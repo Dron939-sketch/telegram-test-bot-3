@@ -177,10 +177,8 @@ STAGE_1_QUESTIONS = [
 ]
 
 # ========== ЭТАП 2: ОПРЕДЕЛЕНИЕ КАРТЫ (18 вопросов) ==========
-# Вопросы РАЗНЫЕ для каждой масти!
-
 STAGE_2_QUESTIONS = {
-    "TF": [  # ТРЕФЫ (Связи, признание, принадлежность)
+    "TF": [  # ТРЕФЫ
         {
             "text": "Как ты чувствуешь себя среди людей?",
             "options": {
@@ -345,7 +343,7 @@ STAGE_2_QUESTIONS = {
         }
     ],
     
-    "CV": [  # ЧЕРВИ (Смысл, глубина, чувства)
+    "CV": [  # ЧЕРВИ
         {
             "text": "Что ты чувствуешь в жизни?",
             "options": {
@@ -510,7 +508,7 @@ STAGE_2_QUESTIONS = {
         }
     ],
     
-    "SB": [  # БУБНЫ (Ресурсы, достижения, результаты)
+    "SB": [  # БУБНЫ
         {
             "text": "Что ты чувствуешь в жизни?",
             "options": {
@@ -675,7 +673,7 @@ STAGE_2_QUESTIONS = {
         }
     ],
     
-    "UB": [  # ПИКИ (Порядок, контроль, системы)
+    "UB": [  # ПИКИ
         {
             "text": "Что ты чувствуешь в жизни?",
             "options": {
@@ -842,11 +840,8 @@ STAGE_2_QUESTIONS = {
 }
 
 # ========== ЭТАП 3: ОПРЕДЕЛЕНИЕ ПРОБЛЕМНОГО УРОВНЯ (12 вопросов) ==========
-# Вопросы РАЗНЫЕ для каждой масти!
-
 STAGE_3_QUESTIONS = {
     "TF": [  # ТРЕФЫ
-        # ОКРУЖЕНИЕ (2 вопроса)
         {
             "level": "OKRUZHENIE",
             "text": "Где вы чувствуете себя хуже всего?",
@@ -865,7 +860,6 @@ STAGE_3_QUESTIONS = {
                 "OK": "Всё нормально"
             }
         },
-        # ПОВЕДЕНИЕ (2 вопроса)
         {
             "level": "POVEDENIE",
             "text": "Что вы делаете, когда хотите сблизиться?",
@@ -884,7 +878,6 @@ STAGE_3_QUESTIONS = {
                 "OK": "Хорошо"
             }
         },
-        # СПОСОБНОСТИ (2 вопроса)
         {
             "level": "SPOSOBNOSTI",
             "text": "Вы умеете налаживать связи?",
@@ -903,7 +896,6 @@ STAGE_3_QUESTIONS = {
                 "OK": "Ничего не мешает"
             }
         },
-        # ЦЕННОСТИ (2 вопроса)
         {
             "level": "CENNOSTI",
             "text": "Зачем вам связи с людьми?",
@@ -922,7 +914,6 @@ STAGE_3_QUESTIONS = {
                 "OK": "Понимаю"
             }
         },
-        # ИДЕНТИЧНОСТЬ (2 вопроса)
         {
             "level": "IDENTICHNOST",
             "text": "Кто вы в отношениях?",
@@ -941,7 +932,6 @@ STAGE_3_QUESTIONS = {
                 "OK": "Да, я — это я"
             }
         },
-        # МИССИЯ (2 вопроса)
         {
             "level": "MISSIYA",
             "text": "Для чего вы нужны людям?",
@@ -963,7 +953,6 @@ STAGE_3_QUESTIONS = {
     ],
     
     "CV": [  # ЧЕРВИ
-        # ОКРУЖЕНИЕ
         {
             "level": "OKRUZHENIE",
             "text": "Где вы чувствуете пустоту сильнее?",
@@ -982,7 +971,6 @@ STAGE_3_QUESTIONS = {
                 "OK": "Всё нормально"
             }
         },
-        # ПОВЕДЕНИЕ
         {
             "level": "POVEDENIE",
             "text": "Что вы делаете, когда ищете смысл?",
@@ -1001,7 +989,6 @@ STAGE_3_QUESTIONS = {
                 "OK": "Хорошо"
             }
         },
-        # СПОСОБНОСТИ
         {
             "level": "SPOSOBNOSTI",
             "text": "Вы умеете чувствовать глубоко?",
@@ -1020,7 +1007,6 @@ STAGE_3_QUESTIONS = {
                 "OK": "Ничего не мешает"
             }
         },
-        # ЦЕННОСТИ
         {
             "level": "CENNOSTI",
             "text": "Зачем вам глубина и смысл?",
@@ -1039,7 +1025,6 @@ STAGE_3_QUESTIONS = {
                 "OK": "Понимаю"
             }
         },
-        # ИДЕНТИЧНОСТЬ
         {
             "level": "IDENTICHNOST",
             "text": "Кто вы на самом деле?",
@@ -1058,7 +1043,6 @@ STAGE_3_QUESTIONS = {
                 "OK": "Да, чувствую"
             }
         },
-        # МИССИЯ
         {
             "level": "MISSIYA",
             "text": "Для чего вы в этом мире?",
@@ -1080,7 +1064,6 @@ STAGE_3_QUESTIONS = {
     ],
     
     "SB": [  # БУБНЫ
-        # ОКРУЖЕНИЕ
         {
             "level": "OKRUZHENIE",
             "text": "Где вы чувствуете нехватку сильнее?",
@@ -1099,7 +1082,6 @@ STAGE_3_QUESTIONS = {
                 "OK": "Всё нормально"
             }
         },
-        # ПОВЕДЕНИЕ
         {
             "level": "POVEDENIE",
             "text": "Что вы делаете, когда нужны ресурсы?",
@@ -1118,7 +1100,6 @@ STAGE_3_QUESTIONS = {
                 "OK": "Хорошо"
             }
         },
-        # СПОСОБНОСТИ
         {
             "level": "SPOSOBNOSTI",
             "text": "Вы умеете зарабатывать/создавать?",
@@ -1137,7 +1118,6 @@ STAGE_3_QUESTIONS = {
                 "OK": "Ничего не мешает"
             }
         },
-        # ЦЕННОСТИ
         {
             "level": "CENNOSTI",
             "text": "Зачем вам достижения?",
@@ -1156,7 +1136,6 @@ STAGE_3_QUESTIONS = {
                 "OK": "Понимаю"
             }
         },
-        # ИДЕНТИЧНОСТЬ
         {
             "level": "IDENTICHNOST",
             "text": "Кто вы в мире достижений?",
@@ -1175,7 +1154,6 @@ STAGE_3_QUESTIONS = {
                 "OK": "Да, я способен"
             }
         },
-        # МИССИЯ
         {
             "level": "MISSIYA",
             "text": "Для чего вы создаёте?",
@@ -1197,7 +1175,6 @@ STAGE_3_QUESTIONS = {
     ],
     
     "UB": [  # ПИКИ
-        # ОКРУЖЕНИЕ
         {
             "level": "OKRUZHENIE",
             "text": "Где вы чувствуете хаос сильнее?",
@@ -1216,7 +1193,6 @@ STAGE_3_QUESTIONS = {
                 "OK": "Всё нормально"
             }
         },
-        # ПОВЕДЕНИЕ
         {
             "level": "POVEDENIE",
             "text": "Что вы делаете, когда нужен порядок?",
@@ -1235,7 +1211,6 @@ STAGE_3_QUESTIONS = {
                 "OK": "Хорошо"
             }
         },
-        # СПОСОБНОСТИ
         {
             "level": "SPOSOBNOSTI",
             "text": "Вы умеете создавать системы?",
@@ -1254,7 +1229,6 @@ STAGE_3_QUESTIONS = {
                 "OK": "Ничего не мешает"
             }
         },
-        # ЦЕННОСТИ
         {
             "level": "CENNOSTI",
             "text": "Зачем вам порядок?",
@@ -1273,7 +1247,6 @@ STAGE_3_QUESTIONS = {
                 "OK": "Понимаю"
             }
         },
-        # ИДЕНТИЧНОСТЬ
         {
             "level": "IDENTICHNOST",
             "text": "Кто вы в мире систем?",
@@ -1292,7 +1265,6 @@ STAGE_3_QUESTIONS = {
                 "OK": "Да, я структурен"
             }
         },
-        # МИССИЯ
         {
             "level": "MISSIYA",
             "text": "Для чего вы создаёте порядок?",
@@ -1461,6 +1433,7 @@ async def start_test(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [[InlineKeyboardButton("▶️ Начать", callback_data="start_stage_1")]]
     reply_markup = InlineKeyboardMarkup(keyboard)
     await query.edit_message_text(intro_text, reply_markup=reply_markup)
+    return STAGE_1
 
 async def start_stage_1(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Начало ЭТАПА 1"""
@@ -1470,11 +1443,7 @@ async def start_stage_1(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def ask_stage_1_question(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Задаёт вопрос ЭТАПА 1"""
-    if update.callback_query:
-        query = update.callback_query
-        await query.answer()
-    else:
-        query = None
+    query = update.callback_query if update.callback_query else None
     
     current_q = context.user_data["current_question"]
     question = STAGE_1_QUESTIONS[current_q]
@@ -1569,11 +1538,7 @@ async def start_stage_2(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def ask_stage_2_question(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Задаёт вопрос ЭТАПА 2"""
-    if update.callback_query:
-        query = update.callback_query
-        await query.answer()
-    else:
-        query = None
+    query = update.callback_query if update.callback_query else None
     
     suit = context.user_data["suit"]
     current_q = context.user_data["current_question"]
@@ -1658,11 +1623,7 @@ async def start_stage_3(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def ask_stage_3_question(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Задаёт вопрос ЭТАПА 3"""
-    if update.callback_query:
-        query = update.callback_query
-        await query.answer()
-    else:
-        query = None
+    query = update.callback_query if update.callback_query else None
     
     suit = context.user_data["suit"]
     current_q = context.user_data["current_question"]
