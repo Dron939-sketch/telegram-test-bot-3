@@ -3,7 +3,7 @@ services:
     name: telegram-test-bot-3
     env: python
     buildCommand: pip install -r requirements.txt
-    startCommand: python bot3.py
+    startCommand: python bot.py
     envVars:
       - key: TOKEN_BOT2
         sync: false
