@@ -1470,8 +1470,11 @@ async def start_stage_1(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def ask_stage_1_question(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Задаёт вопрос ЭТАПА 1"""
-    query = update.callback_query
-    await query.answer()
+    if update.callback_query:
+        query = update.callback_query
+        await query.answer()
+    else:
+        query = None
     
     current_q = context.user_data["current_question"]
     question = STAGE_1_QUESTIONS[current_q]
@@ -1488,7 +1491,12 @@ async def ask_stage_1_question(update: Update, context: ContextTypes.DEFAULT_TYP
     for key, answer in question["options"].items():
         keyboard.append([InlineKeyboardButton(answer, callback_data=f"s1_{key}")])
     reply_markup = InlineKeyboardMarkup(keyboard)
-    await query.edit_message_text(question_text, reply_markup=reply_markup, parse_mode="HTML")
+    
+    if query:
+        await query.edit_message_text(question_text, reply_markup=reply_markup, parse_mode="HTML")
+    else:
+        await update.message.reply_text(question_text, reply_markup=reply_markup, parse_mode="HTML")
+    
     return STAGE_1
 
 async def handle_stage_1_answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1561,8 +1569,11 @@ async def start_stage_2(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def ask_stage_2_question(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Задаёт вопрос ЭТАПА 2"""
-    query = update.callback_query
-    await query.answer()
+    if update.callback_query:
+        query = update.callback_query
+        await query.answer()
+    else:
+        query = None
     
     suit = context.user_data["suit"]
     current_q = context.user_data["current_question"]
@@ -1580,7 +1591,12 @@ async def ask_stage_2_question(update: Update, context: ContextTypes.DEFAULT_TYP
     for card, answer in question["options"].items():
         keyboard.append([InlineKeyboardButton(answer, callback_data=f"s2_{card}")])
     reply_markup = InlineKeyboardMarkup(keyboard)
-    await query.edit_message_text(question_text, reply_markup=reply_markup, parse_mode="HTML")
+    
+    if query:
+        await query.edit_message_text(question_text, reply_markup=reply_markup, parse_mode="HTML")
+    else:
+        await update.message.reply_text(question_text, reply_markup=reply_markup, parse_mode="HTML")
+    
     return STAGE_2
 
 async def handle_stage_2_answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1642,8 +1658,11 @@ async def start_stage_3(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def ask_stage_3_question(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Задаёт вопрос ЭТАПА 3"""
-    query = update.callback_query
-    await query.answer()
+    if update.callback_query:
+        query = update.callback_query
+        await query.answer()
+    else:
+        query = None
     
     suit = context.user_data["suit"]
     current_q = context.user_data["current_question"]
@@ -1661,7 +1680,12 @@ async def ask_stage_3_question(update: Update, context: ContextTypes.DEFAULT_TYP
     for key, answer in question["options"].items():
         keyboard.append([InlineKeyboardButton(answer, callback_data=f"s3_{key}")])
     reply_markup = InlineKeyboardMarkup(keyboard)
-    await query.edit_message_text(question_text, reply_markup=reply_markup, parse_mode="HTML")
+    
+    if query:
+        await query.edit_message_text(question_text, reply_markup=reply_markup, parse_mode="HTML")
+    else:
+        await update.message.reply_text(question_text, reply_markup=reply_markup, parse_mode="HTML")
+    
     return STAGE_3
 
 async def handle_stage_3_answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
