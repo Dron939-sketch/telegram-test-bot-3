@@ -26,6 +26,13 @@ from card_descriptions import (
     get_card_name
 )
 
+from problem_descriptions import get_problem
+
+from profile_descriptions import (
+    get_profile,
+    format_full_result
+)
+
 # ========== НАСТРОЙКИ ==========
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
@@ -1671,48 +1678,53 @@ async def handle_stage_3_answer(update: Update, context: ContextTypes.DEFAULT_TY
     return await ask_stage_3_question(update, context)
 
 async def show_result(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Показ результата"""
+    """Показ результата с полным описанием профиля и проблемы"""
     query = update.callback_query
     
     suit = context.user_data["suit"]
     card = context.user_data["card"]
     scores = context.user_data["stage_3_scores"]
     
-    # Получаем эмодзи и название масти
+    # Получаем эмодзи и названия
     suit_emoji = get_suit_emoji(suit)
     suit_name = get_suit_name(suit)
-    
-    # Получаем эмодзи и название карты
     card_emoji = get_card_emoji(card)
     card_name = get_card_name(card)
     
     # Определяем проблемный уровень
     problem_level = max(scores, key=scores.get)
     
-    level_names = {
-        "OKRUZHENIE": "🌍 ОКРУЖЕНИЕ",
-        "POVEDENIE": "🏃 ПОВЕДЕНИЕ",
-        "SPOSOBNOSTI": "💪 СПОСОБНОСТИ",
-        "CENNOSTI": "🧠 ЦЕННОСТИ",
-        "IDENTICHNOST": "👤 ИДЕНТИЧНОСТЬ",
-        "MISSIYA": "🎯 МИССИЯ"
+    level_emojis = {
+        "OKRUZHENIE": "🌍",
+        "POVEDENIE": "🏃",
+        "SPOSOBNOSTI": "💪",
+        "CENNOSTI": "🧠",
+        "IDENTICHNOST": "👤",
+        "MISSIYA": "🎯"
     }
     
-    result_text = (
-        f"🎉 <b>ТЕСТ ЗАВЕРШЁН!</b>\n\n"
-        f"🎴 <b>Твой результат:</b>\n\n"
-        f"Масть: <b>{suit_emoji} {suit_name}</b>\n"
-        f"Карта: <b>{card_emoji} {card_name}</b>\n"
-        f"Проблемный уровень: <b>{level_names[problem_level]}</b>\n\n"
-        f"📊 <b>Баллы по уровням:</b>\n"
-    )
-    for level, score in scores.items():
-        result_text += f"{level_names[level]}: {score}\n"
+    level_names = {
+        "OKRUZHENIE": "ОКРУЖЕНИЕ",
+        "POVEDENIE": "ПОВЕДЕНИЕ",
+        "SPOSOBNOSTI": "СПОСОБНОСТИ",
+        "CENNOSTI": "ЦЕННОСТИ",
+        "IDENTICHNOST": "ИДЕНТИЧНОСТЬ",
+        "MISSIYA": "МИССИЯ"
+    }
     
-    result_text += (
-        f"\n💡 Это твой текущий профиль!\n"
-        f"Хочешь узнать больше?\n"
-        f"👉 @meysternlp"
+    level_emoji = level_emojis[problem_level]
+    level_name = level_names[problem_level]
+    
+    # Получаем проблему
+    problem = get_problem(suit, card, problem_level)
+    
+    # Форматируем полный результат
+    result_text = format_full_result(
+        suit, card, problem_level,
+        suit_emoji, suit_name,
+        card_emoji, card_name,
+        level_emoji, level_name,
+        problem
     )
     
     keyboard = [
