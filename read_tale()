@@ -111,7 +111,7 @@ async def tale_final(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     
     keyboard = [
-        [InlineKeyboardButton("📤 Отправить тест другу", url=f"https://t.me/share/url?url=https://t.me/YourBotUsername")],
+        [InlineKeyboardButton("📤 Отправить тест другу", url=f"https://t.me/share/url?url=https://t.me/@Nanotech_varik_bot")],
         [InlineKeyboardButton("🔧 Снять очки", callback_data="show_offer")],
         [InlineKeyboardButton("◀️ Назад к результату", callback_data="back_to_result")]
     ]
