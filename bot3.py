@@ -35,9 +35,9 @@ if not TELEGRAM_BOT_TOKEN:
     raise ValueError("❌ ОШИБКА: Переменная TELEGRAM_BOT_TOKEN не установлена!")
 
 # ========== СОСТОЯНИЯ ==========
-STAGE_1 = 1  # Определение масти (16 вопросов)
-STAGE_2 = 2  # Определение карты (18 вопросов)
-STAGE_3 = 3  # Определение проблемного уровня (12 вопросов)
+STAGE_1 = 1
+STAGE_2 = 2
+STAGE_3 = 3
 
 # ========== ЭТАП 1: ОПРЕДЕЛЕНИЕ МАСТИ (16 вопросов) ==========
 STAGE_1_QUESTIONS = [
@@ -1385,6 +1385,17 @@ STAGE_2_SCORING = {
 }
 
 # ========== ФУНКЦИИ ДЛЯ РАБОТЫ С РЕЗУЛЬТАТАМИ ==========
+def calculate_progress(current: int, total: int) -> str:
+    """Вычисляет прогресс"""
+    progress = int((current / total) * 100)
+    filled = int(progress / 10)
+    bar = "▓" * filled + "░" * (10 - filled)
+    return f"{bar} {progress}%\n📊 Пройдено: {current} из {total}"
+
+def get_card_by_scores(scores: dict) -> str:
+    """Определяет карту по баллам"""
+    return max(scores, key=scores.get)
+
 def get_problem_level_by_scores(scores: dict) -> str:
     """Определяет проблемный уровень по максимальному баллу"""
     if not scores or all(v == 0 for v in scores.values()):
@@ -1414,9 +1425,13 @@ def format_problem_result(suit: str, card: str, problem_level: str, scores: dict
     elif isinstance(description, str):
         result_text += f"{description}\n\n"
     else:
-        result_text += f"Масть: {suit}\nКарта: {card}\nПроблемный уровень: {problem_level}\n\n"
+        result_text += f"Конфигурация: {suit}\nПрофиль: {card}\nПроблемный уровень: {problem_level}\n\n"
     
-    result_text += "📊 <b>Распределение по уровням:</b>\n"
+    # ИЗМЕНЕНИЕ ПУНКТ 8: Процентное распределение
+    result_text += "━━━━━━━━━━━━━━━━━━━━\n\n"
+    result_text += "📊 <b>Распределение по уровням:</b>\n\n"
+    
+    total = sum(scores.values())
     level_names = {
         "environment": "🌍 Окружение",
         "behavior": "🎯 Поведение",
@@ -1425,41 +1440,39 @@ def format_problem_result(suit: str, card: str, problem_level: str, scores: dict
         "identity": "👤 Идентичность",
         "mission": "🌟 Миссия"
     }
+    
     for level, score in sorted(scores.items(), key=lambda x: x[1], reverse=True):
         level_name = level_names.get(level, level)
-        result_text += f"• {level_name}: {score} баллов\n"
+        percentage = (score / total * 100) if total > 0 else 0
+        result_text += f"• {level_name}: <b>{percentage:.1f}%</b>\n"
     
     return result_text
 
-# ========== ФУНКЦИИ ==========
-def calculate_progress(current: int, total: int) -> str:
-    """Вычисляет прогресс"""
-    progress = int((current / total) * 100)
-    filled = int(progress / 10)
-    bar = "▓" * filled + "░" * (10 - filled)
-    return f"{bar} {progress}%\nПройдено: {current} из {total}"
-
-def get_card_by_scores(scores: dict) -> str:
-    """Определяет карту по баллам"""
-    return max(scores, key=scores.get)
+# ========== ОБРАБОТЧИКИ КОМАНД И CALLBACK ==========
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Команда /start - начальный экран"""
+    """Команда /start - ИСПРАВЛЕНИЕ ПУНКТ 1"""
     user = update.effective_user
     welcome_text = (
         f"👁 <b>ЧЕЛОВЕК В КРАСНЫХ ОЧКАХ НЕ ВИДИТ КРАСНОГО</b>\n\n"
-        f"Он смотрит сквозь красное. Для него оно прозрачно.\n"
+        f"Он смотрит сквозь красное. Для него оно прозрачно.\n\n"
         f"Даже когда он подходит к зеркалу — он видит прозрачные линзы.\n\n"
-        f"Ты тоже носишь очки.\n"
-        f"Но не знаешь, какого они цвета.\n\n"
-        f"<b>Этот тест — твоё зеркало.</b>\n\n"
+        f"Красный фильтр поглощает сам себя.\n\n"
+        f"Вы тоже носите очки.\n"
+        f"Но не знаете, какого они цвета.\n\n"
+        f"Этот тест — ваше зеркало.\n"
+        f"Он покажет фильтр, через который вы живёте.\n\n"
         f"━━━━━━━━━━━━━━━━━━━━\n\n"
-        f"<b>🎯 ЧТО ТЫ ПОЛУЧИШЬ:</b>\n\n"
-        f"🔍 Твой фильтр восприятия\n"
-        f"🚫 Слепые зоны\n"
-        f"🔄 Повторяющийся паттерн\n"
-        f"🛠 Способ выхода из цикла\n\n"
-        f"⏱ 7–10 минут"
+        f"🎯 <b>ЧТО ВАС ЖДЁТ</b>\n\n"
+        f"1️⃣ Этап 1: Определим вашу конфигурацию восприятия\n"
+        f"2️⃣ Этап 2: Определим вашу конфигурацию мышления\n"
+        f"3️⃣ Этап 3: Определим вашу конфигурацию поведения\n\n"
+        f"🎁 <b>ВЫ ПОЛУЧИТЕ</b>\n\n"
+        f"✅ Свой фильтр — через что вы смотрите на мир\n"
+        f"✅ Слепые зоны — чего вы в себе не замечаете\n"
+        f"✅ Ловушка паттерна — почему вы повторяете одно и то же\n"
+        f"✅ Заплатка — как выйти из цикла\n\n"
+        f"⏱ Займёт 10–15 минут"
     )
     keyboard = [
         [InlineKeyboardButton("🚀 Начать тест", callback_data="start_test")],
@@ -1475,16 +1488,18 @@ async def show_details(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     details_text = (
         f"💡 <b>КАК ЭТО РАБОТАЕТ</b>\n\n"
-        f"Тест состоит из трёх этапов:\n\n"
-        f"<b>1️⃣ Восприятие</b>\n"
-        f"Через что ты фильтруешь реальность: мысли, эмоции, материю или связи.\n\n"
-        f"<b>2️⃣ Мышление</b>\n"
-        f"Как ты обрабатываешь информацию: анализируешь или доверяешь интуиции.\n\n"
-        f"<b>3️⃣ Поведение</b>\n"
-        f"Где ты застреваешь: в окружении, действиях, навыках, ценностях, идентичности или миссии.\n\n"
+        f"Тест состоит из трёх уровней:\n\n"
+        f"<b>Восприятие (твоё «железо»)</b>\n"
+        f"Через что ты фильтруешь реальность: мысли, эмоции, материю или связи\n\n"
+        f"<b>Мышление (твои «программы»)</b>\n"
+        f"Как ты обрабатываешь информацию: анализируешь или полагаешься на интуицию, "
+        f"контролируешь или плывёшь по течению\n\n"
+        f"<b>Поведение (твои «баги»)</b>\n"
+        f"Как вы действуете: шаблоны, привычки\n\n"
         f"━━━━━━━━━━━━━━━━━━━━\n\n"
-        f"Проблема всегда на стыке двух конфигураций.\n"
-        f"Тест найдёт этот стык."
+        f"Проблема всегда возникает на стыке двух конфигураций.\n"
+        f"Тест найдёт этот стык.\n\n"
+        f"🚀 <b>ГОТОВЫ УВИДЕТЬ СВОИ ОЧКИ?</b>"
     )
     keyboard = [
         [InlineKeyboardButton("🚀 Начать тест", callback_data="start_test")],
@@ -1500,18 +1515,24 @@ async def back_to_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     welcome_text = (
         f"👁 <b>ЧЕЛОВЕК В КРАСНЫХ ОЧКАХ НЕ ВИДИТ КРАСНОГО</b>\n\n"
-        f"Он смотрит сквозь красное. Для него оно прозрачно.\n"
+        f"Он смотрит сквозь красное. Для него оно прозрачно.\n\n"
         f"Даже когда он подходит к зеркалу — он видит прозрачные линзы.\n\n"
-        f"Ты тоже носишь очки.\n"
-        f"Но не знаешь, какого они цвета.\n\n"
-        f"<b>Этот тест — твоё зеркало.</b>\n\n"
+        f"Красный фильтр поглощает сам себя.\n\n"
+        f"Вы тоже носите очки.\n"
+        f"Но не знаете, какого они цвета.\n\n"
+        f"Этот тест — ваше зеркало.\n"
+        f"Он покажет фильтр, через который вы живёте.\n\n"
         f"━━━━━━━━━━━━━━━━━━━━\n\n"
-        f"<b>🎯 ЧТО ТЫ ПОЛУЧИШЬ:</b>\n\n"
-        f"🔍 Твой фильтр восприятия\n"
-        f"🚫 Слепые зоны\n"
-        f"🔄 Повторяющийся паттерн\n"
-        f"🛠 Способ выхода из цикла\n\n"
-        f"⏱ 7–10 минут"
+        f"🎯 <b>ЧТО ВАС ЖДЁТ</b>\n\n"
+        f"1️⃣ Этап 1: Определим вашу конфигурацию восприятия\n"
+        f"2️⃣ Этап 2: Определим вашу конфигурацию мышления\n"
+        f"3️⃣ Этап 3: Определим вашу конфигурацию поведения\n\n"
+        f"🎁 <b>ВЫ ПОЛУЧИТЕ</b>\n\n"
+        f"✅ Свой фильтр — через что вы смотрите на мир\n"
+        f"✅ Слепые зоны — чего вы в себе не замечаете\n"
+        f"✅ Ловушка паттерна — почему вы повторяете одно и то же\n"
+        f"✅ Заплатка — как выйти из цикла\n\n"
+        f"⏱ Займёт 10–15 минут"
     )
     keyboard = [
         [InlineKeyboardButton("🚀 Начать тест", callback_data="start_test")],
@@ -1521,7 +1542,7 @@ async def back_to_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.edit_message_text(welcome_text, reply_markup=reply_markup, parse_mode="HTML")
 
 async def start_test(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Начало теста"""
+    """Начало теста - ИСПРАВЛЕНИЕ ПУНКТ 2"""
     query = update.callback_query
     await query.answer()
     
@@ -1547,7 +1568,7 @@ async def start_test(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     intro_text = (
         f"🎯 <b>ЭТАП 1: КОНФИГУРАЦИЯ ВОСПРИЯТИЯ</b>\n\n"
-        f"Сейчас я задам 16 вопросов, чтобы определить твою базовую программу.\n\n"
+        f"Сейчас я задам 16 вопросов, чтобы определить твою систему конфигурации восприятия.\n\n"
         f"Отвечай интуитивно, первое что приходит в голову."
     )
     keyboard = [[InlineKeyboardButton("▶️ Начать", callback_data="start_stage_1")]]
@@ -1562,7 +1583,7 @@ async def start_stage_1(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return await ask_stage_1_question(update, context)
 
 async def ask_stage_1_question(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Задаёт вопрос ЭТАПА 1"""
+    """Задаёт вопрос ЭТАПА 1 - ИСПРАВЛЕНИЕ ПУНКТ 3"""
     query = update.callback_query if update.callback_query else None
     
     current_q = context.user_data["current_question"]
@@ -1570,8 +1591,7 @@ async def ask_stage_1_question(update: Update, context: ContextTypes.DEFAULT_TYP
     progress = calculate_progress(current_q, 16)
     
     question_text = (
-        f"🎯 <b>ЭТАП 1: КОНФИГУРАЦИЯ ВОСПРИЯТИЯ</b>\n"
-        f"Вопрос {current_q + 1}/16\n\n"
+        f"🎯 <b>ЭТАП 1: ОПРЕДЕЛЕНИЕ КОНФИГУРАЦИИ ВОСПРИЯТИЯ</b>\n\n"
         f"<b>{question['text']}</b>\n\n"
         f"{progress}"
     )
@@ -1607,37 +1627,88 @@ async def handle_stage_1_answer(update: Update, context: ContextTypes.DEFAULT_TY
     return await ask_stage_1_question(update, context)
 
 async def finish_stage_1(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Завершение ЭТАПА 1 — определение масти"""
+    """Завершение ЭТАПА 1 - ИСПРАВЛЕНИЕ ПУНКТ 4"""
     query = update.callback_query
     scores = context.user_data["stage_1_scores"]
     
-    # Вычисляем итоговые значения по осям
     control_value = scores.get("VOVNE", 0) - scores.get("VNUTR", 0)
     internal_value = scores.get("UMOZ", 0) - scores.get("FAKT", 0)
     
-    # Определяем масть с учётом процентного распределения
     suit = get_suit_by_axes(control_value, internal_value, scores)
     
     context.user_data["suit"] = suit
     context.user_data["current_question"] = 0
     
-    # Получаем детальный анализ баланса
     balance_info = analyze_suit_balance(scores)
     context.user_data["balance_info"] = balance_info
     
-    # Форматируем результат
+    # Получаем КОМПАКТНОЕ описание (без аналитики)
     result_text = format_suit_result(suit, scores)
     
-    # Добавляем интерпретацию баланса
-    interpretation = get_suit_interpretation(suit, balance_info)
-    result_text += f"\n\n💡 <b>Интерпретация:</b>\n{interpretation}\n"
-    result_text += f"\n<b>Баланс профиля:</b> {balance_info['balance_score']}/100"
-    
-    keyboard = [[InlineKeyboardButton("▶️ Перейти к этапу 2", callback_data="start_stage_2")]]
+    keyboard = [
+        [InlineKeyboardButton("📊 Подробнее", callback_data="show_analytics")],
+        [InlineKeyboardButton("▶️ Продолжить →", callback_data="start_stage_2")]
+    ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
     await query.edit_message_text(result_text, reply_markup=reply_markup, parse_mode="HTML")
     return STAGE_2
+
+async def show_analytics(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Показать детальную аналитику - НОВАЯ ФУНКЦИЯ ДЛЯ ПУНКТА 4"""
+    query = update.callback_query
+    await query.answer()
+    
+    scores = context.user_data["stage_1_scores"]
+    suit = context.user_data["suit"]
+    balance_info = context.user_data.get("balance_info", {})
+    
+    control = scores.get("VOVNE", 0) - scores.get("VNUTR", 0)
+    internal = scores.get("UMOZ", 0) - scores.get("FAKT", 0)
+    total = sum(scores.values())
+    percentages = {k: (v / total * 100) if total > 0 else 0 for k, v in scores.items()}
+    
+    analytics_text = (
+        f"📊 <b>ДЕТАЛЬНАЯ АНАЛИТИКА</b>\n\n"
+        f"<b>Координаты на осях:</b>\n"
+        f"• Ось контроля: <b>{control:+.1f}</b> "
+        f"{'(внешний фокус)' if control >= 0 else '(внутренний фокус)'}\n"
+        f"• Ось страха: <b>{internal:+.1f}</b> "
+        f"{'(умозрительное)' if internal >= 0 else '(фактическое)'}\n\n"
+        f"<b>Процентное распределение:</b>\n"
+        f"• Внешний фокус (VOVNE): {percentages.get('VOVNE', 0):.1f}%\n"
+        f"• Внутренний фокус (VNUTR): {percentages.get('VNUTR', 0):.1f}%\n"
+        f"• Страх умозрительного (UMOZ): {percentages.get('UMOZ', 0):.1f}%\n"
+        f"• Страх фактического (FAKT): {percentages.get('FAKT', 0):.1f}%\n\n"
+        f"<b>Абсолютные значения:</b>\n"
+        f"• VOVNE: {scores.get('VOVNE', 0)} баллов\n"
+        f"• VNUTR: {scores.get('VNUTR', 0)} баллов\n"
+        f"• UMOZ: {scores.get('UMOZ', 0)} баллов\n"
+        f"• FAKT: {scores.get('FAKT', 0)} баллов\n"
+        f"• <b>Всего: {total} баллов</b>\n\n"
+        f"<b>Баланс профиля:</b> {balance_info.get('balance_score', 0)}/100"
+    )
+    
+    keyboard = [[InlineKeyboardButton("◀️ Назад", callback_data="back_to_stage1_result")]]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await query.edit_message_text(analytics_text, reply_markup=reply_markup, parse_mode="HTML")
+
+async def back_to_stage1_result(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Вернуться к результату этапа 1"""
+    query = update.callback_query
+    await query.answer()
+    
+    scores = context.user_data["stage_1_scores"]
+    suit = context.user_data["suit"]
+    
+    result_text = format_suit_result(suit, scores)
+    
+    keyboard = [
+        [InlineKeyboardButton("📊 Подробнее", callback_data="show_analytics")],
+        [InlineKeyboardButton("▶️ Продолжить →", callback_data="start_stage_2")]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await query.edit_message_text(result_text, reply_markup=reply_markup, parse_mode="HTML")
 
 async def start_stage_2(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Начало ЭТАПА 2"""
@@ -1646,7 +1717,7 @@ async def start_stage_2(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return await ask_stage_2_question(update, context)
 
 async def ask_stage_2_question(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Задаёт вопрос ЭТАПА 2"""
+    """Задаёт вопрос ЭТАПА 2 - ИСПРАВЛЕНИЕ ПУНКТ 5"""
     query = update.callback_query if update.callback_query else None
     
     suit = context.user_data["suit"]
@@ -1655,8 +1726,7 @@ async def ask_stage_2_question(update: Update, context: ContextTypes.DEFAULT_TYP
     progress = calculate_progress(current_q, 18)
     
     question_text = (
-        f"🎯 <b>ЭТАП 2: КОНФИГУРАЦИЯ МЫШЛЕНИЯ</b>\n"
-        f"Вопрос {current_q + 1}/18\n\n"
+        f"🎯 <b>ЭТАП 2: ОПРЕДЕЛЕНИЕ КОНФИГУРАЦИИ МЫШЛЕНИЯ</b>\n\n"
         f"<b>{question['text']}</b>\n\n"
         f"{progress}"
     )
@@ -1695,7 +1765,7 @@ async def handle_stage_2_answer(update: Update, context: ContextTypes.DEFAULT_TY
     return await ask_stage_2_question(update, context)
 
 async def finish_stage_2(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Завершение ЭТАПА 2 — определение карты"""
+    """Завершение ЭТАПА 2 - ИСПРАВЛЕНИЕ ПУНКТ 6"""
     query = update.callback_query
     scores = context.user_data["stage_2_scores"]
     suit = context.user_data["suit"]
@@ -1705,6 +1775,7 @@ async def finish_stage_2(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["card"] = card
     context.user_data["current_question"] = 0
     
+    # Получаем КОМПАКТНОЕ описание
     result_text = format_profile_result(suit, card)
     
     keyboard = [[InlineKeyboardButton("▶️ Начать ЭТАП 3", callback_data="start_stage_3")]]
@@ -1720,7 +1791,7 @@ async def start_stage_3(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return await ask_stage_3_question(update, context)
 
 async def ask_stage_3_question(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Задаёт вопрос ЭТАПА 3"""
+    """Задаёт вопрос ЭТАПА 3 - ИСПРАВЛЕНИЕ ПУНКТ 7"""
     query = update.callback_query if update.callback_query else None
     
     suit = context.user_data["suit"]
@@ -1729,8 +1800,7 @@ async def ask_stage_3_question(update: Update, context: ContextTypes.DEFAULT_TYP
     progress = calculate_progress(current_q, 12)
     
     question_text = (
-        f"🎯 <b>ЭТАП 3: ПАТТЕРН ПОВЕДЕНИЯ</b>\n"
-        f"Вопрос {current_q + 1}/12\n\n"
+        f"🎯 <b>ЭТАП 3: ОПРЕДЕЛЕНИЕ КОНФИГУРАЦИИ ПАТТЕРНОВ ПОВЕДЕНИЯ</b>\n\n"
         f"<b>{question['text']}</b>\n\n"
         f"{progress}"
     )
@@ -1770,7 +1840,7 @@ async def handle_stage_3_answer(update: Update, context: ContextTypes.DEFAULT_TY
     return await ask_stage_3_question(update, context)
 
 async def show_result(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Показ результата - завершающий экран"""
+    """Показ результата - ИСПРАВЛЕНИЕ ПУНКТ 8 и 10"""
     query = update.callback_query
     
     suit = context.user_data["suit"]
@@ -1786,26 +1856,28 @@ async def show_result(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"📖 <b>СКАЗКА-ПЕРЕДЫШКА</b>\n\n"
         f"<i>Что такое терапевтическая сказка?</i>\n\n"
         f"Это работа с бессознательным через метафору. Сказка обходит логику и напрямую "
-        f"обращается к той части мозга, которая формирует модели поведения.\n\n"
+        f"обращается к той части мозга, которая формирует модели поведения. "
+        f"Она меняет не мысли — она меняет конфигурацию восприятия.\n\n"
         f"Эта сказка не решит твою проблему.\n"
         f"Но она даст тебе:\n"
         f"• Отдышаться после узнавания\n"
         f"• Посмотреть на ситуацию со стороны\n"
-        f"• Собраться с силами"
+        f"• Собраться с силами\n\n"
+        f"Сказка написана с учётом особенностей твоего восприятия и мышления."
     )
     
     keyboard = [
-        [InlineKeyboardButton("📖 Читать сказку", callback_data="read_tale")],
-        [InlineKeyboardButton("🔧 Снять очки", callback_data="show_offer")],
-        [InlineKeyboardButton("🔄 Пройти заново", callback_data="start_test")],
-        [InlineKeyboardButton("💬 Написать автору", url="https://t.me/meysternlp")]
+        [InlineKeyboardButton("👉 Читать сказку", callback_data="read_tale")],
+        [InlineKeyboardButton("🔧 Если хочешь снять очки", callback_data="show_offer")],
+        [InlineKeyboardButton("💬 Связь с автором", url="https://t.me/meysternlp")],
+        [InlineKeyboardButton("🔄 Пройти заново", callback_data="start_test")]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     await query.edit_message_text(result_text, reply_markup=reply_markup, parse_mode="HTML")
     return ConversationHandler.END
 
 async def show_offer(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Показать предложение о персональной сказке"""
+    """Показать предложение о персональной сказке - ИСПРАВЛЕНИЕ ПУНКТ 10"""
     query = update.callback_query
     await query.answer()
     
@@ -1826,7 +1898,7 @@ async def show_offer(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.edit_message_text(offer_text, reply_markup=reply_markup, parse_mode="HTML")
 
 async def show_details_offer(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Показать подробности предложения"""
+    """Показать подробности предложения - ИСПРАВЛЕНИЕ ПУНКТ 10"""
     query = update.callback_query
     await query.answer()
     
@@ -1835,27 +1907,51 @@ async def show_details_offer(update: Update, context: ContextTypes.DEFAULT_TYPE)
         f"📖 <b>Сказка, которая меняет цвет линз</b>\n"
         f"→ Работает с бессознательным на языке вашего восприятия\n"
         f"→ Создаёт новый опыт вместо старого шаблона\n"
-        f"→ Перенастраивает фильтр\n\n"
-        f"🎯 <b>Рекомендации</b>\n"
+        f"→ Перенастраивает фильтр, через который вы смотрите на мир\n\n"
+        f"🎯 <b>Рекомендации, которые учат видеть по-новому</b>\n"
         f"→ Как понять, что вы снова надели старые очки\n"
         f"→ Что делать, когда паттерн запускается\n"
-        f"→ Конкретные шаги для вашего типа конфликта\n\n"
+        f"→ Конкретные шаги для вашего типа конфликта\n"
+        f"→ Практические инструменты на каждый день\n\n"
         f"━━━━━━━━━━━━━━━━━━━━\n\n"
         f"Сказка меняет фильтр.\n"
-        f"Рекомендации учат им пользоваться."
+        f"Рекомендации учат им пользоваться.\n\n"
+        f"Это не просто текст — это инструмент трансформации."
     )
     
     keyboard = [
-        [InlineKeyboardButton("💳 Заказать — 960 ₽", callback_data="order_tale")],
+        [InlineKeyboardButton("💳 Заказать сказку + рекомендации — 960 ₽", callback_data="order_tale")],
         [InlineKeyboardButton("◀️ Назад", callback_data="show_offer")]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     await query.edit_message_text(details_text, reply_markup=reply_markup, parse_mode="HTML")
 
 async def read_tale(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Заглушка для чтения сказки"""
+    """Показать сказку-передышку - ПУНКТ 9 (нужен текст сказки)"""
     query = update.callback_query
-    await query.answer("Функция в разработке")
+    await query.answer()
+    
+    # ЗДЕСЬ БУДЕТ ТЕКСТ СКАЗКИ ИЗ GOOGLE DRIVE
+    tale_text = (
+        f"📖 <b>СКАЗКА-ПЕРЕДЫШКА</b>\n\n"
+        f"[ТЕКСТ СКАЗКИ БУДЕТ ДОБАВЛЕН]\n\n"
+        f"━━━━━━━━━━━━━━━━━━━━\n\n"
+        f"🙏 <b>СПАСИБО, ЧТО ПРОШЛИ ТЕСТ</b>\n\n"
+        f"Ты сделал первый шаг — увидел механизм.\n"
+        f"Это уже немало.\n\n"
+        f"🎁 <b>ПОМОГИ ДРУГУ ПОНЯТЬ СЕБЯ</b>\n\n"
+        f"Этот тест помог тебе?\n"
+        f"Возможно, он поможет кому-то из твоих близких.\n\n"
+        f"Иногда самое ценное, что мы можем дать, — это зеркало."
+    )
+    
+    keyboard = [
+        [InlineKeyboardButton("📤 Отправить тест другу", url=f"https://t.me/share/url?url=https://t.me/{context.bot.username}")],
+        [InlineKeyboardButton("🔧 Снять очки", callback_data="show_offer")],
+        [InlineKeyboardButton("◀️ Назад к результату", callback_data="back_to_result")]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await query.edit_message_text(tale_text, reply_markup=reply_markup, parse_mode="HTML")
 
 async def order_tale(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Заглушка для заказа сказки"""
@@ -1883,19 +1979,21 @@ async def back_to_result(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"📖 <b>СКАЗКА-ПЕРЕДЫШКА</b>\n\n"
         f"<i>Что такое терапевтическая сказка?</i>\n\n"
         f"Это работа с бессознательным через метафору. Сказка обходит логику и напрямую "
-        f"обращается к той части мозга, которая формирует модели поведения.\n\n"
+        f"обращается к той части мозга, которая формирует модели поведения. "
+        f"Она меняет не мысли — она меняет конфигурацию восприятия.\n\n"
         f"Эта сказка не решит твою проблему.\n"
         f"Но она даст тебе:\n"
         f"• Отдышаться после узнавания\n"
         f"• Посмотреть на ситуацию со стороны\n"
-        f"• Собраться с силами"
+        f"• Собраться с силами\n\n"
+        f"Сказка написана с учётом особенностей твоего восприятия и мышления."
     )
     
     keyboard = [
-        [InlineKeyboardButton("📖 Читать сказку", callback_data="read_tale")],
-        [InlineKeyboardButton("🔧 Снять очки", callback_data="show_offer")],
-        [InlineKeyboardButton("🔄 Пройти заново", callback_data="start_test")],
-        [InlineKeyboardButton("💬 Написать автору", url="https://t.me/meysternlp")]
+        [InlineKeyboardButton("👉 Читать сказку", callback_data="read_tale")],
+        [InlineKeyboardButton("🔧 Если хочешь снять очки", callback_data="show_offer")],
+        [InlineKeyboardButton("💬 Связь с автором", url="https://t.me/meysternlp")],
+        [InlineKeyboardButton("🔄 Пройти заново", callback_data="start_test")]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     await query.edit_message_text(result_text, reply_markup=reply_markup, parse_mode="HTML")
@@ -1934,6 +2032,8 @@ def main():
     application.add_handler(conv_handler)
     application.add_handler(CallbackQueryHandler(show_details, pattern="^show_details$"))
     application.add_handler(CallbackQueryHandler(back_to_start, pattern="^back_to_start$"))
+    application.add_handler(CallbackQueryHandler(show_analytics, pattern="^show_analytics$"))
+    application.add_handler(CallbackQueryHandler(back_to_stage1_result, pattern="^back_to_stage1_result$"))
     application.add_handler(CallbackQueryHandler(show_offer, pattern="^show_offer$"))
     application.add_handler(CallbackQueryHandler(show_details_offer, pattern="^show_details_offer$"))
     application.add_handler(CallbackQueryHandler(read_tale, pattern="^read_tale$"))
