@@ -10,7 +10,7 @@ from telegram.ext import (
 )
 
 # ========== ИМПОРТЫ ОПИСАНИЙ ==========
-from stage1_suits import (
+from suit_descriptions import (
     get_suit_by_axes,
     format_suit_result
 )
@@ -19,7 +19,7 @@ from stage2_profiles import (
     format_profile_result
 )
 
-from stage3_problems import (
+from stage_3_results import (
     get_problem_level_by_scores,
     format_problem_result
 )
