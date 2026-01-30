@@ -9,6 +9,23 @@ from telegram.ext import (
     ConversationHandler,
 )
 
+# ========== ИМПОРТЫ ОПИСАНИЙ ==========
+from suit_descriptions import (
+    get_suit_by_axes,
+    get_suit_description,
+    format_suit_result,
+    get_suit_emoji,
+    get_suit_name
+)
+
+from card_descriptions import (
+    get_card_by_scores,
+    get_card_description,
+    format_card_result,
+    get_card_emoji,
+    get_card_name
+)
+
 # ========== НАСТРОЙКИ ==========
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
@@ -1488,45 +1505,28 @@ async def handle_stage_1_answer(update: Update, context: ContextTypes.DEFAULT_TY
     return await ask_stage_1_question(update, context)
 
 async def finish_stage_1(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Завершение ЭТАПА 1"""
+    """Завершение ЭТАПА 1 — определение масти"""
     query = update.callback_query
     scores = context.user_data["stage_1_scores"]
     
-    # Определяем масть
+    # Определяем масть по осям
     axisX = "VOVNE" if scores["VOVNE"] > scores["VNUTR"] else "VNUTR"
     axisY = "UMOZ" if scores["UMOZ"] > scores["FAKT"] else "FAKT"
     
-    if axisX == "VOVNE" and axisY == "UMOZ":
-        suit = "TF"
-        suit_name = "♥️ ТРЕФЫ (Связи)"
-    elif axisX == "VNUTR" and axisY == "UMOZ":
-        suit = "CV"
-        suit_name = "♦️ ЧЕРВИ (Смысл)"
-    elif axisX == "VOVNE" and axisY == "FAKT":
-        suit = "SB"
-        suit_name = "♦️ БУБНЫ (Ресурсы)"
-    else:
-        suit = "UB"
-        suit_name = "♠️ ПИКИ (Порядок)"
+    # Получаем код масти
+    suit = get_suit_by_axes(axisX, axisY)
     
+    # Сохраняем результат
     context.user_data["suit"] = suit
     context.user_data["current_question"] = 0
     
-    result_text = (
-        f"✅ ЭТАП 1 ЗАВЕРШЁН!\n\n"
-        f"🎯 Твоя масть:\n"
-        f"<b>{suit_name}</b>\n\n"
-        f"📊 Результаты:\n"
-        f"Фокус ВОВНЕ: {scores['VOVNE']}\n"
-        f"Фокус ВНУТРЬ: {scores['VNUTR']}\n"
-        f"Страх УМОЗРИТЕЛЬНОГО: {scores['UMOZ']}\n"
-        f"Страх ФАКТИЧЕСКОГО: {scores['FAKT']}\n\n"
-        f"🎯 ЭТАП 2: ОПРЕДЕЛЕНИЕ КАРТЫ\n"
-        f"Теперь определим твою карту внутри этой масти.\n\n"
-        f"Готов продолжить?"
-    )
+    # Форматируем результат
+    result_text = format_suit_result(suit, scores)
+    
+    # Кнопка перехода к ЭТАПУ 2
     keyboard = [[InlineKeyboardButton("▶️ Начать ЭТАП 2", callback_data="start_stage_2")]]
     reply_markup = InlineKeyboardMarkup(keyboard)
+    
     await query.edit_message_text(result_text, reply_markup=reply_markup, parse_mode="HTML")
     return STAGE_2
 
@@ -1587,31 +1587,29 @@ async def handle_stage_2_answer(update: Update, context: ContextTypes.DEFAULT_TY
     return await ask_stage_2_question(update, context)
 
 async def finish_stage_2(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Завершение ЭТАПА 2"""
+    """Завершение ЭТАПА 2 — определение карты"""
     query = update.callback_query
     scores = context.user_data["stage_2_scores"]
+    suit = context.user_data["suit"]
     
-    # Определяем карту с максимальным баллом
-    card = max(scores, key=scores.get)
+    # Получаем эмодзи и название масти
+    suit_emoji = get_suit_emoji(suit)
+    suit_name = get_suit_name(suit)
+    
+    # Определяем карту по баллам
+    card = get_card_by_scores(scores)
+    
+    # Сохраняем результат
     context.user_data["card"] = card
     context.user_data["current_question"] = 0
     
-    result_text = (
-        f"✅ ЭТАП 2 ЗАВЕРШЁН!\n\n"
-        f"🎯 Твоя карта:\n"
-        f"<b>{card}</b>\n\n"
-        f"📊 Результаты:\n"
-    )
-    for c, score in scores.items():
-        result_text += f"{c}: {score}\n"
+    # Форматируем результат
+    result_text = format_card_result(card, suit_emoji, suit_name, scores)
     
-    result_text += (
-        f"\n🎯 ЭТАП 3: ПРОБЛЕМНЫЙ УРОВЕНЬ\n"
-        f"Теперь определим, на каком уровне у тебя проблема.\n\n"
-        f"Готов продолжить?"
-    )
+    # Кнопка перехода к ЭТАПУ 3
     keyboard = [[InlineKeyboardButton("▶️ Начать ЭТАП 3", callback_data="start_stage_3")]]
     reply_markup = InlineKeyboardMarkup(keyboard)
+    
     await query.edit_message_text(result_text, reply_markup=reply_markup, parse_mode="HTML")
     return STAGE_3
 
@@ -1680,6 +1678,14 @@ async def show_result(update: Update, context: ContextTypes.DEFAULT_TYPE):
     card = context.user_data["card"]
     scores = context.user_data["stage_3_scores"]
     
+    # Получаем эмодзи и название масти
+    suit_emoji = get_suit_emoji(suit)
+    suit_name = get_suit_name(suit)
+    
+    # Получаем эмодзи и название карты
+    card_emoji = get_card_emoji(card)
+    card_name = get_card_name(card)
+    
     # Определяем проблемный уровень
     problem_level = max(scores, key=scores.get)
     
@@ -1693,12 +1699,12 @@ async def show_result(update: Update, context: ContextTypes.DEFAULT_TYPE):
     }
     
     result_text = (
-        f"🎉 ТЕСТ ЗАВЕРШЁН!\n\n"
-        f"🎴 Твой результат:\n"
-        f"Масть: <b>{suit}</b>\n"
-        f"Карта: <b>{card}</b>\n"
+        f"🎉 <b>ТЕСТ ЗАВЕРШЁН!</b>\n\n"
+        f"🎴 <b>Твой результат:</b>\n\n"
+        f"Масть: <b>{suit_emoji} {suit_name}</b>\n"
+        f"Карта: <b>{card_emoji} {card_name}</b>\n"
         f"Проблемный уровень: <b>{level_names[problem_level]}</b>\n\n"
-        f"📊 Баллы по уровням:\n"
+        f"📊 <b>Баллы по уровням:</b>\n"
     )
     for level, score in scores.items():
         result_text += f"{level_names[level]}: {score}\n"
