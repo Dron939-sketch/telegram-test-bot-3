@@ -272,7 +272,9 @@ def format_suit_result(suit):
     text = f"{desc['emoji']} {desc['name']}\n\n"
     text += f"*{desc['title']}*\n\n"
     text += "\n".join(desc['text'])
-    def get_suit_by_axes(control, internal):
+    return text
+
+def get_suit_by_axes(control, internal):
     """Определяет масть по осям"""
     if control >= 0 and internal >= 0:
         return "жезлы"
@@ -282,4 +284,3 @@ def format_suit_result(suit):
         return "кубки"
     else:
         return "пентакли"
-    return text
