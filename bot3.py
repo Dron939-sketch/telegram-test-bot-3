@@ -10,27 +10,18 @@ from telegram.ext import (
 )
 
 # ========== ИМПОРТЫ ОПИСАНИЙ ==========
-from suit_descriptions import (
+from stage1_suits import (
     get_suit_by_axes,
-    get_suit_description,
-    format_suit_result,
-    get_suit_emoji,
-    get_suit_name
+    format_suit_result
 )
 
-from card_descriptions import (
-    get_card_by_scores,
-    get_card_description,
-    format_card_result,
-    get_card_emoji,
-    get_card_name
+from stage2_profiles import (
+    format_profile_result
 )
 
-from problem_descriptions import get_problem
-
-from profile_descriptions import (
-    get_profile,
-    format_full_result
+from stage3_problems import (
+    get_problem_level_by_scores,
+    format_problem_result
 )
 
 # ========== НАСТРОЙКИ ==========
@@ -202,7 +193,7 @@ STAGE_1_QUESTIONS = [
 
 # ========== ЭТАП 2: ОПРЕДЕЛЕНИЕ КАРТЫ (18 вопросов) ==========
 STAGE_2_QUESTIONS = {
-    "TF": [  # ТРЕФЫ
+    "clubs": [  # ТРЕФЫ
         {
             "text": "Как ты чувствуешь себя среди людей?",
             "options": {
@@ -367,7 +358,7 @@ STAGE_2_QUESTIONS = {
         }
     ],
     
-    "CV": [  # ЧЕРВИ
+    "hearts": [  # ЧЕРВИ
         {
             "text": "Что ты чувствуешь в жизни?",
             "options": {
@@ -532,7 +523,7 @@ STAGE_2_QUESTIONS = {
         }
     ],
     
-    "SB": [  # БУБНЫ
+    "diamonds": [  # БУБНЫ
         {
             "text": "Что ты чувствуешь в жизни?",
             "options": {
@@ -697,7 +688,7 @@ STAGE_2_QUESTIONS = {
         }
     ],
     
-    "UB": [  # ПИКИ
+    "spades": [  # ПИКИ
         {
             "text": "Что ты чувствуешь в жизни?",
             "options": {
@@ -865,9 +856,9 @@ STAGE_2_QUESTIONS = {
 
 # ========== ЭТАП 3: ОПРЕДЕЛЕНИЕ ПРОБЛЕМНОГО УРОВНЯ (12 вопросов) ==========
 STAGE_3_QUESTIONS = {
-    "TF": [  # ТРЕФЫ
+    "clubs": [  # ТРЕФЫ
         {
-            "level": "OKRUZHENIE",
+            "level": "environment",
             "text": "Где вы чувствуете себя хуже всего?",
             "options": {
                 "PROBLEM": "Среди чужих людей",
@@ -876,7 +867,7 @@ STAGE_3_QUESTIONS = {
             }
         },
         {
-            "level": "OKRUZHENIE",
+            "level": "environment",
             "text": "Что в вашем окружении не так?",
             "options": {
                 "PROBLEM": "Не те люди",
@@ -885,7 +876,7 @@ STAGE_3_QUESTIONS = {
             }
         },
         {
-            "level": "POVEDENIE",
+            "level": "behavior",
             "text": "Что вы делаете, когда хотите сблизиться?",
             "options": {
                 "PROBLEM": "Не знаю как",
@@ -894,7 +885,7 @@ STAGE_3_QUESTIONS = {
             }
         },
         {
-            "level": "POVEDENIE",
+            "level": "behavior",
             "text": "Как вы строите отношения?",
             "options": {
                 "PROBLEM": "Неправильно",
@@ -903,7 +894,7 @@ STAGE_3_QUESTIONS = {
             }
         },
         {
-            "level": "SPOSOBNOSTI",
+            "level": "capabilities",
             "text": "Вы умеете налаживать связи?",
             "options": {
                 "PROBLEM": "Нет этого навыка",
@@ -912,7 +903,7 @@ STAGE_3_QUESTIONS = {
             }
         },
         {
-            "level": "SPOSOBNOSTI",
+            "level": "capabilities",
             "text": "Что вам мешает быть ближе с людьми?",
             "options": {
                 "PROBLEM": "Не умею чувствовать других",
@@ -921,7 +912,7 @@ STAGE_3_QUESTIONS = {
             }
         },
         {
-            "level": "CENNOSTI",
+            "level": "values",
             "text": "Зачем вам связи с людьми?",
             "options": {
                 "PROBLEM": "Не знаю зачем",
@@ -930,7 +921,7 @@ STAGE_3_QUESTIONS = {
             }
         },
         {
-            "level": "CENNOSTI",
+            "level": "values",
             "text": "Что для вас важно в отношениях?",
             "options": {
                 "PROBLEM": "Не понимаю что",
@@ -939,7 +930,7 @@ STAGE_3_QUESTIONS = {
             }
         },
         {
-            "level": "IDENTICHNOST",
+            "level": "identity",
             "text": "Кто вы в отношениях?",
             "options": {
                 "PROBLEM": "Не знаю кто",
@@ -948,7 +939,7 @@ STAGE_3_QUESTIONS = {
             }
         },
         {
-            "level": "IDENTICHNOST",
+            "level": "identity",
             "text": "Вы чувствуете себя собой с людьми?",
             "options": {
                 "PROBLEM": "Нет, я другой",
@@ -957,7 +948,7 @@ STAGE_3_QUESTIONS = {
             }
         },
         {
-            "level": "MISSIYA",
+            "level": "mission",
             "text": "Для чего вы нужны людям?",
             "options": {
                 "PROBLEM": "Не знаю для чего",
@@ -966,7 +957,7 @@ STAGE_3_QUESTIONS = {
             }
         },
         {
-            "level": "MISSIYA",
+            "level": "mission",
             "text": "Какой ваш вклад в мир через связи?",
             "options": {
                 "PROBLEM": "Нет вклада",
@@ -976,9 +967,9 @@ STAGE_3_QUESTIONS = {
         }
     ],
     
-    "CV": [  # ЧЕРВИ
+    "hearts": [  # ЧЕРВИ
         {
-            "level": "OKRUZHENIE",
+            "level": "environment",
             "text": "Где вы чувствуете пустоту сильнее?",
             "options": {
                 "PROBLEM": "В поверхностном мире",
@@ -987,7 +978,7 @@ STAGE_3_QUESTIONS = {
             }
         },
         {
-            "level": "OKRUZHENIE",
+            "level": "environment",
             "text": "Что не так с вашим миром?",
             "options": {
                 "PROBLEM": "Вокруг нет глубины",
@@ -996,7 +987,7 @@ STAGE_3_QUESTIONS = {
             }
         },
         {
-            "level": "POVEDENIE",
+            "level": "behavior",
             "text": "Что вы делаете, когда ищете смысл?",
             "options": {
                 "PROBLEM": "Не знаю как искать",
@@ -1005,7 +996,7 @@ STAGE_3_QUESTIONS = {
             }
         },
         {
-            "level": "POVEDENIE",
+            "level": "behavior",
             "text": "Как вы работаете с чувствами?",
             "options": {
                 "PROBLEM": "Неправильно",
@@ -1014,7 +1005,7 @@ STAGE_3_QUESTIONS = {
             }
         },
         {
-            "level": "SPOSOBNOSTI",
+            "level": "capabilities",
             "text": "Вы умеете чувствовать глубоко?",
             "options": {
                 "PROBLEM": "Нет этого навыка",
@@ -1023,7 +1014,7 @@ STAGE_3_QUESTIONS = {
             }
         },
         {
-            "level": "SPOSOBNOSTI",
+            "level": "capabilities",
             "text": "Что мешает вам чувствовать?",
             "options": {
                 "PROBLEM": "Не умею проживать",
@@ -1032,7 +1023,7 @@ STAGE_3_QUESTIONS = {
             }
         },
         {
-            "level": "CENNOSTI",
+            "level": "values",
             "text": "Зачем вам глубина и смысл?",
             "options": {
                 "PROBLEM": "Не знаю зачем",
@@ -1041,7 +1032,7 @@ STAGE_3_QUESTIONS = {
             }
         },
         {
-            "level": "CENNOSTI",
+            "level": "values",
             "text": "Что для вас важно в жизни?",
             "options": {
                 "PROBLEM": "Не понимаю что",
@@ -1050,7 +1041,7 @@ STAGE_3_QUESTIONS = {
             }
         },
         {
-            "level": "IDENTICHNOST",
+            "level": "identity",
             "text": "Кто вы на самом деле?",
             "options": {
                 "PROBLEM": "Не знаю кто",
@@ -1059,7 +1050,7 @@ STAGE_3_QUESTIONS = {
             }
         },
         {
-            "level": "IDENTICHNOST",
+            "level": "identity",
             "text": "Вы чувствуете свою суть?",
             "options": {
                 "PROBLEM": "Нет, я пустой",
@@ -1068,7 +1059,7 @@ STAGE_3_QUESTIONS = {
             }
         },
         {
-            "level": "MISSIYA",
+            "level": "mission",
             "text": "Для чего вы в этом мире?",
             "options": {
                 "PROBLEM": "Не знаю для чего",
@@ -1077,7 +1068,7 @@ STAGE_3_QUESTIONS = {
             }
         },
         {
-            "level": "MISSIYA",
+            "level": "mission",
             "text": "Какой ваш вклад в мир через чувства?",
             "options": {
                 "PROBLEM": "Нет вклада",
@@ -1087,9 +1078,9 @@ STAGE_3_QUESTIONS = {
         }
     ],
     
-    "SB": [  # БУБНЫ
+    "diamonds": [  # БУБНЫ
         {
-            "level": "OKRUZHENIE",
+            "level": "environment",
             "text": "Где вы чувствуете нехватку сильнее?",
             "options": {
                 "PROBLEM": "В бедном окружении",
@@ -1098,7 +1089,7 @@ STAGE_3_QUESTIONS = {
             }
         },
         {
-            "level": "OKRUZHENIE",
+            "level": "environment",
             "text": "Что не так с вашим миром?",
             "options": {
                 "PROBLEM": "Мало ресурсов вокруг",
@@ -1107,7 +1098,7 @@ STAGE_3_QUESTIONS = {
             }
         },
         {
-            "level": "POVEDENIE",
+            "level": "behavior",
             "text": "Что вы делаете, когда нужны ресурсы?",
             "options": {
                 "PROBLEM": "Не знаю как добыть",
@@ -1116,7 +1107,7 @@ STAGE_3_QUESTIONS = {
             }
         },
         {
-            "level": "POVEDENIE",
+            "level": "behavior",
             "text": "Как вы достигаете целей?",
             "options": {
                 "PROBLEM": "Неправильно",
@@ -1125,7 +1116,7 @@ STAGE_3_QUESTIONS = {
             }
         },
         {
-            "level": "SPOSOBNOSTI",
+            "level": "capabilities",
             "text": "Вы умеете зарабатывать/создавать?",
             "options": {
                 "PROBLEM": "Нет этого навыка",
@@ -1134,7 +1125,7 @@ STAGE_3_QUESTIONS = {
             }
         },
         {
-            "level": "SPOSOBNOSTI",
+            "level": "capabilities",
             "text": "Что мешает вам достигать?",
             "options": {
                 "PROBLEM": "Не умею планировать",
@@ -1143,7 +1134,7 @@ STAGE_3_QUESTIONS = {
             }
         },
         {
-            "level": "CENNOSTI",
+            "level": "values",
             "text": "Зачем вам достижения?",
             "options": {
                 "PROBLEM": "Не знаю зачем",
@@ -1152,7 +1143,7 @@ STAGE_3_QUESTIONS = {
             }
         },
         {
-            "level": "CENNOSTI",
+            "level": "values",
             "text": "Что для вас важно в успехе?",
             "options": {
                 "PROBLEM": "Не понимаю что",
@@ -1161,7 +1152,7 @@ STAGE_3_QUESTIONS = {
             }
         },
         {
-            "level": "IDENTICHNOST",
+            "level": "identity",
             "text": "Кто вы в мире достижений?",
             "options": {
                 "PROBLEM": "Не знаю кто",
@@ -1170,7 +1161,7 @@ STAGE_3_QUESTIONS = {
             }
         },
         {
-            "level": "IDENTICHNOST",
+            "level": "identity",
             "text": "Вы чувствуете себя способным?",
             "options": {
                 "PROBLEM": "Нет, я слабый",
@@ -1179,7 +1170,7 @@ STAGE_3_QUESTIONS = {
             }
         },
         {
-            "level": "MISSIYA",
+            "level": "mission",
             "text": "Для чего вы создаёте?",
             "options": {
                 "PROBLEM": "Не знаю для чего",
@@ -1188,7 +1179,7 @@ STAGE_3_QUESTIONS = {
             }
         },
         {
-            "level": "MISSIYA",
+            "level": "mission",
             "text": "Какой ваш вклад в мир через дела?",
             "options": {
                 "PROBLEM": "Нет вклада",
@@ -1198,9 +1189,9 @@ STAGE_3_QUESTIONS = {
         }
     ],
     
-    "UB": [  # ПИКИ
+    "spades": [  # ПИКИ
         {
-            "level": "OKRUZHENIE",
+            "level": "environment",
             "text": "Где вы чувствуете хаос сильнее?",
             "options": {
                 "PROBLEM": "В беспорядочном мире",
@@ -1209,7 +1200,7 @@ STAGE_3_QUESTIONS = {
             }
         },
         {
-            "level": "OKRUZHENIE",
+            "level": "environment",
             "text": "Что не так с вашим миром?",
             "options": {
                 "PROBLEM": "Вокруг нет порядка",
@@ -1218,7 +1209,7 @@ STAGE_3_QUESTIONS = {
             }
         },
         {
-            "level": "POVEDENIE",
+            "level": "behavior",
             "text": "Что вы делаете, когда нужен порядок?",
             "options": {
                 "PROBLEM": "Не знаю как создать",
@@ -1227,7 +1218,7 @@ STAGE_3_QUESTIONS = {
             }
         },
         {
-            "level": "POVEDENIE",
+            "level": "behavior",
             "text": "Как вы наводите порядок?",
             "options": {
                 "PROBLEM": "Неправильно",
@@ -1236,7 +1227,7 @@ STAGE_3_QUESTIONS = {
             }
         },
         {
-            "level": "SPOSOBNOSTI",
+            "level": "capabilities",
             "text": "Вы умеете создавать системы?",
             "options": {
                 "PROBLEM": "Нет этого навыка",
@@ -1245,7 +1236,7 @@ STAGE_3_QUESTIONS = {
             }
         },
         {
-            "level": "SPOSOBNOSTI",
+            "level": "capabilities",
             "text": "Что мешает вам контролировать?",
             "options": {
                 "PROBLEM": "Не умею анализировать",
@@ -1254,7 +1245,7 @@ STAGE_3_QUESTIONS = {
             }
         },
         {
-            "level": "CENNOSTI",
+            "level": "values",
             "text": "Зачем вам порядок?",
             "options": {
                 "PROBLEM": "Не знаю зачем",
@@ -1263,7 +1254,7 @@ STAGE_3_QUESTIONS = {
             }
         },
         {
-            "level": "CENNOSTI",
+            "level": "values",
             "text": "Что для вас важно в системах?",
             "options": {
                 "PROBLEM": "Не понимаю что",
@@ -1272,7 +1263,7 @@ STAGE_3_QUESTIONS = {
             }
         },
         {
-            "level": "IDENTICHNOST",
+            "level": "identity",
             "text": "Кто вы в мире систем?",
             "options": {
                 "PROBLEM": "Не знаю кто",
@@ -1281,7 +1272,7 @@ STAGE_3_QUESTIONS = {
             }
         },
         {
-            "level": "IDENTICHNOST",
+            "level": "identity",
             "text": "Вы чувствуете себя упорядоченным?",
             "options": {
                 "PROBLEM": "Нет, я хаос",
@@ -1290,7 +1281,7 @@ STAGE_3_QUESTIONS = {
             }
         },
         {
-            "level": "MISSIYA",
+            "level": "mission",
             "text": "Для чего вы создаёте порядок?",
             "options": {
                 "PROBLEM": "Не знаю для чего",
@@ -1299,7 +1290,7 @@ STAGE_3_QUESTIONS = {
             }
         },
         {
-            "level": "MISSIYA",
+            "level": "mission",
             "text": "Какой ваш вклад в мир через системы?",
             "options": {
                 "PROBLEM": "Нет вклада",
@@ -1312,7 +1303,7 @@ STAGE_3_QUESTIONS = {
 
 # ========== ТАБЛИЦА НАЧИСЛЕНИЯ БАЛЛОВ ДЛЯ ЭТАПА 2 ==========
 STAGE_2_SCORING = {
-    "TF": {
+    "clubs": {
         0: {"6": 2, "7": 2, "8": 2, "9": 2},
         1: {"6": 2, "7": 2, "8": 2, "9": 2},
         2: {"6": 2, "7": 2, "8": 2, "9": 2},
@@ -1332,7 +1323,7 @@ STAGE_2_SCORING = {
         16: {"J": 2, "Q": 2, "K": 2, "A": 2},
         17: {"Q": 2, "K": 2, "A": 2, "10": 2}
     },
-    "CV": {
+    "hearts": {
         0: {"6": 2, "7": 2, "8": 2, "9": 2},
         1: {"6": 2, "7": 2, "8": 2, "9": 2},
         2: {"6": 2, "7": 2, "8": 2, "9": 2},
@@ -1352,7 +1343,7 @@ STAGE_2_SCORING = {
         16: {"J": 2, "Q": 2, "K": 2, "A": 2},
         17: {"Q": 2, "K": 2, "A": 2, "10": 2}
     },
-    "SB": {
+    "diamonds": {
         0: {"6": 2, "7": 2, "8": 2, "9": 2},
         1: {"6": 2, "7": 2, "8": 2, "9": 2},
         2: {"6": 2, "7": 2, "8": 2, "9": 2},
@@ -1372,7 +1363,7 @@ STAGE_2_SCORING = {
         16: {"J": 2, "Q": 2, "K": 2, "A": 2},
         17: {"Q": 2, "K": 2, "A": 2, "10": 2}
     },
-    "UB": {
+    "spades": {
         0: {"6": 2, "7": 2, "8": 2, "9": 2},
         1: {"6": 2, "7": 2, "8": 2, "9": 2},
         2: {"6": 2, "7": 2, "8": 2, "9": 2},
@@ -1401,6 +1392,10 @@ def calculate_progress(current: int, total: int) -> str:
     filled = int(progress / 10)
     bar = "▓" * filled + "░" * (10 - filled)
     return f"{bar} {progress}%\nПройдено: {current} из {total}"
+
+def get_card_by_scores(scores: dict) -> str:
+    """Определяет карту по баллам"""
+    return max(scores, key=scores.get)
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Команда /start"""
@@ -1440,12 +1435,12 @@ async def start_test(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "J": 0, "Q": 0, "K": 0, "A": 0
     }
     context.user_data["stage_3_scores"] = {
-        "OKRUZHENIE": 0,
-        "POVEDENIE": 0,
-        "SPOSOBNOSTI": 0,
-        "CENNOSTI": 0,
-        "IDENTICHNOST": 0,
-        "MISSIYA": 0
+        "environment": 0,
+        "behavior": 0,
+        "capabilities": 0,
+        "values": 0,
+        "identity": 0,
+        "mission": 0
     }
     context.user_data["current_question"] = 0
     
@@ -1534,7 +1529,7 @@ async def finish_stage_1(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [[InlineKeyboardButton("▶️ Начать ЭТАП 2", callback_data="start_stage_2")]]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
-    await query.edit_message_text(result_text, reply_markup=reply_markup, parse_mode="HTML")
+    await query.edit_message_text(result_text, reply_markup=reply_markup)
     return STAGE_2
 
 async def start_stage_2(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1599,10 +1594,6 @@ async def finish_stage_2(update: Update, context: ContextTypes.DEFAULT_TYPE):
     scores = context.user_data["stage_2_scores"]
     suit = context.user_data["suit"]
     
-    # Получаем эмодзи и название масти
-    suit_emoji = get_suit_emoji(suit)
-    suit_name = get_suit_name(suit)
-    
     # Определяем карту по баллам
     card = get_card_by_scores(scores)
     
@@ -1611,13 +1602,13 @@ async def finish_stage_2(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["current_question"] = 0
     
     # Форматируем результат
-    result_text = format_card_result(card, suit_emoji, suit_name, scores)
+    result_text = format_profile_result(suit, card)
     
     # Кнопка перехода к ЭТАПУ 3
     keyboard = [[InlineKeyboardButton("▶️ Начать ЭТАП 3", callback_data="start_stage_3")]]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
-    await query.edit_message_text(result_text, reply_markup=reply_markup, parse_mode="HTML")
+    await query.edit_message_text(result_text, reply_markup=reply_markup)
     return STAGE_3
 
 async def start_stage_3(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1685,54 +1676,18 @@ async def show_result(update: Update, context: ContextTypes.DEFAULT_TYPE):
     card = context.user_data["card"]
     scores = context.user_data["stage_3_scores"]
     
-    # Получаем эмодзи и названия
-    suit_emoji = get_suit_emoji(suit)
-    suit_name = get_suit_name(suit)
-    card_emoji = get_card_emoji(card)
-    card_name = get_card_name(card)
-    
     # Определяем проблемный уровень
-    problem_level = max(scores, key=scores.get)
+    problem_level = get_problem_level_by_scores(scores)
     
-    level_emojis = {
-        "OKRUZHENIE": "🌍",
-        "POVEDENIE": "🏃",
-        "SPOSOBNOSTI": "💪",
-        "CENNOSTI": "🧠",
-        "IDENTICHNOST": "👤",
-        "MISSIYA": "🎯"
-    }
-    
-    level_names = {
-        "OKRUZHENIE": "ОКРУЖЕНИЕ",
-        "POVEDENIE": "ПОВЕДЕНИЕ",
-        "SPOSOBNOSTI": "СПОСОБНОСТИ",
-        "CENNOSTI": "ЦЕННОСТИ",
-        "IDENTICHNOST": "ИДЕНТИЧНОСТЬ",
-        "MISSIYA": "МИССИЯ"
-    }
-    
-    level_emoji = level_emojis[problem_level]
-    level_name = level_names[problem_level]
-    
-    # Получаем проблему
-    problem = get_problem(suit, card, problem_level)
-    
-    # Форматируем полный результат
-    result_text = format_full_result(
-        suit, card, problem_level,
-        suit_emoji, suit_name,
-        card_emoji, card_name,
-        level_emoji, level_name,
-        problem
-    )
+    # Форматируем результат
+    result_text = format_problem_result(suit, card, problem_level, scores)
     
     keyboard = [
         [InlineKeyboardButton("🔄 Пройти заново", callback_data="start_test")],
         [InlineKeyboardButton("💬 Написать автору", url="https://t.me/meysternlp")]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
-    await query.edit_message_text(result_text, reply_markup=reply_markup, parse_mode="HTML")
+    await query.edit_message_text(result_text, reply_markup=reply_markup)
     return ConversationHandler.END
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
