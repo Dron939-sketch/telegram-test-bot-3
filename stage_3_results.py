@@ -845,3 +845,23 @@ STAGE_3_RESULTS = {
         ]
     }
 }
+def get_problem_level_by_scores(scores):
+    """Определяет проблемный уровень по баллам"""
+    max_level = max(scores, key=scores.get)
+    return max_level
+
+def format_problem_result(suit, card, problem_level, scores):
+    """Форматирует результат 3 этапа"""
+    # Определяем ключ для результата
+    # Нужно сопоставить масть, карту и уровень с ключами в STAGE_3_RESULTS
+    
+    # Пока возвращаем заглушку
+    result_text = f"🎯 ИТОГОВЫЙ РЕЗУЛЬТАТ\n\n"
+    result_text += f"Масть: {suit}\n"
+    result_text += f"Карта: {card}\n"
+    result_text += f"Проблемный уровень: {problem_level}\n\n"
+    result_text += f"Баллы по уровням:\n"
+    for level, score in scores.items():
+        result_text += f"• {level}: {score}\n"
+    
+    return result_text
