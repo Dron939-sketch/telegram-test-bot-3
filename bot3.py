@@ -1404,8 +1404,63 @@ def get_problem_level_by_scores(scores: dict) -> str:
         return "environment"
     return max(scores, key=scores.get)
 
+def format_suit_result_short(suit: str, scores: dict) -> str:
+    """НОВАЯ ФУНКЦИЯ: Форматирует КОРОТКИЙ результат БЕЗ аналитики (ПУНКТ 3)"""
+    
+    suit_data = {
+        "clubs": {
+            "emoji": "♣️",
+            "name": "ТРЕФЫ",
+            "title": "Конфигурация связи",
+            "description": "Ты воспринимаешь мир через связи с людьми. Для тебя реальность — это отношения, принадлежность, общность. Твоя базовая потребность — быть частью чего-то большего.",
+            "focus": "Внешний фокус — ты ищешь связь вовне",
+            "fear": "Страх умозрительного — боишься потерять людей, остаться один"
+        },
+        "hearts": {
+            "emoji": "♥️",
+            "name": "ЧЕРВИ",
+            "title": "Конфигурация смысла",
+            "description": "Ты воспринимаешь мир через чувства и смыслы. Для тебя реальность — это переживания, глубина, внутренний опыт. Твоя базовая потребность — чувствовать и понимать.",
+            "focus": "Внутренний фокус — ты ищешь смысл внутри",
+            "fear": "Страх умозрительного — боишься пустоты, бессмысленности"
+        },
+        "diamonds": {
+            "emoji": "♦️",
+            "name": "БУБНЫ",
+            "title": "Конфигурация ресурса",
+            "description": "Ты воспринимаешь мир через материю и ресурсы. Для тебя реальность — это то, что можно потрогать, измерить, использовать. Твоя базовая потребность — иметь и достигать.",
+            "focus": "Внешний фокус — ты ищешь ресурсы вовне",
+            "fear": "Страх фактического — боишься потерять то, что имеешь"
+        },
+        "spades": {
+            "emoji": "♠️",
+            "name": "ПИКИ",
+            "title": "Конфигурация порядка",
+            "description": "Ты воспринимаешь мир через системы и структуры. Для тебя реальность — это логика, причинно-следственные связи, закономерности. Твоя базовая потребность — понимать и контролировать.",
+            "focus": "Внутренний фокус — ты ищешь порядок внутри",
+            "fear": "Страх фактического — боишься хаоса, потери контроля"
+        }
+    }
+    
+    data = suit_data.get(suit, suit_data["clubs"])
+    
+    result = f"🎯 <b>РЕЗУЛЬТАТ ЭТАПА 1</b>\n\n"
+    result += f"{data['emoji']} <b>{data['name']}</b>\n\n"
+    result += f"<b>{data['title']}</b>\n\n"
+    result += f"{data['description']}\n\n"
+    result += f"━━━━━━━━━━━━━━━━━━━━\n\n"
+    result += f"<b>Ваша конфигурация:</b>\n"
+    result += f"• {data.get('focus', '')}\n"
+    result += f"• {data.get('fear', '')}\n\n"
+    result += "Дальше вы узнаете:\n"
+    result += "• Почему это происходит\n"
+    result += "• Как это использовать как силу\n"
+    result += "• В каком режиме вы сейчас"
+    
+    return result
+
 def format_problem_result(suit: str, card: str, problem_level: str, scores: dict) -> str:
-    """Форматирует результат 3 этапа с описанием проблемы"""
+    """Форматирует результат 3 этапа с описанием проблемы (ПУНКТ 6)"""
     key = f"{suit}_{card}_{problem_level}"
     description = STAGE_3_RESULTS.get(key, {})
     
@@ -1415,6 +1470,7 @@ def format_problem_result(suit: str, card: str, problem_level: str, scores: dict
     
     result_text = "🎭 <b>ВАША СИТУАЦИЯ</b>\n\n"
     
+    # ДОБАВЛЯЕМ ОПИСАНИЕ КОНФЛИКТА ИЗ STAGE_3_RESULTS
     if isinstance(description, dict):
         if 'title' in description:
             result_text += f"<b>{description['title']}</b>\n"
@@ -1452,7 +1508,7 @@ def format_problem_result(suit: str, card: str, problem_level: str, scores: dict
 # ========== ОБРАБОТЧИКИ КОМАНД И CALLBACK ==========
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Команда /start - ИСПРАВЛЕНИЕ ПУНКТ 1"""
+    """Команда /start"""
     user = update.effective_user
     welcome_text = (
         f"👁 <b>ЧЕЛОВЕК В КРАСНЫХ ОЧКАХ НЕ ВИДИТ КРАСНОГО</b>\n"
@@ -1481,7 +1537,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(welcome_text, reply_markup=reply_markup, parse_mode="HTML")
 
 async def show_details(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Показать подробности о тесте - ИСПРАВЛЕНИЕ ПУНКТ 2"""
+    """Показать подробности о тесте"""
     query = update.callback_query
     await query.answer()
     
@@ -1622,7 +1678,7 @@ async def handle_stage_1_answer(update: Update, context: ContextTypes.DEFAULT_TY
     return await ask_stage_1_question(update, context)
 
 async def finish_stage_1(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Завершение ЭТАПА 1 - ИСПРАВЛЕНИЕ ПУНКТ 3 и 4"""
+    """Завершение ЭТАПА 1 - ИСПРАВЛЕНО (ПУНКТ 3)"""
     query = update.callback_query
     scores = context.user_data["stage_1_scores"]
     
@@ -1637,8 +1693,8 @@ async def finish_stage_1(update: Update, context: ContextTypes.DEFAULT_TYPE):
     balance_info = analyze_suit_balance(scores)
     context.user_data["balance_info"] = balance_info
     
-    # Получаем КОМПАКТНОЕ описание (без аналитики)
-    result_text = format_suit_result(suit, scores)
+    # ИСПОЛЬЗУЕМ КОРОТКУЮ ВЕРСИЮ (БЕЗ АНАЛИТИКИ)
+    result_text = format_suit_result_short(suit, scores)
     
     keyboard = [
         [InlineKeyboardButton("📊 Подробнее", callback_data="show_analytics")],
@@ -1650,7 +1706,7 @@ async def finish_stage_1(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return STAGE_2
 
 async def show_analytics(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Показать детальную аналитику - НОВАЯ ФУНКЦИЯ ДЛЯ ПУНКТА 4"""
+    """Показать детальную аналитику (ПУНКТ 4)"""
     query = update.callback_query
     await query.answer()
     
@@ -1696,7 +1752,7 @@ async def back_to_stage1_result(update: Update, context: ContextTypes.DEFAULT_TY
     scores = context.user_data["stage_1_scores"]
     suit = context.user_data["suit"]
     
-    result_text = format_suit_result(suit, scores)
+    result_text = format_suit_result_short(suit, scores)
     
     keyboard = [
         [InlineKeyboardButton("📊 Подробнее", callback_data="show_analytics")],
@@ -1760,7 +1816,7 @@ async def handle_stage_2_answer(update: Update, context: ContextTypes.DEFAULT_TY
     return await ask_stage_2_question(update, context)
 
 async def finish_stage_2(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Завершение ЭТАПА 2 - ИСПРАВЛЕНИЕ ПУНКТ 5"""
+    """Завершение ЭТАПА 2"""
     query = update.callback_query
     scores = context.user_data["stage_2_scores"]
     suit = context.user_data["suit"]
@@ -1770,7 +1826,6 @@ async def finish_stage_2(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["card"] = card
     context.user_data["current_question"] = 0
     
-    # Получаем КОМПАКТНОЕ описание
     result_text = format_profile_result(suit, card)
     
     keyboard = [[InlineKeyboardButton("▶️ Начать ЭТАП 3", callback_data="start_stage_3")]]
@@ -1835,7 +1890,7 @@ async def handle_stage_3_answer(update: Update, context: ContextTypes.DEFAULT_TY
     return await ask_stage_3_question(update, context)
 
 async def show_result(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Показ результата - ИСПРАВЛЕНИЕ ПУНКТ 6 и 7"""
+    """Показ результата (ПУНКТ 6)"""
     query = update.callback_query
     
     suit = context.user_data["suit"]
@@ -1844,6 +1899,7 @@ async def show_result(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     problem_level = get_problem_level_by_scores(scores)
     
+    # ИСПОЛЬЗУЕМ format_problem_result, КОТОРЫЙ УЖЕ СОДЕРЖИТ ОПИСАНИЕ КОНФЛИКТА
     result_text = format_problem_result(suit, card, problem_level, scores)
     
     result_text += (
