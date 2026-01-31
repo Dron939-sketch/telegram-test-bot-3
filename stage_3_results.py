@@ -32,7 +32,7 @@ def get_stage3_description(suit, level):
     """Получить описание для конкретной комбинации масти и уровня"""
     
     # ========================================
-    # СВЯЗНОЙ (clubs) - ОКРУЖЕНИЕ
+    # СВЯЗНОЙ (clubs) - ВСЕ УРОВНИ
     # ========================================
     
     if suit == "clubs" and level == "environment":
@@ -1871,34 +1871,30 @@ def format_stage3_result(suit, level):
     return "\n".join(text_parts)
 
 
-def calculate_stage_3_result(answers):
+def calculate_stage_3_result(scores):
     """
-    Подсчитать результат Этапа 3
-    Возвращает уровень с максимальным количеством проблем
+    ✅ ИСПРАВЛЕНО: Подсчитать результат Этапа 3
+    
+    Args:
+        scores: dict {"SILA": X, "LOVUSHKA": Y, "ZAPLAT": Z}
+    
+    Returns:
+        str: Уровень ("SILA", "LOVUSHKA", "ZAPLAT")
     """
-    level_counts = {
-        "environment": 0,
-        "behavior": 0,
-        "capabilities": 0,
-        "values": 0,
-        "identity": 0,
-        "mission": 0,
-        "none": 0
-    }
+    if not scores or not isinstance(scores, dict):
+        return "LOVUSHKA"  # По умолчанию
     
-    for answer in answers:
-        level = answer["level"]
-        level_counts[level] += 1
+    # Находим максимальный балл
+    max_category = max(scores, key=scores.get)
+    max_score = scores[max_category]
     
-    # Находим уровень с максимальным количеством проблем
-    # Исключаем "none" из подсчета
-    problem_levels = {k: v for k, v in level_counts.items() if k != "none"}
+    # Проверяем, есть ли явный лидер (разница >= 2 баллов)
+    other_scores = [v for k, v in scores.items() if k != max_category]
+    if other_scores and (max_score - max(other_scores) >= 2):
+        return max_category
     
-    if not problem_levels or max(problem_levels.values()) == 0:
-        return "none"  # Нет проблем вообще
-    
-    max_level = max(problem_levels, key=problem_levels.get)
-    return max_level
+    # Если баллы близки — возвращаем LOVUSHKA (переходное состояние)
+    return "LOVUSHKA"
 
 
 # Экспорт
