@@ -10,17 +10,8 @@ from telegram.ext import (
 )
 
 # ========== ИМПОРТЫ ОПИСАНИЙ ==========
-from suit_descriptions import (
-    get_suit_by_axes,
-    format_suit_result,
-    analyze_suit_balance,
-    get_suit_interpretation
-)
-
-from stage2_profiles import (
-    format_profile_result
-)
-
+from suit_descriptions import SUIT_DESCRIPTIONS
+from stage2_profiles import STAGE_2_PROFILES
 from stage_3_results import STAGE_3_RESULTS
 
 # ========== НАСТРОЙКИ ==========
@@ -1394,6 +1385,17 @@ def calculate_progress(current: int, total: int) -> str:
     bar = "▓" * filled + "░" * (10 - filled)
     return f"{bar} {progress}%\n📊 Пройдено: {current} из {total}"
 
+def get_suit_by_axes(control_value: float, internal_value: float, scores: dict) -> str:
+    """Определяет масть по осям"""
+    if control_value >= 0 and internal_value >= 0:
+        return "clubs"
+    elif control_value < 0 and internal_value >= 0:
+        return "hearts"
+    elif control_value >= 0 and internal_value < 0:
+        return "diamonds"
+    else:
+        return "spades"
+
 def get_card_by_scores(scores: dict) -> str:
     """Определяет карту по баллам"""
     return max(scores, key=scores.get)
@@ -1403,33 +1405,6 @@ def get_problem_level_by_scores(scores: dict) -> str:
     if not scores or all(v == 0 for v in scores.values()):
         return "environment"
     return max(scores, key=scores.get)
-
-def format_problem_result(suit: str, card: str, problem_level: str, scores: dict) -> str:
-    """Форматирует результат 3 этапа с описанием проблемы"""
-    key = f"{suit}_{card}_{problem_level}"
-    description = STAGE_3_RESULTS.get(key, {})
-    
-    if not description:
-        key_without_card = f"{suit}_{problem_level}"
-        description = STAGE_3_RESULTS.get(key_without_card, {})
-    
-    result_text = "🎭 <b>ВАША СИСТЕМА КОНФИГУРАЦИИ ПОВЕДЕНЧЕСКИХ ПАТТЕРНОВ</b>\n\n"
-    
-    if isinstance(description, dict):
-        if 'title' in description:
-            result_text += f"<b>{description['title']}</b>\n\n"
-        if 'description' in description:
-            result_text += f"{description['description']}\n\n"
-        if 'pattern' in description:
-            result_text += f"🔄 <b>Паттерн:</b> {description['pattern']}\n\n"
-        if 'recommendation' in description:
-            result_text += f"💡 <b>Что делать:</b> {description['recommendation']}\n"
-    elif isinstance(description, str):
-        result_text += f"{description}\n"
-    else:
-        result_text += f"Конфигурация: {suit} | Профиль: {card} | Уровень: {problem_level}\n"
-    
-    return result_text
 
 # ========== ОБРАБОТЧИКИ КОМАНД И CALLBACK ==========
 
@@ -1446,11 +1421,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"━━━━━━━━━━━━━━━━━━━━\n\n"
         f"🎯 <b>ЧТО ВАС ЖДЁТ</b>\n\n"
         f"1️⃣ <b>Этап 1: Конфигурация восприятия</b>\n"
-        f"Определим вашу масть — базовый фильтр, через который вы воспринимаете реальность (Трефы/Червы/Бубны/Пики)\n\n"
+        f"Определим ваш базовый фильтр — через что вы воспринимаете реальность (16 вопросов)\n\n"
         f"2️⃣ <b>Этап 2: Конфигурация мышления</b>\n"
-        f"Определим ваш профиль — как вы обрабатываете информацию и принимаете решения (карты 6-9)\n\n"
+        f"Определим ваш профиль — как вы обрабатываете информацию и принимаете решения (18 вопросов)\n\n"
         f"3️⃣ <b>Этап 3: Конфигурация поведенческих паттернов</b>\n"
-        f"Определим проблемный уровень — где застряла ваша проблема (Окружение/Поведение/Способности/Ценности/Идентичность/Миссия)\n\n"
+        f"Определим проблемный уровень — где застряла ваша проблема (12 вопросов)\n\n"
         f"━━━━━━━━━━━━━━━━━━━━\n\n"
         f"🎁 <b>ВЫ ПОЛУЧИТЕ</b>\n"
         f"✅ Свой фильтр — через что вы смотрите на мир\n"
@@ -1475,16 +1450,16 @@ async def show_details(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"💡 <b>КАК ЭТО РАБОТАЕТ</b>\n\n"
         f"📍 <b>Конфигурация восприятия (твоё «железо»)</b>\n"
         f"Через что ты фильтруешь реальность:\n"
-        f"• ♣️ Трефы — связи и отношения\n"
-        f"• ♥️ Червы — чувства и смыслы\n"
-        f"• ♦️ Бубны — действие и результат\n"
-        f"• ♠️ Пики — мысли и системы\n\n"
+        f"• Связи и отношения\n"
+        f"• Чувства и смыслы\n"
+        f"• Действие и результат\n"
+        f"• Мысли и системы\n\n"
         f"🧠 <b>Конфигурация мышления (твои «программы»)</b>\n"
         f"Как ты обрабатываешь информацию:\n"
-        f"• Карта 6 — базовый уровень\n"
-        f"• Карта 7 — развивающийся уровень\n"
-        f"• Карта 8 — продвинутый уровень\n"
-        f"• Карта 9 — мастерский уровень\n\n"
+        f"• Базовый уровень — начальная стадия\n"
+        f"• Развивающийся уровень — поиск и рост\n"
+        f"• Продвинутый уровень — адаптация\n"
+        f"• Мастерский уровень — интеграция\n\n"
         f"🎭 <b>Конфигурация поведенческих паттернов (твои «баги»)</b>\n"
         f"Где застряла твоя проблема:\n"
         f"• Окружение — где и с кем\n"
@@ -1520,11 +1495,11 @@ async def back_to_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"━━━━━━━━━━━━━━━━━━━━\n\n"
         f"🎯 <b>ЧТО ВАС ЖДЁТ</b>\n\n"
         f"1️⃣ <b>Этап 1: Конфигурация восприятия</b>\n"
-        f"Определим вашу масть — базовый фильтр, через который вы воспринимаете реальность (Трефы/Червы/Бубны/Пики)\n\n"
+        f"Определим ваш базовый фильтр — через что вы воспринимаете реальность (16 вопросов)\n\n"
         f"2️⃣ <b>Этап 2: Конфигурация мышления</b>\n"
-        f"Определим ваш профиль — как вы обрабатываете информацию и принимаете решения (карты 6-9)\n\n"
+        f"Определим ваш профиль — как вы обрабатываете информацию и принимаете решения (18 вопросов)\n\n"
         f"3️⃣ <b>Этап 3: Конфигурация поведенческих паттернов</b>\n"
-        f"Определим проблемный уровень — где застряла ваша проблема (Окружение/Поведение/Способности/Ценности/Идентичность/Миссия)\n\n"
+        f"Определим проблемный уровень — где застряла ваша проблема (12 вопросов)\n\n"
         f"━━━━━━━━━━━━━━━━━━━━\n\n"
         f"🎁 <b>ВЫ ПОЛУЧИТЕ</b>\n"
         f"✅ Свой фильтр — через что вы смотрите на мир\n"
@@ -1568,7 +1543,7 @@ async def start_test(update: Update, context: ContextTypes.DEFAULT_TYPE):
     intro_text = (
         f"🎯 <b>ЭТАП 1: КОНФИГУРАЦИЯ ВОСПРИЯТИЯ</b>\n\n"
         f"Сейчас я задам 16 вопросов, чтобы определить твою систему конфигурации восприятия.\n\n"
-        f"Это твоя <b>масть</b> — базовый фильтр, через который ты смотришь на мир.\n\n"
+        f"Это твой базовый фильтр, через который ты смотришь на мир.\n\n"
         f"Отвечай интуитивно, первое что приходит в голову."
     )
     keyboard = [[InlineKeyboardButton("▶️ Начать", callback_data="start_stage_1")]]
@@ -1639,11 +1614,18 @@ async def finish_stage_1(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["suit"] = suit
     context.user_data["current_question"] = 0
     
-    balance_info = analyze_suit_balance(scores)
-    context.user_data["balance_info"] = balance_info
+    # Получаем ПОЛНОЕ описание из файла
+    suit_data = SUIT_DESCRIPTIONS.get(suit, {})
     
-    # Получаем КОМПАКТНОЕ описание
-    result_text = format_suit_result(suit, scores)
+    result_text = (
+        f"🎯 <b>ВАШ ТИП ВОСПРИЯТИЯ</b>\n\n"
+        f"<b>{suit_data.get('title', 'Неизвестный тип')}</b>\n\n"
+        f"{suit_data.get('description', 'Описание отсутствует')}\n\n"
+        f"<b>🔍 Ваш фильтр:</b>\n{suit_data.get('filter', 'Не определён')}\n\n"
+        f"<b>👁 Слепая зона:</b>\n{suit_data.get('blind_spot', 'Не определена')}\n\n"
+        f"<b>🎭 Ловушка паттерна:</b>\n{suit_data.get('trap', 'Не определена')}\n\n"
+        f"<b>💡 Заплатка:</b>\n{suit_data.get('solution', 'Не определена')}"
+    )
     
     keyboard = [
         [InlineKeyboardButton("🔍 Подробнее о расчётах", callback_data="show_stage1_details")],
@@ -1661,20 +1643,15 @@ async def show_stage1_details(update: Update, context: ContextTypes.DEFAULT_TYPE
     
     scores = context.user_data["stage_1_scores"]
     suit = context.user_data["suit"]
-    balance_info = context.user_data.get("balance_info", {})
     
     control = scores.get("VOVNE", 0) - scores.get("VNUTR", 0)
     internal = scores.get("UMOZ", 0) - scores.get("FAKT", 0)
     total = sum(scores.values())
     percentages = {k: (v / total * 100) if total > 0 else 0 for k, v in scores.items()}
     
-    # Получаем интерпретацию масти
-    interpretation = get_suit_interpretation(suit)
-    
     analytics_text = (
         f"🔍 <b>ДЕТАЛЬНАЯ АНАЛИТИКА ЭТАПА 1</b>\n"
         f"<b>КОНФИГУРАЦИЯ ВОСПРИЯТИЯ</b>\n\n"
-        f"<b>Ваша масть:</b> {suit.upper()}\n\n"
         f"<b>Координаты на осях:</b>\n"
         f"• Ось контроля (X): <b>{control:+.1f}</b> "
         f"{'(внешний фокус — МЫ)' if control >= 0 else '(внутренний фокус — Я)'}\n"
@@ -1690,9 +1667,7 @@ async def show_stage1_details(update: Update, context: ContextTypes.DEFAULT_TYPE
         f"• VNUTR: {scores.get('VNUTR', 0)} баллов\n"
         f"• UMOZ: {scores.get('UMOZ', 0)} баллов\n"
         f"• FAKT: {scores.get('FAKT', 0)} баллов\n"
-        f"• <b>Всего: {total} баллов</b>\n\n"
-        f"<b>Баланс профиля:</b> {balance_info.get('balance_score', 0)}/100\n\n"
-        f"{interpretation}"
+        f"• <b>Всего: {total} баллов</b>"
     )
     
     keyboard = [
@@ -1710,7 +1685,17 @@ async def back_to_stage1_result(update: Update, context: ContextTypes.DEFAULT_TY
     scores = context.user_data["stage_1_scores"]
     suit = context.user_data["suit"]
     
-    result_text = format_suit_result(suit, scores)
+    suit_data = SUIT_DESCRIPTIONS.get(suit, {})
+    
+    result_text = (
+        f"🎯 <b>ВАШ ТИП ВОСПРИЯТИЯ</b>\n\n"
+        f"<b>{suit_data.get('title', 'Неизвестный тип')}</b>\n\n"
+        f"{suit_data.get('description', 'Описание отсутствует')}\n\n"
+        f"<b>🔍 Ваш фильтр:</b>\n{suit_data.get('filter', 'Не определён')}\n\n"
+        f"<b>👁 Слепая зона:</b>\n{suit_data.get('blind_spot', 'Не определена')}\n\n"
+        f"<b>🎭 Ловушка паттерна:</b>\n{suit_data.get('trap', 'Не определена')}\n\n"
+        f"<b>💡 Заплатка:</b>\n{suit_data.get('solution', 'Не определена')}"
+    )
     
     keyboard = [
         [InlineKeyboardButton("🔍 Подробнее о расчётах", callback_data="show_stage1_details")],
@@ -1727,7 +1712,7 @@ async def start_stage_2(update: Update, context: ContextTypes.DEFAULT_TYPE):
     intro_text = (
         f"🎯 <b>ЭТАП 2: КОНФИГУРАЦИЯ МЫШЛЕНИЯ</b>\n\n"
         f"Сейчас я задам 18 вопросов, чтобы определить твою конфигурацию мышления.\n\n"
-        f"Это твой <b>профиль</b> — как ты обрабатываешь информацию и принимаешь решения.\n\n"
+        f"Это твой профиль — как ты обрабатываешь информацию и принимаешь решения.\n\n"
         f"Отвечай честно, выбирай то, что ближе всего."
     )
     keyboard = [[InlineKeyboardButton("▶️ Начать", callback_data="start_stage_2_questions")]]
@@ -1801,8 +1786,19 @@ async def finish_stage_2(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["card"] = card
     context.user_data["current_question"] = 0
     
-    # Получаем КОМПАКТНОЕ описание
-    result_text = format_profile_result(suit, card)
+    # Получаем ПОЛНОЕ описание из файла
+    profile_key = f"{suit}_{card}"
+    profile_data = STAGE_2_PROFILES.get(profile_key, {})
+    
+    result_text = (
+        f"🎯 <b>ВАШ ПРОФИЛЬ МЫШЛЕНИЯ</b>\n\n"
+        f"<b>{profile_data.get('title', 'Неизвестный профиль')}</b>\n\n"
+        f"{profile_data.get('description', 'Описание отсутствует')}\n\n"
+        f"<b>🔍 Как вы мыслите:</b>\n{profile_data.get('thinking', 'Не определено')}\n\n"
+        f"<b>👁 Слепая зона:</b>\n{profile_data.get('blind_spot', 'Не определена')}\n\n"
+        f"<b>🎭 Ловушка:</b>\n{profile_data.get('trap', 'Не определена')}\n\n"
+        f"<b>💡 Заплатка:</b>\n{profile_data.get('solution', 'Не определена')}"
+    )
     
     keyboard = [
         [InlineKeyboardButton("🔍 Подробнее о расчётах", callback_data="show_stage2_details")],
@@ -1827,7 +1823,7 @@ async def show_stage2_details(update: Update, context: ContextTypes.DEFAULT_TYPE
     analytics_text = (
         f"🔍 <b>ДЕТАЛЬНАЯ АНАЛИТИКА ЭТАПА 2</b>\n"
         f"<b>КОНФИГУРАЦИЯ МЫШЛЕНИЯ</b>\n\n"
-        f"<b>Ваш профиль:</b> Карта {card} ({suit.upper()})\n\n"
+        f"<b>Ваш профиль:</b> Карта {card}\n\n"
         f"<b>Баллы по картам:</b>\n"
     )
     
@@ -1857,7 +1853,18 @@ async def back_to_stage2_result(update: Update, context: ContextTypes.DEFAULT_TY
     suit = context.user_data["suit"]
     card = context.user_data["card"]
     
-    result_text = format_profile_result(suit, card)
+    profile_key = f"{suit}_{card}"
+    profile_data = STAGE_2_PROFILES.get(profile_key, {})
+    
+    result_text = (
+        f"🎯 <b>ВАШ ПРОФИЛЬ МЫШЛЕНИЯ</b>\n\n"
+        f"<b>{profile_data.get('title', 'Неизвестный профиль')}</b>\n\n"
+        f"{profile_data.get('description', 'Описание отсутствует')}\n\n"
+        f"<b>🔍 Как вы мыслите:</b>\n{profile_data.get('thinking', 'Не определено')}\n\n"
+        f"<b>👁 Слепая зона:</b>\n{profile_data.get('blind_spot', 'Не определена')}\n\n"
+        f"<b>🎭 Ловушка:</b>\n{profile_data.get('trap', 'Не определена')}\n\n"
+        f"<b>💡 Заплатка:</b>\n{profile_data.get('solution', 'Не определена')}"
+    )
     
     keyboard = [
         [InlineKeyboardButton("🔍 Подробнее о расчётах", callback_data="show_stage2_details")],
@@ -1874,7 +1881,7 @@ async def start_stage_3(update: Update, context: ContextTypes.DEFAULT_TYPE):
     intro_text = (
         f"🎯 <b>ЭТАП 3: КОНФИГУРАЦИЯ ПОВЕДЕНЧЕСКИХ ПАТТЕРНОВ</b>\n\n"
         f"Последний этап! Сейчас я задам 12 вопросов, чтобы определить, на каком уровне находится твоя проблема.\n\n"
-        f"Это твой <b>проблемный уровень</b> — где застрял твой паттерн поведения.\n\n"
+        f"Это твой проблемный уровень — где застрял твой паттерн поведения.\n\n"
         f"Отвечай честно, не думай долго."
     )
     keyboard = [[InlineKeyboardButton("▶️ Начать", callback_data="start_stage_3_questions")]]
@@ -1911,6 +1918,8 @@ async def ask_stage_3_question(update: Update, context: ContextTypes.DEFAULT_TYP
     
     if query:
         await query.edit_message_text(question_text, reply_markup=reply_markup, parse_mode="HTML")
+    
+
     else:
         await update.message.reply_text(question_text, reply_markup=reply_markup, parse_mode="HTML")
     
@@ -1921,47 +1930,69 @@ async def handle_stage_3_answer(update: Update, context: ContextTypes.DEFAULT_TY
     query = update.callback_query
     await query.answer()
     
-    answer = query.data.split("_")[1]
+    answer_type = query.data.split("_")[1]
     suit = context.user_data["suit"]
     current_q = context.user_data["current_question"]
     question = STAGE_3_QUESTIONS[suit][current_q]
+    level = question["level"]
     
-    if answer in ["PROBLEM", "PROBLEM_ALT"]:
-        level = question["level"]
+    # Начисляем баллы за проблемные ответы
+    if answer_type in ["PROBLEM", "PROBLEM_ALT"]:
         context.user_data["stage_3_scores"][level] += 2
     
     context.user_data["current_question"] += 1
     current_q = context.user_data["current_question"]
     
     if current_q >= 12:
-        return await show_result(update, context)
+        return await finish_stage_3(update, context)
     
     return await ask_stage_3_question(update, context)
 
-async def show_result(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Показ финального результата"""
+async def finish_stage_3(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Завершение ЭТАПА 3 и показ финального результата"""
     query = update.callback_query
     
     suit = context.user_data["suit"]
     card = context.user_data["card"]
     scores = context.user_data["stage_3_scores"]
-    
     problem_level = get_problem_level_by_scores(scores)
     
-    result_text = format_problem_result(suit, card, problem_level, scores)
+    # Получаем описание из файла
+    result_key = f"{suit}_{card}_{problem_level}"
+    result_data = STAGE_3_RESULTS.get(result_key, {})
+    
+    level_names = {
+        "environment": "Окружение",
+        "behavior": "Поведение",
+        "capabilities": "Способности",
+        "values": "Ценности",
+        "identity": "Идентичность",
+        "mission": "Миссия"
+    }
+    
+    result_text = (
+        f"🎯 <b>ФИНАЛЬНЫЙ РЕЗУЛЬТАТ</b>\n\n"
+        f"<b>Ваша конфигурация:</b>\n"
+        f"• Тип восприятия: {SUIT_DESCRIPTIONS.get(suit, {}).get('title', 'Неизвестно')}\n"
+        f"• Профиль мышления: {STAGE_2_PROFILES.get(f'{suit}_{card}', {}).get('title', 'Неизвестно')}\n"
+        f"• Проблемный уровень: <b>{level_names.get(problem_level, problem_level)}</b>\n\n"
+        f"━━━━━━━━━━━━━━━━━━━━\n\n"
+        f"<b>{result_data.get('title', 'Ваша проблема')}</b>\n\n"
+        f"{result_data.get('description', 'Описание отсутствует')}\n\n"
+        f"<b>🎭 Ваша ловушка:</b>\n{result_data.get('trap', 'Не определена')}\n\n"
+        f"<b>💡 Ваша заплатка:</b>\n{result_data.get('solution', 'Не определена')}\n\n"
+        f"<b>🔧 Что делать:</b>\n{result_data.get('action', 'Не определено')}"
+    )
     
     result_text += (
-        f"\n━━━━━━━━━━━━━━━━━━━━\n\n"
+        f"\n\n━━━━━━━━━━━━━━━━━━━━\n\n"
         f"📖 <b>СКАЗКА-ПЕРЕДЫШКА</b>\n\n"
         f"<i>Что такое терапевтическая сказка?</i>\n\n"
         f"Это работа с бессознательным через метафору. Сказка обходит защиты разума "
         f"и показывает выход из твоего паттерна.\n\n"
         f"💰 <b>Стоимость:</b> 500₽\n"
         f"⏱ <b>Готовность:</b> 24 часа\n\n"
-        f"Сказка будет написана персонально под твою конфигурацию:\n"
-        f"• Масть: {suit.upper()}\n"
-        f"• Карта: {card}\n"
-        f"• Проблемный уровень: {problem_level}\n\n"
+        f"Сказка будет написана персонально под твою конфигурацию.\n\n"
         f"Это не развлечение. Это инструмент трансформации."
     )
     
@@ -1994,11 +2025,20 @@ async def show_final_details(update: Update, context: ContextTypes.DEFAULT_TYPE)
     stage3_scores = context.user_data["stage_3_scores"]
     problem_level = get_problem_level_by_scores(stage3_scores)
     
+    level_names = {
+        "environment": "Окружение",
+        "behavior": "Поведение",
+        "capabilities": "Способности",
+        "values": "Ценности",
+        "identity": "Идентичность",
+        "mission": "Миссия"
+    }
+    
     analytics_text = (
         f"🔍 <b>ПОЛНАЯ АНАЛИТИКА ТЕСТА</b>\n\n"
         f"━━━━━━━━━━━━━━━━━━━━\n"
         f"<b>ЭТАП 1: КОНФИГУРАЦИЯ ВОСПРИЯТИЯ</b>\n\n"
-        f"<b>Масть:</b> {suit.upper()}\n"
+        f"<b>Тип:</b> {SUIT_DESCRIPTIONS.get(suit, {}).get('title', 'Неизвестно')}\n"
         f"<b>Координаты:</b>\n"
         f"• Ось X (контроль): {control:+.1f}\n"
         f"• Ось Y (страх): {internal:+.1f}\n\n"
@@ -2021,18 +2061,9 @@ async def show_final_details(update: Update, context: ContextTypes.DEFAULT_TYPE)
     analytics_text += (
         f"\n━━━━━━━━━━━━━━━━━━━━\n"
         f"<b>ЭТАП 3: КОНФИГУРАЦИЯ ПОВЕДЕНЧЕСКИХ ПАТТЕРНОВ</b>\n\n"
-        f"<b>Проблемный уровень:</b> {problem_level}\n\n"
+        f"<b>Проблемный уровень:</b> {level_names.get(problem_level, problem_level)}\n\n"
         f"<b>Баллы по уровням:</b>\n"
     )
-    
-    level_names = {
-        "environment": "Окружение",
-        "behavior": "Поведение",
-        "capabilities": "Способности",
-        "values": "Ценности",
-        "identity": "Идентичность",
-        "mission": "Миссия"
-    }
     
     sorted_stage3 = sorted(stage3_scores.items(), key=lambda x: x[1], reverse=True)
     for level_key, score in sorted_stage3:
@@ -2042,8 +2073,8 @@ async def show_final_details(update: Update, context: ContextTypes.DEFAULT_TYPE)
     analytics_text += (
         f"\n━━━━━━━━━━━━━━━━━━━━\n\n"
         f"<b>ИТОГОВАЯ КОНФИГУРАЦИЯ:</b>\n"
-        f"• Масть: {suit.upper()}\n"
-        f"• Карта: {card}\n"
+        f"• Восприятие: {SUIT_DESCRIPTIONS.get(suit, {}).get('title', 'Неизвестно')}\n"
+        f"• Мышление: Карта {card}\n"
         f"• Проблема: {level_names.get(problem_level, problem_level)}"
     )
     
@@ -2065,20 +2096,41 @@ async def back_to_final_result(update: Update, context: ContextTypes.DEFAULT_TYP
     scores = context.user_data["stage_3_scores"]
     problem_level = get_problem_level_by_scores(scores)
     
-    result_text = format_problem_result(suit, card, problem_level, scores)
+    result_key = f"{suit}_{card}_{problem_level}"
+    result_data = STAGE_3_RESULTS.get(result_key, {})
+    
+    level_names = {
+        "environment": "Окружение",
+        "behavior": "Поведение",
+        "capabilities": "Способности",
+        "values": "Ценности",
+        "identity": "Идентичность",
+        "mission": "Миссия"
+    }
+    
+    result_text = (
+        f"🎯 <b>ФИНАЛЬНЫЙ РЕЗУЛЬТАТ</b>\n\n"
+        f"<b>Ваша конфигурация:</b>\n"
+        f"• Тип восприятия: {SUIT_DESCRIPTIONS.get(suit, {}).get('title', 'Неизвестно')}\n"
+        f"• Профиль мышления: {STAGE_2_PROFILES.get(f'{suit}_{card}', {}).get('title', 'Неизвестно')}\n"
+        f"• Проблемный уровень: <b>{level_names.get(problem_level, problem_level)}</b>\n\n"
+        f"━━━━━━━━━━━━━━━━━━━━\n\n"
+        f"<b>{result_data.get('title', 'Ваша проблема')}</b>\n\n"
+        f"{result_data.get('description', 'Описание отсутствует')}\n\n"
+        f"<b>🎭 Ваша ловушка:</b>\n{result_data.get('trap', 'Не определена')}\n\n"
+        f"<b>💡 Ваша заплатка:</b>\n{result_data.get('solution', 'Не определена')}\n\n"
+        f"<b>🔧 Что делать:</b>\n{result_data.get('action', 'Не определено')}"
+    )
     
     result_text += (
-        f"\n━━━━━━━━━━━━━━━━━━━━\n\n"
+        f"\n\n━━━━━━━━━━━━━━━━━━━━\n\n"
         f"📖 <b>СКАЗКА-ПЕРЕДЫШКА</b>\n\n"
         f"<i>Что такое терапевтическая сказка?</i>\n\n"
         f"Это работа с бессознательным через метафору. Сказка обходит защиты разума "
         f"и показывает выход из твоего паттерна.\n\n"
         f"💰 <b>Стоимость:</b> 500₽\n"
         f"⏱ <b>Готовность:</b> 24 часа\n\n"
-        f"Сказка будет написана персонально под твою конфигурацию:\n"
-        f"• Масть: {suit.upper()}\n"
-        f"• Карта: {card}\n"
-        f"• Проблемный уровень: {problem_level}\n\n"
+        f"Сказка будет написана персонально под твою конфигурацию.\n\n"
         f"Это не развлечение. Это инструмент трансформации."
     )
     
@@ -2100,12 +2152,21 @@ async def order_story(update: Update, context: ContextTypes.DEFAULT_TYPE):
     scores = context.user_data["stage_3_scores"]
     problem_level = get_problem_level_by_scores(scores)
     
+    level_names = {
+        "environment": "Окружение",
+        "behavior": "Поведение",
+        "capabilities": "Способности",
+        "values": "Ценности",
+        "identity": "Идентичность",
+        "mission": "Миссия"
+    }
+    
     order_text = (
         f"💳 <b>ЗАКАЗ СКАЗКИ-ПЕРЕДЫШКИ</b>\n\n"
         f"<b>Ваша конфигурация:</b>\n"
-        f"• Масть: {suit.upper()}\n"
-        f"• Карта: {card}\n"
-        f"• Проблемный уровень: {problem_level}\n\n"
+        f"• Тип восприятия: {SUIT_DESCRIPTIONS.get(suit, {}).get('title', 'Неизвестно')}\n"
+        f"• Профиль мышления: Карта {card}\n"
+        f"• Проблемный уровень: {level_names.get(problem_level, problem_level)}\n\n"
         f"<b>Стоимость:</b> 500₽\n"
         f"<b>Срок:</b> 24 часа\n\n"
         f"Для оформления заказа напишите @your_username\n\n"
@@ -2141,11 +2202,11 @@ async def restart_test(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"━━━━━━━━━━━━━━━━━━━━\n\n"
         f"🎯 <b>ЧТО ВАС ЖДЁТ</b>\n\n"
         f"1️⃣ <b>Этап 1: Конфигурация восприятия</b>\n"
-        f"Определим вашу масть — базовый фильтр, через который вы воспринимаете реальность (Трефы/Червы/Бубны/Пики)\n\n"
+        f"Определим ваш базовый фильтр — через что вы воспринимаете реальность (16 вопросов)\n\n"
         f"2️⃣ <b>Этап 2: Конфигурация мышления</b>\n"
-        f"Определим ваш профиль — как вы обрабатываете информацию и принимаете решения (карты 6-9)\n\n"
+        f"Определим ваш профиль — как вы обрабатываете информацию и принимаете решения (18 вопросов)\n\n"
         f"3️⃣ <b>Этап 3: Конфигурация поведенческих паттернов</b>\n"
-        f"Определим проблемный уровень — где застряла ваша проблема (Окружение/Поведение/Способности/Ценности/Идентичность/Миссия)\n\n"
+        f"Определим проблемный уровень — где застряла ваша проблема (12 вопросов)\n\n"
         f"━━━━━━━━━━━━━━━━━━━━\n\n"
         f"🎁 <b>ВЫ ПОЛУЧИТЕ</b>\n"
         f"✅ Свой фильтр — через что вы смотрите на мир\n"
