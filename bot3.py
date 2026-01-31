@@ -21,7 +21,7 @@ from stage2_profiles import (
     format_profile_result
 )
 
-from stage_3_results import STAGE_3_RESULTS
+from stage_3_results import format_stage3_result, calculate_stage_3_result
 
 # ========== НАСТРОЙКИ ==========
 logging.basicConfig(
@@ -1459,52 +1459,6 @@ def format_suit_result_short(suit: str, scores: dict) -> str:
     
     return result
 
-def format_problem_result(suit: str, card: str, problem_level: str, scores: dict) -> str:
-    """Форматирует результат 3 этапа с описанием проблемы (ПУНКТ 6)"""
-    key = f"{suit}_{card}_{problem_level}"
-    description = STAGE_3_RESULTS.get(key, {})
-    
-    if not description:
-        key_without_card = f"{suit}_{problem_level}"
-        description = STAGE_3_RESULTS.get(key_without_card, {})
-    
-    result_text = "🎭 <b>ВАША СИТУАЦИЯ</b>\n\n"
-    
-    # ДОБАВЛЯЕМ ОПИСАНИЕ КОНФЛИКТА ИЗ STAGE_3_RESULTS
-    if isinstance(description, dict):
-        if 'title' in description:
-            result_text += f"<b>{description['title']}</b>\n"
-        if 'description' in description:
-            result_text += f"{description['description']}\n"
-        if 'pattern' in description:
-            result_text += f"🔄 <b>Паттерн:</b> {description['pattern']}\n"
-        if 'recommendation' in description:
-            result_text += f"💡 <b>Что делать:</b> {description['recommendation']}\n"
-    elif isinstance(description, str):
-        result_text += f"{description}\n"
-    else:
-        result_text += f"Конфигурация: {suit} | Профиль: {card} | Уровень: {problem_level}\n"
-    
-    result_text += "\n━━━━━━━━━━━━━━━━━━━━\n"
-    result_text += "📊 <b>Распределение по уровням:</b>\n"
-    
-    total = sum(scores.values())
-    level_names = {
-        "environment": "🌍 Окружение",
-        "behavior": "🎯 Поведение",
-        "capabilities": "🛠 Способности",
-        "values": "💎 Ценности",
-        "identity": "👤 Идентичность",
-        "mission": "🌟 Миссия"
-    }
-    
-    for level, score in sorted(scores.items(), key=lambda x: x[1], reverse=True):
-        level_name = level_names.get(level, level)
-        percentage = (score / total * 100) if total > 0 else 0
-        result_text += f"• {level_name}: <b>{percentage:.1f}%</b>\n"
-    
-    return result_text
-
 # ========== ОБРАБОТЧИКИ КОМАНД И CALLBACK ==========
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1890,17 +1844,20 @@ async def handle_stage_3_answer(update: Update, context: ContextTypes.DEFAULT_TY
     return await ask_stage_3_question(update, context)
 
 async def show_result(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Показ результата (ПУНКТ 6)"""
+    """Показ результата (ИСПРАВЛЕНО)"""
     query = update.callback_query
     
     suit = context.user_data["suit"]
-    card = context.user_data["card"]
     scores = context.user_data["stage_3_scores"]
     
-    problem_level = get_problem_level_by_scores(scores)
+    # Подсчитываем уровень
+    level = calculate_stage_3_result(scores)
     
-    # ИСПОЛЬЗУЕМ format_problem_result, КОТОРЫЙ УЖЕ СОДЕРЖИТ ОПИСАНИЕ КОНФЛИКТА
-    result_text = format_problem_result(suit, card, problem_level, scores)
+    # Сохраняем для back_to_result
+    context.user_data["stage_3_level"] = level
+    
+    # ИСПОЛЬЗУЕМ format_stage3_result(suit, level) БЕЗ card
+    result_text = format_stage3_result(suit, level)
     
     result_text += (
         f"\n━━━━━━━━━━━━━━━━━━━━\n\n"
@@ -2066,20 +2023,19 @@ async def order_tale(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer("Функция оплаты в разработке. Напишите автору @meysternlp")
 
 async def back_to_result(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Вернуться к результату"""
+    """Вернуться к результату (ИСПРАВЛЕНО)"""
     query = update.callback_query
     await query.answer()
     
     suit = context.user_data.get("suit")
-    card = context.user_data.get("card")
-    scores = context.user_data.get("stage_3_scores", {})
+    level = context.user_data.get("stage_3_level")
     
-    if not suit or not card:
+    if not suit or not level:
         await query.edit_message_text("Результаты не найдены. Пройдите тест заново.")
         return
     
-    problem_level = get_problem_level_by_scores(scores)
-    result_text = format_problem_result(suit, card, problem_level, scores)
+    # ИСПОЛЬЗУЕМ format_stage3_result(suit, level) БЕЗ card
+    result_text = format_stage3_result(suit, level)
     
     result_text += (
         f"\n━━━━━━━━━━━━━━━━━━━━\n\n"
