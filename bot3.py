@@ -71,11 +71,87 @@ def get_mystic_symbol() -> str:
     symbols = ["🔮", "🕯️", "🌙", "⭐", "🌀", "💫", "✨", "🪷", "🌿", "🦉"]
     return random.choice(symbols)
 
-# ==================== ВОПРОСЫ ====================
+# ==================== БЛОК 1: ОПРЕДЕЛЕНИЕ НАРРАТИВА (8 вопросов) ====================
 
-# ОБЩИЕ ВОПРОСЫ
-QUESTIONS = [
-    {  # 0. Пол
+NARRATIVE_QUESTIONS = [
+    {  # Вопрос 1
+        "text": "Какой отдых ты предпочитаешь?",
+        "options": {
+            "🔱": {"text": "Активный, соревновательный, спорт", "scores": {"narrative_bias": "СБ"}},
+            "🔨": {"text": "Созидательный — что-то сделать своими руками", "scores": {"narrative_bias": "ТФ"}},
+            "📚": {"text": "Интеллектуальный — книги, головоломки", "scores": {"narrative_bias": "УБ"}},
+            "🎭": {"text": "Развлекательный — тусовки, мероприятия", "scores": {"narrative_bias": "ЧВ"}}
+        }
+    },
+    {  # Вопрос 2
+        "text": "Что ты ценишь в людях больше всего?",
+        "options": {
+            "🥊": {"text": "Силу и уверенность", "scores": {"narrative_bias": "СБ"}},
+            "🛠️": {"text": "Трудолюбие и надёжность", "scores": {"narrative_bias": "ТФ"}},
+            "📖": {"text": "Ум и глубину", "scores": {"narrative_bias": "УБ"}},
+            "🎉": {"text": "Харизму и обаяние", "scores": {"narrative_bias": "ЧВ"}}
+        }
+    },
+    {  # Вопрос 3
+        "text": "Какая похвала для тебя ценнее?",
+        "options": {
+            "⚔️": {"text": "«Тебя стоит уважать»", "scores": {"narrative_bias": "СБ"}},
+            "⚙️": {"text": "«На тебя можно положиться»", "scores": {"narrative_bias": "ТФ"}},
+            "🔬": {"text": "«Ты очень умный(ая)»", "scores": {"narrative_bias": "УБ"}},
+            "🎪": {"text": "«Ты душа компании»", "scores": {"narrative_bias": "ЧВ"}}
+        }
+    },
+    {  # Вопрос 4
+        "text": "В компании незнакомых людей ты сразу...",
+        "options": {
+            "👑": {"text": "Оцениваешь, кто тут главный", "scores": {"narrative_bias": "СБ"}},
+            "⏰": {"text": "Ищешь, с кем можно по делу поговорить", "scores": {"narrative_bias": "ТФ"}},
+            "🤯": {"text": "Прислушиваешься к умным разговорам", "scores": {"narrative_bias": "УБ"}},
+            "👻": {"text": "Смотришь, кто в центре внимания", "scores": {"narrative_bias": "ЧВ"}}
+        }
+    },
+    {  # Вопрос 5
+        "text": "Куда бы ты потратил(а) крупную сумму?",
+        "options": {
+            "🏛️": {"text": "На статусные вещи (машина, часы)", "scores": {"narrative_bias": "СБ"}},
+            "🏗️": {"text": "На инструменты, оборудование, свой цех", "scores": {"narrative_bias": "ТФ"}},
+            "🧠": {"text": "На обучение, книги, исследования", "scores": {"narrative_bias": "УБ"}},
+            "🌟": {"text": "На раскрутку имени, пиар", "scores": {"narrative_bias": "ЧВ"}}
+        }
+    },
+    {  # Вопрос 6
+        "text": "Что тебя бесит больше всего?",
+        "options": {
+            "💎": {"text": "Неуважение, когда меня не ставят ни во что", "scores": {"narrative_bias": "СБ"}},
+            "🏭": {"text": "Лень и халява других", "scores": {"narrative_bias": "ТФ"}},
+            "📚": {"text": "Глупость и нежелание думать", "scores": {"narrative_bias": "УБ"}},
+            "📢": {"text": "Когда меня игнорируют, не замечают", "scores": {"narrative_bias": "ЧВ"}}
+        }
+    },
+    {  # Вопрос 7
+        "text": "Какой подарок тебя порадует больше?",
+        "options": {
+            "🦁": {"text": "Эксклюзивная вещь, подчёркивающая статус", "scores": {"narrative_bias": "СБ"}},
+            "🐜": {"text": "Полезный инструмент или техника", "scores": {"narrative_bias": "ТФ"}},
+            "🦉": {"text": "Редкая книга или доступ к знаниям", "scores": {"narrative_bias": "УБ"}},
+            "🦚": {"text": "Приглашение на закрытое мероприятие", "scores": {"narrative_bias": "ЧВ"}}
+        }
+    },
+    {  # Вопрос 8
+        "text": "Чего ты боишься больше всего?",
+        "options": {
+            "📉": {"text": "Потерять авторитет, стать никем", "scores": {"narrative_bias": "СБ"}},
+            "💸": {"text": "Остаться без работы, без денег", "scores": {"narrative_bias": "ТФ"}},
+            "🤦": {"text": "Показаться глупым(ой)", "scores": {"narrative_bias": "УБ"}},
+            "👀": {"text": "Стать незаметным, скучным", "scores": {"narrative_bias": "ЧВ"}}
+        }
+    }
+]
+
+# ==================== БЛОК 2: ОБЩИЕ ВОПРОСЫ ====================
+
+COMMON_QUESTIONS = [
+    {  # 0. Пол (первый вопрос после нарративов)
         "text": "Кто ты в этом мире?",
         "options": {
             "М": {"text": "👨 Мужчина", "scores": {"gender": "М"}},
@@ -349,75 +425,35 @@ FEMALE_QUESTIONS = [
     }
 ]
 
-# ==================== ФУНКЦИИ ОПРЕДЕЛЕНИЯ ====================
+# ==================== ФУНКЦИИ ОПРЕДЕЛЕНИЯ НАРРАТИВА ====================
 
-def get_narrative(data):
-    """Определяем нарративы"""
+def get_narrative_from_answers(answers):
+    """Определяет нарратив на основе ответов на первые 8 вопросов"""
     scores = {"СБ": 0, "ТФ": 0, "УБ": 0, "ЧВ": 0}
     
-    job = data.get('job', '')
-    job_weights = {
-        "WORKER": {"ТФ": 4, "СБ": 2},
-        "OFFICE": {"ТФ": 3, "УБ": 3, "ЧВ": 2},
-        "PROFESSIONAL": {"УБ": 5, "ТФ": 3},
-        "MANAGER": {"СБ": 4, "ТФ": 3, "ЧВ": 3},
-        "BUSINESS": {"СБ": 5, "ТФ": 4, "ЧВ": 3},
-        "FREELANCE": {"ТФ": 3, "ЧВ": 3, "УБ": 3},
-        "CREATIVE": {"ЧВ": 5, "УБ": 3}
-    }
-    if job in job_weights:
-        for n, w in job_weights[job].items():
-            scores[n] += w * 3
+    # Собираем все narrative_bias из ответов
+    for key, value in answers.items():
+        if key == 'narrative_bias':
+            # Если это единичное значение
+            if value in scores:
+                scores[value] += 1
+        elif isinstance(value, list) and all(v in scores for v in value):
+            # Если это список значений
+            for v in value:
+                scores[v] += 1
     
-    money = data.get('money', 3)
-    if money > 7:
-        scores["СБ"] += 4
-        scores["ТФ"] += 4
-    elif money > 4:
-        scores["ТФ"] += 3
-        scores["УБ"] += 2
-        scores["СБ"] += 1
+    # Нормализуем
+    total = sum(scores.values())
+    if total > 0:
+        for n in scores:
+            scores[n] = round(scores[n] / total * 100)
     
-    edu = data.get('education', 4)
-    if edu > 7:
-        scores["УБ"] += 6
-    elif edu > 4:
-        scores["УБ"] += 3
-        scores["ТФ"] += 2
-    
-    looks = data.get('looks', 4)
-    if looks > 7:
-        scores["ЧВ"] += 6
-        scores["СБ"] += 2
-    
-    gender = data.get('gender', 'М')
-    if gender == 'Ж':
-        breast = data.get('breast', 5)
-        if breast > 7:
-            scores["ЧВ"] += 4
-            scores["СБ"] += 2
-        mate = data.get('mate', '')
-        if mate == 'ALPHA':
-            scores["СБ"] += 4
-        elif mate == 'DELTA':
-            scores["СБ"] += 3
-            scores["ТФ"] += 3
-        elif mate == 'GAMMA':
-            scores["УБ"] += 4
-    else:
-        testosterone = data.get('testosterone', 5)
-        if testosterone > 7:
-            scores["СБ"] += 5
-            scores["ЧВ"] += 2
-        strength = data.get('strength', 4)
-        if strength > 7:
-            scores["СБ"] += 4
-            scores["ТФ"] += 2
-    
+    # Сортируем
     sorted_narr = sorted(scores.items(), key=lambda x: x[1], reverse=True)
+    
     main = sorted_narr[0][0]
-    second = sorted_narr[1][0] if sorted_narr[1][1] > sorted_narr[2][1] * 1.5 else None
-    third = sorted_narr[2][0] if len(sorted_narr) > 2 and sorted_narr[2][1] > sorted_narr[3][1] * 2 else None
+    second = sorted_narr[1][0] if len(sorted_narr) > 1 and sorted_narr[1][1] > 15 else None
+    third = sorted_narr[2][0] if len(sorted_narr) > 2 and sorted_narr[2][1] > 10 else None
     
     return main, second, third
 
@@ -553,7 +589,7 @@ async def start_test(callback: types.CallbackQuery, state: FSMContext):
     
     await state.clear()
     await state.update_data(answers={}, last_message_id=None, sexual_invites=saved_invites)
-    await state.set_state(UserState.gender)
+    await state.set_state(UserState.question_index)
     
     # Мистическое вступление
     mystic = get_mystic_symbol()
@@ -570,7 +606,10 @@ async def ask_question(user_id, index, state: FSMContext):
     """Задаёт вопрос, удаляя предыдущий"""
     data = await state.get_data()
     answers = data.get('answers', {})
-    gender = answers.get('gender', 'М')
+    
+    # Определяем, какой блок вопросов сейчас
+    total_narrative = len(NARRATIVE_QUESTIONS)
+    total_common = len(COMMON_QUESTIONS)
     
     # Удаляем предыдущее сообщение
     last_id = data.get('last_message_id')
@@ -580,25 +619,30 @@ async def ask_question(user_id, index, state: FSMContext):
         except:
             pass
     
-    # Определяем общее количество вопросов
-    total = len(QUESTIONS) + (len(MALE_QUESTIONS) if gender == 'М' else len(FEMALE_QUESTIONS))
+    # БЛОК 1: Вопросы для определения нарратива (первые 8)
+    if index < total_narrative:
+        q = NARRATIVE_QUESTIONS[index]
+        total = total_narrative + total_common + (len(MALE_QUESTIONS) if answers.get('gender') == 'М' else len(FEMALE_QUESTIONS))
+        current_block = "ПЕРВЫЙ КРУГ"
     
-    if index >= total:
-        await show_fortune(user_id, state)
-        return
+    # БЛОК 2: Общие вопросы
+    elif index < total_narrative + total_common:
+        q = COMMON_QUESTIONS[index - total_narrative]
+        total = total_narrative + total_common + (len(MALE_QUESTIONS) if answers.get('gender') == 'М' else len(FEMALE_QUESTIONS))
+        current_block = "ВТОРОЙ КРУГ"
     
-    # Выбираем вопрос
-    if index < len(QUESTIONS):
-        q = QUESTIONS[index]
-    elif gender == 'М':
-        q = MALE_QUESTIONS[index - len(QUESTIONS)]
+    # БЛОК 3: Гендерные вопросы
     else:
-        q = FEMALE_QUESTIONS[index - len(QUESTIONS)]
+        gender = answers.get('gender', 'М')
+        if gender == 'М':
+            q = MALE_QUESTIONS[index - total_narrative - total_common]
+        else:
+            q = FEMALE_QUESTIONS[index - total_narrative - total_common]
+        total = total_narrative + total_common + (len(MALE_QUESTIONS) if gender == 'М' else len(FEMALE_QUESTIONS))
+        current_block = "ТРЕТИЙ КРУГ"
     
     # Прогресс
-    progress = "░" * 10
-    filled = int(index / total * 10)
-    progress = "█" * filled + "░" * (10 - filled)
+    progress = "█" * int(index / total * 10) + "░" * (10 - int(index / total * 10))
     
     # Клавиатура
     builder = InlineKeyboardBuilder()
@@ -609,7 +653,7 @@ async def ask_question(user_id, index, state: FSMContext):
     # Отправляем вопрос
     sent = await bot.send_message(
         user_id,
-        f"{get_mystic_symbol()} *Вопрос {index+1}/{total}*\n"
+        f"{get_mystic_symbol()} *{current_block} • Вопрос {index+1}/{total}*\n"
         f"`{progress}`\n\n"
         f"*{q['text']}*",
         reply_markup=builder.as_markup()
@@ -627,19 +671,31 @@ async def process_answer(callback: types.CallbackQuery, state: FSMContext):
     
     data = await state.get_data()
     answers = data.get('answers', {})
-    gender = answers.get('gender', 'М')
     
     # Определяем вопрос
-    if idx < len(QUESTIONS):
-        q = QUESTIONS[idx]
-    elif gender == 'М':
-        q = MALE_QUESTIONS[idx - len(QUESTIONS)]
+    total_narrative = len(NARRATIVE_QUESTIONS)
+    total_common = len(COMMON_QUESTIONS)
+    
+    if idx < total_narrative:
+        q = NARRATIVE_QUESTIONS[idx]
+    elif idx < total_narrative + total_common:
+        q = COMMON_QUESTIONS[idx - total_narrative]
     else:
-        q = FEMALE_QUESTIONS[idx - len(QUESTIONS)]
+        gender = answers.get('gender', 'М')
+        if gender == 'М':
+            q = MALE_QUESTIONS[idx - total_narrative - total_common]
+        else:
+            q = FEMALE_QUESTIONS[idx - total_narrative - total_common]
     
     # Сохраняем ответ
     for k, v in q["options"][key]["scores"].items():
-        answers[k] = v
+        # Специальная обработка для narrative_bias
+        if k == 'narrative_bias':
+            if 'narrative_biases' not in answers:
+                answers['narrative_biases'] = []
+            answers['narrative_biases'].append(v)
+        else:
+            answers[k] = v
     
     await state.update_data(answers=answers)
     
@@ -669,8 +725,8 @@ async def show_fortune(user_id, state: FSMContext):
     user = await bot.get_chat(user_id)
     user_name = user.first_name or "путник"
     
-    # Определяем нарративы
-    narrative, second, third = get_narrative(answers)
+    # Определяем нарративы из первых 8 вопросов
+    narrative, second, third = get_narrative_from_answers(answers)
     level = get_level(answers, narrative)
     role = get_role_name(narrative, level, gender)
     
@@ -717,29 +773,24 @@ async def show_fortune(user_id, state: FSMContext):
         "💫 *Знак свыше:* удача в делах."
     ]
     
-    # Разбиваем на 2 части максимум
-    parts = []
-    max_len = 3500
+    # Разбиваем на 2 части
+    mid = len(interpretation) // 2
+    first_half = interpretation[:mid]
+    second_half = interpretation[mid:]
     
-    # Первая часть: заголовок + первая половина интерпретации
-    first_half = interpretation[:len(interpretation)//2]
-    parts.append(header + first_half)
+    part1 = header + first_half
+    part2 = second_half + f"\n\n{sep}\n\n{secret_power}\n\n{random.choice(daily)}"
     
-    # Вторая часть: вторая половина + сила + предсказание
-    second_half = interpretation[len(interpretation)//2:]
-    second_part = second_half + f"\n\n{sep}\n\n{secret_power}\n\n{random.choice(daily)}"
-    parts.append(second_part)
-    
-    # Отправляем с эффектом печати
+    # Отправляем
     await bot.send_chat_action(user_id, action="typing")
     await asyncio.sleep(2)
-    await bot.send_message(user_id, parts[0])
+    await bot.send_message(user_id, part1)
     
     await bot.send_chat_action(user_id, action="typing")
     await asyncio.sleep(2)
-    await bot.send_message(user_id, parts[1])
+    await bot.send_message(user_id, part2)
     
-    # Кнопки
+    # Кнопка перезапуска
     builder = InlineKeyboardBuilder()
     builder.button(text="🔄 Ещё раз", callback_data="restart")
     builder.adjust(1)
