@@ -1,6 +1,6 @@
 """
 Variatica Bot - для aiogram 3.x
-С гендерно-специфичными вопросами
+С определением пола, гендерными вопросами и отдельными интерпретациями
 """
 
 import os
@@ -76,7 +76,7 @@ QUESTIONS_BLOCK1 = [
         "options": {
             "⚔️": {"text": "«Тебя стоит уважать»", "exclude": "ЧВ"},
             "⚙️": {"text": "«На тебя можно положиться»", "exclude": "СБ"},
-            "🔬": {"text": "«Ты очень умный»", "exclude": "ТФ"},
+            "🔬": {"text": "«Ты очень умный/умная»", "exclude": "ТФ"},
             "🎪": {"text": "«Ты душа компании»", "exclude": "УБ"}
         }
     },
@@ -90,7 +90,7 @@ QUESTIONS_BLOCK1 = [
         }
     },
     {
-        "text": "Куда бы ты потратил крупную сумму?",
+        "text": "Куда бы ты потратил(а) крупную сумму?",
         "options": {
             "🏛️": {"text": "На статусные вещи (машина, часы)", "exclude": "ЧВ"},
             "🏗️": {"text": "На инструменты, оборудование, свой цех", "exclude": "СБ"},
@@ -121,7 +121,7 @@ QUESTIONS_BLOCK1 = [
         "options": {
             "📉": {"text": "Потерять авторитет, стать никем", "exclude": "ЧВ"},
             "💸": {"text": "Остаться без работы, без денег", "exclude": "СБ"},
-            "🤦": {"text": "Показаться глупым, некомпетентным", "exclude": "ТФ"},
+            "🤦": {"text": "Показаться глупым/глупой", "exclude": "ТФ"},
             "👀": {"text": "Стать незаметным, скучным", "exclude": "УБ"}
         }
     }
@@ -154,13 +154,13 @@ COMMON_QUESTIONS = [
         "options": {
             "1": {"text": "Меня не замечают", "scores": {"attractiveness": 2}},
             "2": {"text": "Обычная внешность", "scores": {"attractiveness": 4}},
-            "3": {"text": "Симпатичный/симпатичная", "scores": {"attractiveness": 6}},
-            "4": {"text": "Красивый/красивая, привлекаю внимание", "scores": {"attractiveness": 8}},
+            "3": {"text": "Симпатичный(ая)", "scores": {"attractiveness": 6}},
+            "4": {"text": "Красивый(ая), привлекаю внимание", "scores": {"attractiveness": 8}},
             "5": {"text": "Модельная внешность", "scores": {"attractiveness": 10}}
         }
     },
     {
-        "text": "В школе ты учился...",
+        "text": "В школе ты учился(ась)...",
         "options": {
             "1": {"text": "Еле тянул(а), двойки", "scores": {"intelligence": 2}},
             "2": {"text": "Тройки, кое-как", "scores": {"intelligence": 4}},
@@ -186,11 +186,11 @@ MALE_QUESTIONS = [
     {
         "text": "Во сколько лет у тебя начал ломаться голос?",
         "options": {
-            "1": {"text": "Очень рано, в 10-11 лет", "scores": {"testosterone_timing": 10, "testosterone": 9}},
-            "2": {"text": "В 12-13 лет", "scores": {"testosterone_timing": 8, "testosterone": 7}},
-            "3": {"text": "В 14-15 лет", "scores": {"testosterone_timing": 6, "testosterone": 6}},
-            "4": {"text": "В 16-17 лет", "scores": {"testosterone_timing": 4, "testosterone": 4}},
-            "5": {"text": "До сих пор не сломался / не помню", "scores": {"testosterone_timing": 2, "testosterone": 2}}
+            "1": {"text": "Очень рано, в 10-11 лет", "scores": {"testosterone": 9}},
+            "2": {"text": "В 12-13 лет", "scores": {"testosterone": 7}},
+            "3": {"text": "В 14-15 лет", "scores": {"testosterone": 6}},
+            "4": {"text": "В 16-17 лет", "scores": {"testosterone": 4}},
+            "5": {"text": "До сих пор не сломался", "scores": {"testosterone": 2}}
         }
     },
     {
@@ -204,6 +204,26 @@ MALE_QUESTIONS = [
         }
     },
     {
+        "text": "Какой автомобиль ты предпочитаешь?",
+        "options": {
+            "1": {"text": "Большой внедорожник, джип", "scores": {"car_type": "BIG", "compensation": 8}},
+            "2": {"text": "Спортивную машину", "scores": {"car_type": "SPORT", "compensation": 7}},
+            "3": {"text": "Надёжный седан, универсал", "scores": {"car_type": "PRACTICAL", "compensation": 5}},
+            "4": {"text": "Маленький экономичный автомобиль", "scores": {"car_type": "SMALL", "compensation": 3}},
+            "5": {"text": "У меня нет машины", "scores": {"car_type": "NONE", "compensation": 2}}
+        }
+    },
+    {
+        "text": "Ходишь ли ты в общественные бани, сауны?",
+        "options": {
+            "1": {"text": "Да, регулярно, не стесняюсь", "scores": {"body_confidence": 9}},
+            "2": {"text": "Иногда хожу, нормально себя чувствую", "scores": {"body_confidence": 7}},
+            "3": {"text": "Редко, немного стесняюсь", "scores": {"body_confidence": 5}},
+            "4": {"text": "Не хожу, стесняюсь своего тела", "scores": {"body_confidence": 3}},
+            "5": {"text": "Никогда не ходил и не пойду", "scores": {"body_confidence": 1}}
+        }
+    },
+    {
         "text": "Сколько ты можешь отжаться от пола?",
         "options": {
             "1": {"text": "0-5 раз", "scores": {"strength": 2}},
@@ -212,59 +232,49 @@ MALE_QUESTIONS = [
             "4": {"text": "30-50 раз", "scores": {"strength": 8}},
             "5": {"text": "Больше 50", "scores": {"strength": 10}}
         }
-    },
-    {
-        "text": "Как часто ты занимаешься спортом?",
-        "options": {
-            "1": {"text": "Вообще не занимаюсь", "scores": {"sport": 2}},
-            "2": {"text": "Иногда, без фанатизма", "scores": {"sport": 4}},
-            "3": {"text": "Регулярно 2-3 раза в неделю", "scores": {"sport": 6}},
-            "4": {"text": "Часто, 4-5 раз в неделю", "scores": {"sport": 8}},
-            "5": {"text": "Профессионально, каждый день", "scores": {"sport": 10}}
-        }
-    },
-    {
-        "text": "Как быстро ты засыпаешь после тяжёлого дня?",
-        "options": {
-            "1": {"text": "Мгновенно", "scores": {"nervous": 8}},
-            "2": {"text": "Минут 10-15", "scores": {"nervous": 6}},
-            "3": {"text": "Долго ворочаюсь", "scores": {"nervous": 4}},
-            "4": {"text": "Не могу уснуть без снотворного", "scores": {"nervous": 2}},
-            "5": {"text": "Просыпаюсь среди ночи", "scores": {"nervous": 3}}
-        }
     }
 ]
 
 # Женские вопросы (5 вопросов)
 FEMALE_QUESTIONS = [
     {
+        "text": "Какой у тебя размер груди?",
+        "options": {
+            "1": {"text": "0-1 размер (маленькая)", "scores": {"breast_size": 3, "feminine_capital": 4}},
+            "2": {"text": "2 размер", "scores": {"breast_size": 5, "feminine_capital": 6}},
+            "3": {"text": "3 размер", "scores": {"breast_size": 7, "feminine_capital": 8}},
+            "4": {"text": "4 размер и больше", "scores": {"breast_size": 9, "feminine_capital": 9}},
+            "5": {"text": "Не хочу отвечать", "scores": {"breast_size": 5, "feminine_capital": 5}}
+        }
+    },
+    {
         "text": "Во сколько лет у тебя начались месячные?",
         "options": {
-            "1": {"text": "Очень рано, до 11 лет", "scores": {"estrogen_timing": 10, "hormonal": 8}},
-            "2": {"text": "В 11-12 лет", "scores": {"estrogen_timing": 8, "hormonal": 7}},
-            "3": {"text": "В 12-14 лет", "scores": {"estrogen_timing": 6, "hormonal": 6}},
-            "4": {"text": "В 14-16 лет", "scores": {"estrogen_timing": 4, "hormonal": 4}},
-            "5": {"text": "После 16 лет", "scores": {"estrogen_timing": 2, "hormonal": 3}}
+            "1": {"text": "Очень рано, до 11 лет", "scores": {"hormonal": 8}},
+            "2": {"text": "В 11-12 лет", "scores": {"hormonal": 7}},
+            "3": {"text": "В 12-14 лет", "scores": {"hormonal": 6}},
+            "4": {"text": "В 14-16 лет", "scores": {"hormonal": 4}},
+            "5": {"text": "После 16 лет", "scores": {"hormonal": 3}}
         }
     },
     {
-        "text": "Как у тебя проходят месячные?",
+        "text": "Какой тип мужчин ты обычно выбираешь?",
         "options": {
-            "1": {"text": "Почти незаметно, легко", "scores": {"hormonal_stability": 8}},
-            "2": {"text": "Нормально, средние боли", "scores": {"hormonal_stability": 6}},
-            "3": {"text": "Болезненно, но терпимо", "scores": {"hormonal_stability": 4}},
-            "4": {"text": "Очень болезненно, выпадаю из жизни", "scores": {"hormonal_stability": 2}},
-            "5": {"text": "Нерегулярно, проблемы с циклом", "scores": {"hormonal_stability": 3}}
+            "1": {"text": "Сильных, доминантных, которые решают всё", "scores": {"mate_type": "АЛЬФА", "mate_strategy": "DEPENDENT"}},
+            "2": {"text": "Уверенных, но с которыми можно договориться", "scores": {"mate_type": "БЕТА", "mate_strategy": "PARTNERSHIP"}},
+            "3": {"text": "Умных, интеллектуалов", "scores": {"mate_type": "ГАММА", "mate_strategy": "INTELLECTUAL"}},
+            "4": {"text": "Богатых, статусных, которые могут обеспечить", "scores": {"mate_type": "ДЕЛЬТА", "mate_strategy": "PROVIDER"}},
+            "5": {"text": "Красивых, харизматичных", "scores": {"mate_type": "ОМЕГА", "mate_strategy": "STATUS"}}
         }
     },
     {
-        "text": "Как у тебя с кожей?",
+        "text": "Что для тебя важнее в мужчине?",
         "options": {
-            "1": {"text": "Проблемная, прыщи, жирная", "scores": {"hormonal": 4}},
-            "2": {"text": "Нормальная, иногда бывает", "scores": {"hormonal": 6}},
-            "3": {"text": "Хорошая, чистая", "scores": {"hormonal": 8}},
-            "4": {"text": "Очень сухая, чувствительная", "scores": {"hormonal": 5}},
-            "5": {"text": "Идеальная, все завидуют", "scores": {"hormonal": 10}}
+            "1": {"text": "Чтобы защищал и был надёжной стеной", "scores": {"mate_priority": "PROTECTION", "feminine_strategy": "ЗАВИСИМАЯ"}},
+            "2": {"text": "Чтобы зарабатывал и обеспечивал", "scores": {"mate_priority": "PROVISION", "feminine_strategy": "ПРАГМАТИЧНАЯ"}},
+            "3": {"text": "Чтобы понимал и поддерживал", "scores": {"mate_priority": "SUPPORT", "feminine_strategy": "ПАРТНЁРСКАЯ"}},
+            "4": {"text": "Чтобы был управляемым", "scores": {"mate_priority": "CONTROL", "feminine_strategy": "ДОМИНАНТНАЯ"}},
+            "5": {"text": "Чтобы с ним было весело", "scores": {"mate_priority": "FUN", "feminine_strategy": "ГЕДОНИСТИЧЕСКАЯ"}}
         }
     },
     {
@@ -274,17 +284,7 @@ FEMALE_QUESTIONS = [
             "2": {"text": "Иногда, без фанатизма", "scores": {"sport": 4}},
             "3": {"text": "Регулярно 2-3 раза в неделю", "scores": {"sport": 6}},
             "4": {"text": "Часто, 4-5 раз в неделю", "scores": {"sport": 8}},
-            "5": {"text": "Профессионально, каждый день", "scores": {"sport": 10}}
-        }
-    },
-    {
-        "text": "Как быстро ты засыпаешь после тяжёлого дня?",
-        "options": {
-            "1": {"text": "Мгновенно", "scores": {"nervous": 8}},
-            "2": {"text": "Минут 10-15", "scores": {"nervous": 6}},
-            "3": {"text": "Долго ворочаюсь", "scores": {"nervous": 4}},
-            "4": {"text": "Не могу уснуть без снотворного", "scores": {"nervous": 2}},
-            "5": {"text": "Просыпаюсь среди ночи", "scores": {"nervous": 3}}
+            "5": {"text": "Профессионально", "scores": {"sport": 10}}
         }
     }
 ]
@@ -297,16 +297,16 @@ STRESS_QUESTIONS = [
             "1": {"text": "Краснело", "scores": {"stress_response": "FIGHT"}},
             "2": {"text": "Бледнело", "scores": {"stress_response": "FLIGHT"}},
             "3": {"text": "Каменело, застывало", "scores": {"stress_response": "FREEZE"}},
-            "4": {"text": "Становилось тряпичным, обмякало", "scores": {"stress_response": "PLAY_DEAD"}},
+            "4": {"text": "Становилось тряпичным", "scores": {"stress_response": "PLAY_DEAD"}},
             "5": {"text": "Расплывалось в улыбке", "scores": {"stress_response": "FAWN"}},
-            "6": {"text": "Становилось пустым, безразличным", "scores": {"stress_response": "SURRENDER"}}
+            "6": {"text": "Становилось пустым", "scores": {"stress_response": "SURRENDER"}}
         }
     },
     {
         "text": "Когда кто-то лезет без очереди, ты...",
         "options": {
             "1": {"text": "Громко делаю замечание", "scores": {"conflict": "FIGHT"}},
-            "2": {"text": "Молча злюсь, но ничего не говорю", "scores": {"conflict": "FREEZE"}},
+            "2": {"text": "Молча злюсь", "scores": {"conflict": "FREEZE"}},
             "3": {"text": "Думаю «да и ладно»", "scores": {"conflict": "SURRENDER"}},
             "4": {"text": "Пытаюсь объяснить вежливо", "scores": {"conflict": "FAWN"}},
             "5": {"text": "Ухожу в другую очередь", "scores": {"conflict": "FLIGHT"}}
@@ -319,13 +319,13 @@ STRESS_QUESTIONS = [
             "2": {"text": "Защищаюсь, но не бью", "scores": {"conflict_style": "FREEZE"}},
             "3": {"text": "Пытаюсь договориться", "scores": {"conflict_style": "FAWN"}},
             "4": {"text": "Ухожу от конфликта", "scores": {"conflict_style": "FLIGHT"}},
-            "5": {"text": "Уступаю, чтобы не связываться", "scores": {"conflict_style": "SURRENDER"}}
+            "5": {"text": "Уступаю", "scores": {"conflict_style": "SURRENDER"}}
         }
     },
     {
         "text": "После сильного стресса ты...",
         "options": {
-            "1": {"text": "Ещё долго заведён", "scores": {"recovery": 2}},
+            "1": {"text": "Ещё долго заведён(а)", "scores": {"recovery": 2}},
             "2": {"text": "Быстро прихожу в норму", "scores": {"recovery": 8}},
             "3": {"text": "Чувствую опустошение", "scores": {"recovery": 4}},
             "4": {"text": "Хочется есть сладкое", "scores": {"recovery": 5}},
@@ -333,18 +333,18 @@ STRESS_QUESTIONS = [
         }
     },
     {
-        "text": "Что с тобой происходит, когда ты долго один?",
+        "text": "Как быстро ты засыпаешь после тяжёлого дня?",
         "options": {
-            "1": {"text": "Мне кайф, я расцветаю", "scores": {"social": 2}},
-            "2": {"text": "Сначала ок, потом начинаю киснуть", "scores": {"social": 5}},
-            "3": {"text": "Мне плохо, ищу людей", "scores": {"social": 8}},
-            "4": {"text": "Мне всё равно", "scores": {"social": 3}},
-            "5": {"text": "Начинаю говорить сам с собой", "scores": {"social": 4}}
+            "1": {"text": "Мгновенно", "scores": {"sleep": 10, "nervous": 8}},
+            "2": {"text": "Минут 10-15", "scores": {"sleep": 8, "nervous": 6}},
+            "3": {"text": "Долго ворочаюсь", "scores": {"sleep": 4, "nervous": 4}},
+            "4": {"text": "Не могу уснуть", "scores": {"sleep": 2, "nervous": 2}},
+            "5": {"text": "Просыпаюсь ночью", "scores": {"sleep": 3, "nervous": 3}}
         }
     }
 ]
 
-# Матрица ролей
+# Матрица ролей (для отображения названия)
 ROLES_MATRIX = {
     "СБ": {1: "БОМЖ", 2: "ШНЫРЬ", 3: "СМОТРЯЩИЙ", 4: "ВОЛЬНЫЙ СТРЕЛОК", 5: "РАЗВОДЯЩИЙ", 6: "ПАХАН"},
     "ТФ": {1: "ИЖДИВЕНЕЦ", 2: "НАЁМНЫЙ РАБОЧИЙ", 3: "АРЕНДОДАТЕЛЬ", 4: "САМОЗАНЯТЫЙ", 5: "СЕЛЛЕР", 6: "ПРОИЗВОДИТЕЛЬ"},
@@ -352,7 +352,15 @@ ROLES_MATRIX = {
     "ЧВ": {1: "ТУСОВЩИК", 2: "ПРОЕКТНЫЙ", 3: "АМБАССАДОР", 4: "АРТИСТ", 5: "АГЕНТ", 6: "МЕДИАМАГНАТ"}
 }
 
-BIOCHEMICAL_TO_LEVEL = {"FIGHT": 6, "FLIGHT": 4, "FREEZE": 3, "PLAY_DEAD": 2, "FAWN": 5, "SURRENDER": 1}
+# Соответствие реакции на стресс и уровня
+BIOCHEMICAL_TO_LEVEL = {
+    "FIGHT": 6,
+    "FLIGHT": 4,
+    "FREEZE": 3,
+    "PLAY_DEAD": 2,
+    "FAWN": 5,
+    "SURRENDER": 1
+}
 
 # ==================== ХЕНДЛЕРЫ ====================
 
@@ -373,7 +381,7 @@ async def cmd_start(message: types.Message, state: FSMContext):
     )
     await state.set_state(UserState.gender)
 
-@dp.callback_query_handler(lambda c: c.data.startswith('gender_'))
+@dp.callback_query(lambda c: c.data.startswith('gender_'))
 async def process_gender(callback: types.CallbackQuery, state: FSMContext):
     """Обработка выбора пола"""
     await callback.answer()
@@ -399,7 +407,7 @@ async def ask_block1_question(user_id, question_index, state: FSMContext):
         reply_markup=builder.as_markup()
     )
 
-@dp.callback_query_handler(lambda c: c.data.startswith('b1_'))
+@dp.callback_query(lambda c: c.data.startswith('b1_'))
 async def process_block1_answer(callback: types.CallbackQuery, state: FSMContext):
     """Обработка ответа на вопрос блока 1"""
     await callback.answer()
@@ -452,7 +460,6 @@ async def ask_block2_question(user_id, question_index, state: FSMContext):
     gender = data.get('gender')
     
     # Определяем, какой вопрос задавать
-    total_questions = 15
     if question_index < 5:
         # Общие вопросы
         q = COMMON_QUESTIONS[question_index]
@@ -478,7 +485,7 @@ async def ask_block2_question(user_id, question_index, state: FSMContext):
         reply_markup=builder.as_markup()
     )
 
-@dp.callback_query_handler(lambda c: c.data.startswith('b2_'))
+@dp.callback_query(lambda c: c.data.startswith('b2_'))
 async def process_block2_answer(callback: types.CallbackQuery, state: FSMContext):
     """Обработка ответа на вопрос блока 2"""
     await callback.answer()
@@ -524,13 +531,16 @@ async def show_result(user_id, state: FSMContext):
     level = BIOCHEMICAL_TO_LEVEL.get(resources.get('stress_response', 'FREEZE'), 3)
     
     # Корректировка по физическим данным
-    if resources.get('height', 0) > 8 and resources.get('sport', 0) > 7:
-        level = min(6, level + 1)
-    
-    if gender == "М" and resources.get('testosterone', 0) > 7:
-        level = min(6, level + 1)
-    elif gender == "Ж" and resources.get('hormonal', 0) > 7:
-        level = min(6, level + 1)
+    if gender == "М":
+        if resources.get('testosterone', 0) > 7 and resources.get('strength', 0) > 6:
+            level = min(6, level + 1)
+        if resources.get('body_confidence', 0) < 3:
+            level = max(1, level - 1)
+    else:
+        if resources.get('feminine_capital', 0) > 7:
+            level = min(6, level + 1)
+        if resources.get('breast_size', 0) > 7 and resources.get('attractiveness', 0) > 6:
+            level = min(6, level + 1)
     
     # Получаем интерпретацию из отдельного файла
     role = ROLES_MATRIX[narrative][level]
@@ -541,12 +551,6 @@ async def show_result(user_id, state: FSMContext):
     result += f"Ты — *{role}* в мире *{NARRATIVE_NAMES[narrative]}*.\n\n"
     result += f"{interpretation}\n\n"
     
-    if level < 6:
-        next_role = ROLES_MATRIX[narrative][level + 1]
-        result += f"*Если хочешь расти:* твой следующий уровень — *{next_role}*.\n"
-    else:
-        result += f"*Ты на вершине* своего мира. Дальше только смена нарратива.\n"
-    
     builder = InlineKeyboardBuilder()
     builder.button(text="🔄 Пройти заново", callback_data="restart")
     builder.adjust(1)
@@ -554,7 +558,7 @@ async def show_result(user_id, state: FSMContext):
     await bot.send_message(user_id, result, reply_markup=builder.as_markup())
     await state.clear()
 
-@dp.callback_query_handler(lambda c: c.data == 'restart')
+@dp.callback_query(lambda c: c.data == 'restart')
 async def restart_test(callback: types.CallbackQuery, state: FSMContext):
     """Перезапуск теста"""
     await callback.answer()
