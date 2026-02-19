@@ -19,6 +19,9 @@ import asyncio
 load_dotenv()
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 
+if not BOT_TOKEN:
+    raise ValueError("❌ BOT_TOKEN не найден! Проверь переменные окружения")
+
 logging.basicConfig(level=logging.INFO)
 
 bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.MARKDOWN))
@@ -336,7 +339,8 @@ async def ask_block1_question(user_id, question_index, state: FSMContext):
     builder.adjust(2)
     await bot.send_message(user_id, f"*Вопрос {question_index+1}/8:*\n{q['text']}", reply_markup=builder.as_markup())
 
-@dp.callback_query_handler(lambda c: c.data.startswith('b1_'))
+# ИСПРАВЛЕНО: используем @dp.callback_query() вместо @dp.callback_query_handler
+@dp.callback_query(lambda c: c.data.startswith('b1_'))
 async def process_block1_answer(callback: types.CallbackQuery, state: FSMContext):
     await callback.answer()
     _, q_index_str, emoji = callback.data.split('_')
@@ -377,7 +381,8 @@ async def ask_block2_question(user_id, question_index, state: FSMContext):
     builder.adjust(2)
     await bot.send_message(user_id, f"*Вопрос {question_index+1}/15:*\n{q['text']}", reply_markup=builder.as_markup())
 
-@dp.callback_query_handler(lambda c: c.data.startswith('b2_'))
+# ИСПРАВЛЕНО: используем @dp.callback_query() вместо @dp.callback_query_handler
+@dp.callback_query(lambda c: c.data.startswith('b2_'))
 async def process_block2_answer(callback: types.CallbackQuery, state: FSMContext):
     await callback.answer()
     _, q_index_str, answer_key = callback.data.split('_')
@@ -412,7 +417,14 @@ async def show_result(user_id, state: FSMContext):
     if second_narrative:
         result += f"*При этом* ты используешь мир *{NARRATIVE_NAMES[second_narrative]}* как средство.\n\n"
     
-    stress_map = {"FIGHT": "Ты краснеешь в конфликте — твоя реакция атаковать.", "FLIGHT": "Ты бледнеешь — твоя реакция убегать.", "FREEZE": "Ты каменеешь — твоя реакция замирать.", "PLAY_DEAD": "Ты обмякаешь — твоя реакция притворяться мертвым.", "FAWN": "Ты улыбаешься — твоя реакция заискивать.", "SURRENDER": "Ты пустеешь — твоя реакция сдаваться."}
+    stress_map = {
+        "FIGHT": "Ты краснеешь в конфликте — твоя реакция атаковать.",
+        "FLIGHT": "Ты бледнеешь — твоя реакция убегать.",
+        "FREEZE": "Ты каменеешь — твоя реакция замирать.",
+        "PLAY_DEAD": "Ты обмякаешь — твоя реакция притворяться мертвым.",
+        "FAWN": "Ты улыбаешься — твоя реакция заискивать.",
+        "SURRENDER": "Ты пустеешь — твоя реакция сдаваться."
+    }
     if 'stress_response' in resources:
         result += f"{stress_map.get(resources['stress_response'], '')}\n\n"
     
@@ -426,7 +438,8 @@ async def show_result(user_id, state: FSMContext):
     await bot.send_message(user_id, result, reply_markup=builder.as_markup())
     await state.clear()
 
-@dp.callback_query_handler(lambda c: c.data == 'restart')
+# ИСПРАВЛЕНО: используем @dp.callback_query() вместо @dp.callback_query_handler
+@dp.callback_query(lambda c: c.data == 'restart')
 async def restart_test(callback: types.CallbackQuery, state: FSMContext):
     await callback.answer()
     await cmd_start(callback.message, state)
