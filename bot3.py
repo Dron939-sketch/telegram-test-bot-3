@@ -39,7 +39,6 @@ dp = Dispatcher(storage=storage)
 # ==================== СОСТОЯНИЯ ====================
 
 class UserState(StatesGroup):
-    gender = State()               # Пол
     question_index = State()        # Индекс текущего вопроса
     answers = State()               # Все ответы
     last_message_id = State()       # ID последнего сообщения
@@ -71,8 +70,16 @@ def get_mystic_symbol() -> str:
     symbols = ["🔮", "🕯️", "🌙", "⭐", "🌀", "💫", "✨", "🪷", "🌿", "🦉"]
     return random.choice(symbols)
 
-# ==================== БЛОК 1: ОПРЕДЕЛЕНИЕ НАРРАТИВА (8 вопросов) ====================
+# ==================== ВОПРОС 0: ПОЛ ====================
+GENDER_QUESTION = {
+    "text": "Кто ты в этом мире?",
+    "options": {
+        "М": {"text": "👨 Мужчина", "scores": {"gender": "М"}},
+        "Ж": {"text": "👩 Женщина", "scores": {"gender": "Ж"}}
+    }
+}
 
+# ==================== БЛОК 1: НАРРАТИВ (8 вопросов, общие для всех) ====================
 NARRATIVE_QUESTIONS = [
     {  # Вопрос 1
         "text": "Какой отдых ты предпочитаешь?",
@@ -148,17 +155,9 @@ NARRATIVE_QUESTIONS = [
     }
 ]
 
-# ==================== БЛОК 2: ОБЩИЕ ВОПРОСЫ ====================
-
+# ==================== БЛОК 2: ОБЩИЕ ВОПРОСЫ (для всех) ====================
 COMMON_QUESTIONS = [
-    {  # 0. Пол (первый вопрос после нарративов)
-        "text": "Кто ты в этом мире?",
-        "options": {
-            "М": {"text": "👨 Мужчина", "scores": {"gender": "М"}},
-            "Ж": {"text": "👩 Женщина", "scores": {"gender": "Ж"}}
-        }
-    },
-    {  # 1. Возраст
+    {  # Вопрос 9. Возраст
         "text": "Сколько зим минуло с твоего рождения?",
         "options": {
             "1": {"text": "Меньше 20", "scores": {"age": 18, "age_group": "YOUNG"}},
@@ -172,7 +171,7 @@ COMMON_QUESTIONS = [
             "9": {"text": "Больше 60", "scores": {"age": 65, "age_group": "ELDER"}}
         }
     },
-    {  # 2. Образование
+    {  # Вопрос 10. Образование
         "text": "Какие знания ты нёс через годы?",
         "options": {
             "1": {"text": "Неполное среднее", "scores": {"education": 2, "edu_level": "LOW"}},
@@ -182,7 +181,7 @@ COMMON_QUESTIONS = [
             "5": {"text": "Два и более / учёная степень", "scores": {"education": 10, "edu_level": "VERY_HIGH"}}
         }
     },
-    {  # 3. Работа
+    {  # Вопрос 11. Работа
         "text": "Чем ты наполняешь свои дни?",
         "options": {
             "1": {"text": "Не работаю", "scores": {"job": "DEPENDENT", "income": 1}},
@@ -195,7 +194,7 @@ COMMON_QUESTIONS = [
             "8": {"text": "Творческая профессия", "scores": {"job": "CREATIVE", "income": 4}}
         }
     },
-    {  # 4. Доход
+    {  # Вопрос 12. Доход
         "text": "Как щедра к тебе судьба в монетах?",
         "options": {
             "1": {"text": "Едва хватает на еду", "scores": {"money": 1}},
@@ -205,7 +204,7 @@ COMMON_QUESTIONS = [
             "5": {"text": "Богат(а), деньги не проблема", "scores": {"money": 9}}
         }
     },
-    {  # 5. Жильё
+    {  # Вопрос 13. Жильё
         "text": "Где приютилась твоя душа?",
         "options": {
             "1": {"text": "Снимаю угол/комнату", "scores": {"housing": 1}},
@@ -215,7 +214,7 @@ COMMON_QUESTIONS = [
             "5": {"text": "Несколько объектов", "scores": {"housing": 8}}
         }
     },
-    {  # 6. Рост
+    {  # Вопрос 14. Рост
         "text": "Как высоко ты над землёй?",
         "options": {
             "1": {"text": "Ниже 160 см", "scores": {"height": 2}},
@@ -225,7 +224,7 @@ COMMON_QUESTIONS = [
             "5": {"text": "Выше 190 см", "scores": {"height": 10}}
         }
     },
-    {  # 7. Внешность
+    {  # Вопрос 15. Внешность
         "text": "Как оценивают твой облик прохожие?",
         "options": {
             "1": {"text": "Меня не замечают", "scores": {"looks": 2}},
@@ -235,7 +234,7 @@ COMMON_QUESTIONS = [
             "5": {"text": "Модельная внешность", "scores": {"looks": 10}}
         }
     },
-    {  # 8. Здоровье
+    {  # Вопрос 16. Здоровье
         "text": "Как часто тело напоминает о себе?",
         "options": {
             "1": {"text": "Постоянно", "scores": {"health": 2}},
@@ -245,7 +244,7 @@ COMMON_QUESTIONS = [
             "5": {"text": "Практически никогда", "scores": {"health": 10}}
         }
     },
-    {  # 9. Семейное положение
+    {  # Вопрос 17. Семейное положение
         "text": "Кого согреваешь теплом своим?",
         "options": {
             "1": {"text": "Никогда не был(а) в браке", "scores": {"marriage": 0, "marriages": 0}},
@@ -255,7 +254,7 @@ COMMON_QUESTIONS = [
             "5": {"text": "Вдовец/вдова", "scores": {"marriage": 0, "marriages": 1}}
         }
     },
-    {  # 10. Дети
+    {  # Вопрос 18. Дети
         "text": "Оставил(а) ли след в потомках?",
         "options": {
             "1": {"text": "Нет детей", "scores": {"children": 0, "kids": 0}},
@@ -264,7 +263,7 @@ COMMON_QUESTIONS = [
             "4": {"text": "Трое и больше", "scores": {"children": 3, "kids": 3}}
         }
     },
-    {  # 11. Друзья
+    {  # Вопрос 19. Друзья
         "text": "Сколько душ готовы прийти на зов?",
         "options": {
             "1": {"text": "Никого, я один(а)", "scores": {"friends": 1, "social": 1}},
@@ -276,9 +275,9 @@ COMMON_QUESTIONS = [
     }
 ]
 
-# МУЖСКИЕ ВОПРОСЫ
+# ==================== БЛОК 3: МУЖСКИЕ ВОПРОСЫ ====================
 MALE_QUESTIONS = [
-    {  # 12. Автомобиль
+    {  # Вопрос 20. Автомобиль
         "text": "Какое железное сердце служит тебе?",
         "options": {
             "1": {"text": "Нет машины", "scores": {"car": 0, "car_type": "NONE", "status": 1}},
@@ -289,7 +288,7 @@ MALE_QUESTIONS = [
             "6": {"text": "Внедорожник/джип", "scores": {"car": 4, "car_type": "SUV", "status": 6}}
         }
     },
-    {  # 13. Баня
+    {  # Вопрос 21. Баня
         "text": "Как часто очищаешь тело и дух в бане?",
         "options": {
             "1": {"text": "Никогда", "scores": {"banya": 1, "body_confidence": 2}},
@@ -299,7 +298,7 @@ MALE_QUESTIONS = [
             "5": {"text": "У меня своя баня", "scores": {"banya": 9, "body_confidence": 7}}
         }
     },
-    {  # 14. Верность
+    {  # Вопрос 22. Верность
         "text": "Что для тебя значит верность?",
         "options": {
             "1": {"text": "Святое, никогда не изменял", "scores": {"cheating": 1, "loyalty": 9, "sex_drive": 3}},
@@ -309,7 +308,7 @@ MALE_QUESTIONS = [
             "5": {"text": "Не был в отношениях", "scores": {"cheating": 2, "loyalty": 5, "sex_drive": 4}}
         }
     },
-    {  # 15. Растительность
+    {  # Вопрос 23. Растительность
         "text": "Как щедра природа на лице?",
         "options": {
             "1": {"text": "Растёт плохо", "scores": {"testosterone": 3, "masculinity": 3}},
@@ -319,7 +318,7 @@ MALE_QUESTIONS = [
             "5": {"text": "Очень густая борода", "scores": {"testosterone": 9, "masculinity": 9}}
         }
     },
-    {  # 16. Сила
+    {  # Вопрос 24. Сила
         "text": "Сколько раз можешь оторвать себя от земли?",
         "options": {
             "1": {"text": "0-5 раз", "scores": {"strength": 2, "fitness": 2}},
@@ -329,7 +328,7 @@ MALE_QUESTIONS = [
             "5": {"text": "Больше 50", "scores": {"strength": 10, "fitness": 10}}
         }
     },
-    {  # 17. Телосложение
+    {  # Вопрос 25. Телосложение
         "text": "Какова твоя телесная форма?",
         "options": {
             "1": {"text": "Худощавое", "scores": {"body_type": "THIN", "size_confidence": 3}},
@@ -339,7 +338,7 @@ MALE_QUESTIONS = [
             "5": {"text": "Полное", "scores": {"body_type": "FULL", "size_confidence": 4}}
         }
     },
-    {  # 18. Фантазии
+    {  # Вопрос 26. Фантазии
         "text": "Какие тайные желания будоражат ночами?",
         "options": {
             "1": {"text": "О власти и деньгах", "scores": {"fantasy": "POWER", "kink": "DOMINANCE"}},
@@ -351,9 +350,9 @@ MALE_QUESTIONS = [
     }
 ]
 
-# ЖЕНСКИЕ ВОПРОСЫ
+# ==================== БЛОК 3: ЖЕНСКИЕ ВОПРОСЫ ====================
 FEMALE_QUESTIONS = [
-    {  # 12. Размер груди
+    {  # Вопрос 20. Размер груди
         "text": "Каков твой знак женственности?",
         "options": {
             "1": {"text": "0-1 размер", "scores": {"breast": 3, "fem_capital": 4, "body_confidence": 4}},
@@ -363,7 +362,7 @@ FEMALE_QUESTIONS = [
             "5": {"text": "Не хочу отвечать", "scores": {"breast": 5, "fem_capital": 5, "body_confidence": 5}}
         }
     },
-    {  # 13. Месячные
+    {  # Вопрос 21. Месячные
         "text": "Когда природа впервые заявила о себе?",
         "options": {
             "1": {"text": "До 11 лет", "scores": {"hormones": 8, "maturity": 8}},
@@ -373,7 +372,7 @@ FEMALE_QUESTIONS = [
             "5": {"text": "После 16 лет", "scores": {"hormones": 3, "maturity": 3}}
         }
     },
-    {  # 14. Выбор мужчин
+    {  # Вопрос 22. Выбор мужчин
         "text": "К какому типу мужчин тянется душа?",
         "options": {
             "1": {"text": "Сильные, доминантные", "scores": {"mate": "ALPHA", "strategy": "DEPENDENT", "kink": "SUBMISSIVE"}},
@@ -383,7 +382,7 @@ FEMALE_QUESTIONS = [
             "5": {"text": "Красивые, харизматичные", "scores": {"mate": "OMEGA", "strategy": "STATUS", "kink": "EXHIBITION"}}
         }
     },
-    {  # 15. Количество отношений
+    {  # Вопрос 23. Количество отношений
         "text": "Скольким дарила своё сердце?",
         "options": {
             "1": {"text": "Ни одного", "scores": {"relationships": 0, "experience": 1}},
@@ -393,7 +392,7 @@ FEMALE_QUESTIONS = [
             "5": {"text": "Больше 5", "scores": {"relationships": 4, "experience": 9}}
         }
     },
-    {  # 16. Интимный опыт
+    {  # Вопрос 24. Интимный опыт
         "text": "Приходилось ли платить телом за блага?",
         "options": {
             "1": {"text": "Нет, никогда", "scores": {"sex_work": 0, "taboo": 1}},
@@ -403,7 +402,7 @@ FEMALE_QUESTIONS = [
             "5": {"text": "Не хочу отвечать", "scores": {"sex_work": 1, "taboo": 4}}
         }
     },
-    {  # 17. Любимая часть тела
+    {  # Вопрос 25. Любимая часть тела
         "text": "Что в себе ты любишь больше всего?",
         "options": {
             "1": {"text": "Грудь", "scores": {"body_pride": "BREAST", "body_confidence": 6}},
@@ -413,7 +412,7 @@ FEMALE_QUESTIONS = [
             "5": {"text": "Ничего не нравится", "scores": {"body_pride": "NONE", "body_confidence": 2}}
         }
     },
-    {  # 18. Фантазии
+    {  # Вопрос 26. Фантазии
         "text": "Какие тайные желания будоражат ночами?",
         "options": {
             "1": {"text": "О сильном мужчине", "scores": {"fantasy": "ALPHA", "kink": "SUBMISSIVE"}},
@@ -425,21 +424,20 @@ FEMALE_QUESTIONS = [
     }
 ]
 
-# ==================== ФУНКЦИИ ОПРЕДЕЛЕНИЯ НАРРАТИВА ====================
+# ==================== ФУНКЦИИ ОПРЕДЕЛЕНИЯ ====================
 
 def get_narrative_from_answers(answers):
     """Определяет нарратив на основе ответов на первые 8 вопросов"""
     scores = {"СБ": 0, "ТФ": 0, "УБ": 0, "ЧВ": 0}
     
-    # Собираем все narrative_bias из ответов (из списка)
+    # Собираем все narrative_bias из ответов
     if 'narrative_biases' in answers:
         for bias in answers['narrative_biases']:
             if bias in scores:
                 scores[bias] += 1
     
-    # Если список пуст или не найден, пробуем другие ключи
+    # Если список пуст, пробуем отдельные ключи
     if sum(scores.values()) == 0:
-        # Ищем по отдельным ключам
         for i in range(len(NARRATIVE_QUESTIONS)):
             bias_key = f'narrative_bias_{i}'
             if bias_key in answers:
@@ -476,6 +474,8 @@ def get_level(data, narrative):
         base += 1
     if data.get('looks', 0) > 8:
         base += 1
+    if data.get('friends', 0) > 7:
+        base += 1
     
     gender = data.get('gender', 'М')
     if gender == 'Ж':
@@ -483,10 +483,14 @@ def get_level(data, narrative):
             base += 1
         if data.get('experience', 0) > 7:
             base += 1
+        if data.get('sex_work', 0) > 2:
+            base += 1
     else:
         if data.get('strength', 0) > 7:
             base += 1
         if data.get('testosterone', 0) > 7:
+            base += 1
+        if data.get('car', 0) > 3:
             base += 1
     
     return max(1, min(6, base))
@@ -590,12 +594,9 @@ async def start_test(callback: types.CallbackQuery, state: FSMContext):
     """Начало теста"""
     await callback.answer()
     
-    # Очищаем состояние, но сохраняем важное
-    data = await state.get_data()
-    saved_invites = data.get('sexual_invites', [])
-    
+    # Очищаем состояние, начинаем с вопроса о поле
     await state.clear()
-    await state.update_data(answers={}, last_message_id=None, sexual_invites=saved_invites)
+    await state.update_data(answers={}, last_message_id=None)
     await state.set_state(UserState.question_index)
     
     # Мистическое вступление
@@ -607,16 +608,12 @@ async def start_test(callback: types.CallbackQuery, state: FSMContext):
     )
     await asyncio.sleep(2)
     
-    await ask_question(callback.from_user.id, 0, state)
+    # Начинаем с вопроса о поле
+    await ask_gender_question(callback.from_user.id, state)
 
-async def ask_question(user_id, index, state: FSMContext):
-    """Задаёт вопрос, удаляя предыдущий"""
+async def ask_gender_question(user_id, state: FSMContext):
+    """Задаёт вопрос о поле"""
     data = await state.get_data()
-    answers = data.get('answers', {})
-    
-    # Определяем, какой блок вопросов сейчас
-    total_narrative = len(NARRATIVE_QUESTIONS)
-    total_common = len(COMMON_QUESTIONS)
     
     # Удаляем предыдущее сообщение
     last_id = data.get('last_message_id')
@@ -626,30 +623,63 @@ async def ask_question(user_id, index, state: FSMContext):
         except:
             pass
     
-    # БЛОК 1: Вопросы для определения нарратива (первые 8)
+    builder = InlineKeyboardBuilder()
+    for key, option in GENDER_QUESTION["options"].items():
+        builder.button(text=option["text"], callback_data=f"gender_{key}")
+    builder.adjust(1)
+    
+    sent = await bot.send_message(
+        user_id,
+        f"{get_mystic_symbol()} *Вопрос 1/26*\n\n"
+        f"*{GENDER_QUESTION['text']}*",
+        reply_markup=builder.as_markup()
+    )
+    
+    await state.update_data(last_message_id=sent.message_id, question_index=0)
+
+async def ask_question(user_id, index, state: FSMContext):
+    """Задаёт вопрос, удаляя предыдущий"""
+    data = await state.get_data()
+    answers = data.get('answers', {})
+    gender = answers.get('gender', 'М')
+    
+    # Определяем общее количество вопросов
+    total_narrative = len(NARRATIVE_QUESTIONS)
+    total_common = len(COMMON_QUESTIONS)
+    total_gender = len(MALE_QUESTIONS) if gender == 'М' else len(FEMALE_QUESTIONS)
+    total = 1 + total_narrative + total_common + total_gender  # +1 за вопрос о поле
+    
+    # Удаляем предыдущее сообщение
+    last_id = data.get('last_message_id')
+    if last_id:
+        try:
+            await bot.delete_message(user_id, last_id)
+        except:
+            pass
+    
+    # Определяем, какой блок вопросов сейчас
     if index < total_narrative:
+        # БЛОК 1: Вопросы для определения нарратива
         q = NARRATIVE_QUESTIONS[index]
-        total = total_narrative + total_common + (len(MALE_QUESTIONS) if answers.get('gender') == 'М' else len(FEMALE_QUESTIONS))
-        current_block = "ПЕРВЫЙ КРУГ"
-    
-    # БЛОК 2: Общие вопросы
+        block_name = "ПЕРВЫЙ КРУГ"
+        question_num = index + 2  # +2 (пол + предыдущие нарративные)
     elif index < total_narrative + total_common:
+        # БЛОК 2: Общие вопросы
         q = COMMON_QUESTIONS[index - total_narrative]
-        total = total_narrative + total_common + (len(MALE_QUESTIONS) if answers.get('gender') == 'М' else len(FEMALE_QUESTIONS))
-        current_block = "ВТОРОЙ КРУГ"
-    
-    # БЛОК 3: Гендерные вопросы
+        block_name = "ВТОРОЙ КРУГ"
+        question_num = index + 2
     else:
-        gender = answers.get('gender', 'М')
+        # БЛОК 3: Гендерные вопросы
+        gender_idx = index - total_narrative - total_common
         if gender == 'М':
-            q = MALE_QUESTIONS[index - total_narrative - total_common]
+            q = MALE_QUESTIONS[gender_idx]
         else:
-            q = FEMALE_QUESTIONS[index - total_narrative - total_common]
-        total = total_narrative + total_common + (len(MALE_QUESTIONS) if gender == 'М' else len(FEMALE_QUESTIONS))
-        current_block = "ТРЕТИЙ КРУГ"
+            q = FEMALE_QUESTIONS[gender_idx]
+        block_name = "ТРЕТИЙ КРУГ"
+        question_num = index + 2
     
     # Прогресс
-    progress = "█" * int(index / total * 10) + "░" * (10 - int(index / total * 10))
+    progress = "█" * int((index + 1) / total * 10) + "░" * (10 - int((index + 1) / total * 10))
     
     # Клавиатура
     builder = InlineKeyboardBuilder()
@@ -660,7 +690,7 @@ async def ask_question(user_id, index, state: FSMContext):
     # Отправляем вопрос
     sent = await bot.send_message(
         user_id,
-        f"{get_mystic_symbol()} *{current_block} • Вопрос {index+1}/{total}*\n"
+        f"{get_mystic_symbol()} *{block_name} • Вопрос {question_num}/{total}*\n"
         f"`{progress}`\n\n"
         f"*{q['text']}*",
         reply_markup=builder.as_markup()
@@ -668,9 +698,31 @@ async def ask_question(user_id, index, state: FSMContext):
     
     await state.update_data(last_message_id=sent.message_id)
 
+@dp.callback_query(lambda c: c.data.startswith('gender_'))
+async def process_gender(callback: types.CallbackQuery, state: FSMContext):
+    """Обработка ответа на вопрос о поле"""
+    await callback.answer()
+    
+    gender = callback.data.split('_')[1]
+    
+    data = await state.get_data()
+    answers = data.get('answers', {})
+    answers['gender'] = gender
+    
+    await state.update_data(answers=answers)
+    
+    # Удаляем сообщение с кнопками
+    try:
+        await bot.delete_message(callback.from_user.id, callback.message.message_id)
+    except:
+        pass
+    
+    # Переходим к первому нарративному вопросу
+    await ask_question(callback.from_user.id, 0, state)
+
 @dp.callback_query(lambda c: c.data.startswith('ans_'))
 async def process_answer(callback: types.CallbackQuery, state: FSMContext):
-    """Обработка ответа"""
+    """Обработка ответа на остальные вопросы"""
     await callback.answer()
     
     _, idx_str, key = callback.data.split('_')
@@ -678,6 +730,7 @@ async def process_answer(callback: types.CallbackQuery, state: FSMContext):
     
     data = await state.get_data()
     answers = data.get('answers', {})
+    gender = answers.get('gender', 'М')
     
     # Определяем вопрос
     total_narrative = len(NARRATIVE_QUESTIONS)
@@ -688,20 +741,18 @@ async def process_answer(callback: types.CallbackQuery, state: FSMContext):
     elif idx < total_narrative + total_common:
         q = COMMON_QUESTIONS[idx - total_narrative]
     else:
-        gender = answers.get('gender', 'М')
+        gender_idx = idx - total_narrative - total_common
         if gender == 'М':
-            q = MALE_QUESTIONS[idx - total_narrative - total_common]
+            q = MALE_QUESTIONS[gender_idx]
         else:
-            q = FEMALE_QUESTIONS[idx - total_narrative - total_common]
+            q = FEMALE_QUESTIONS[gender_idx]
     
     # Сохраняем ответ
     for k, v in q["options"][key]["scores"].items():
-        # Специальная обработка для narrative_bias - сохраняем в список
         if k == 'narrative_bias':
             if 'narrative_biases' not in answers:
                 answers['narrative_biases'] = []
             answers['narrative_biases'].append(v)
-            # Дополнительно сохраняем с индексом для надёжности
             answers[f'narrative_bias_{idx}'] = v
         else:
             answers[k] = v
@@ -714,10 +765,20 @@ async def process_answer(callback: types.CallbackQuery, state: FSMContext):
     except:
         pass
     
-    await ask_question(callback.from_user.id, idx + 1, state)
+    # Определяем общее количество вопросов
+    total_narrative = len(NARRATIVE_QUESTIONS)
+    total_common = len(COMMON_QUESTIONS)
+    total_gender = len(MALE_QUESTIONS) if gender == 'М' else len(FEMALE_QUESTIONS)
+    total_questions = total_narrative + total_common + total_gender
+    
+    # Проверяем, все ли вопросы отвечены
+    if idx + 1 >= total_questions:
+        await show_fortune(callback.from_user.id, state)
+    else:
+        await ask_question(callback.from_user.id, idx + 1, state)
 
 async def show_fortune(user_id, state: FSMContext):
-    """Показывает гадание — красиво и без дублей"""
+    """Показывает гадание"""
     data = await state.get_data()
     answers = data.get('answers', {})
     
@@ -738,7 +799,7 @@ async def show_fortune(user_id, state: FSMContext):
     user = await bot.get_chat(user_id)
     user_name = user.first_name or "путник"
     
-    # Определяем нарративы из первых 8 вопросов
+    # Определяем нарративы
     narrative, second, third = get_narrative_from_answers(answers)
     level = get_level(answers, narrative)
     role = get_role_name(narrative, level, gender)
