@@ -36,10 +36,11 @@ class UserState(StatesGroup):
     gender = State()               # Пол
     question_index = State()        # Индекс текущего вопроса
     answers = State()               # Все ответы
+    last_message_id = State()       # ID последнего сообщения для удаления
 
 # ==================== ВОПРОСЫ ====================
 
-# ОБЩИЕ ВОПРОСЫ ДЛЯ ВСЕХ
+# ОБЩИЕ ВОПРОСЫ ДЛЯ ВСЕХ (без гендерных пометок)
 QUESTIONS = [
     {  # 0. Пол
         "text": "Скажи мне, кто ты...",
@@ -166,7 +167,7 @@ QUESTIONS = [
     }
 ]
 
-# МУЖСКИЕ ВОПРОСЫ
+# МУЖСКИЕ ВОПРОСЫ (без пометок о поле)
 MALE_QUESTIONS = [
     {  # 12. Автомобиль
         "text": "Какой у тебя автомобиль?",
@@ -202,9 +203,9 @@ MALE_QUESTIONS = [
     {  # 15. Растительность на лице
         "text": "Как у тебя с растительностью на лице?",
         "options": {
-            "1": {"text": "Растёт плохо, бреюсь раз в неделю", "scores": {"testosterone": 3, "masculinity": 3}},
-            "2": {"text": "Нормально, бреюсь через день", "scores": {"testosterone": 5, "masculinity": 5}},
-            "3": {"text": "Густая, бреюсь каждый день", "scores": {"testosterone": 7, "masculinity": 7}},
+            "1": {"text": "Растёт плохо", "scores": {"testosterone": 3, "masculinity": 3}},
+            "2": {"text": "Нормально", "scores": {"testosterone": 5, "masculinity": 5}},
+            "3": {"text": "Густая", "scores": {"testosterone": 7, "masculinity": 7}},
             "4": {"text": "Ношу бороду", "scores": {"testosterone": 8, "masculinity": 8}},
             "5": {"text": "Очень густая борода", "scores": {"testosterone": 9, "masculinity": 9}}
         }
@@ -223,10 +224,10 @@ MALE_QUESTIONS = [
         "text": "Как ты оцениваешь своё телосложение?",
         "options": {
             "1": {"text": "Худощавое", "scores": {"body_type": "THIN", "size_confidence": 3}},
-            "2": {"text": "Среднее, обычное", "scores": {"body_type": "AVERAGE", "size_confidence": 5}},
-            "3": {"text": "Атлетичное, подкачанное", "scores": {"body_type": "ATHLETIC", "size_confidence": 7}},
-            "4": {"text": "Крупное, мощное", "scores": {"body_type": "BIG", "size_confidence": 8}},
-            "5": {"text": "Полное, с лишним весом", "scores": {"body_type": "FULL", "size_confidence": 4}}
+            "2": {"text": "Среднее", "scores": {"body_type": "AVERAGE", "size_confidence": 5}},
+            "3": {"text": "Атлетичное", "scores": {"body_type": "ATHLETIC", "size_confidence": 7}},
+            "4": {"text": "Крупное", "scores": {"body_type": "BIG", "size_confidence": 8}},
+            "5": {"text": "Полное", "scores": {"body_type": "FULL", "size_confidence": 4}}
         }
     },
     {  # 18. Секретные фантазии
@@ -241,7 +242,7 @@ MALE_QUESTIONS = [
     }
 ]
 
-# ЖЕНСКИЕ ВОПРОСЫ
+# ЖЕНСКИЕ ВОПРОСЫ (без пометок о поле)
 FEMALE_QUESTIONS = [
     {  # 12. Размер груди
         "text": "Какой у тебя размер груди?",
@@ -540,8 +541,8 @@ def get_narrative(data):
     sorted_narr = sorted(scores.items(), key=lambda x: x[1], reverse=True)
     
     main = sorted_narr[0][0]
-    second = sorted_narr[1][0] if sorted_narr[1][1] > sorted_narr[2][1] * 1.5 else None
-    third = sorted_narr[2][0] if sorted_narr[2][1] > sorted_narr[3][1] * 2 else None
+    second = sorted_narr[1][0] if len(sorted_narr) > 1 and sorted_narr[1][1] > sorted_narr[2][1] * 1.5 else None
+    third = sorted_narr[2][0] if len(sorted_narr) > 2 and sorted_narr[2][1] > sorted_narr[3][1] * 2 else None
     
     return main, second, third
 
@@ -638,18 +639,26 @@ async def cmd_start(message: types.Message, state: FSMContext):
     
     await message.answer(welcome)
     await state.set_state(UserState.gender)
-    await state.update_data(answers={})
+    await state.update_data(answers={}, last_message_id=None)
     await ask_question(message.from_user.id, 0, state)
 
 
 async def ask_question(user_id, index, state: FSMContext):
-    """Задаёт вопрос по индексу"""
+    """Задаёт вопрос по индексу, удаляя предыдущее сообщение"""
     data = await state.get_data()
     answers = data.get('answers', {})
     gender = answers.get('gender', 'М')
     
+    # Удаляем предыдущее сообщение, если оно есть
+    last_message_id = data.get('last_message_id')
+    if last_message_id:
+        try:
+            await bot.delete_message(user_id, last_message_id)
+        except:
+            pass  # Если не удалось удалить (например, сообщение слишком старое)
+    
     # Определяем общее количество вопросов
-    total_questions = len(QUESTIONS) + len(MALE_QUESTIONS) if gender == 'М' else len(QUESTIONS) + len(FEMALE_QUESTIONS)
+    total_questions = len(QUESTIONS) + (len(MALE_QUESTIONS) if gender == 'М' else len(FEMALE_QUESTIONS))
     
     if index >= total_questions:
         await show_fortune(user_id, state)
@@ -669,11 +678,15 @@ async def ask_question(user_id, index, state: FSMContext):
         builder.button(text=option["text"], callback_data=f"ans_{index}_{key}")
     builder.adjust(1)  # вертикальное расположение
     
-    await bot.send_message(
+    # Отправляем новое сообщение и сохраняем его ID
+    sent_message = await bot.send_message(
         user_id,
         f"*Вопрос {index+1}*: {q['text']}",
         reply_markup=builder.as_markup()
     )
+    
+    # Сохраняем ID последнего сообщения в состоянии
+    await state.update_data(last_message_id=sent_message.message_id)
 
 
 @dp.callback_query(lambda c: c.data.startswith('ans_'))
@@ -705,6 +718,12 @@ async def process_answer(callback: types.CallbackQuery, state: FSMContext):
     
     await state.update_data(answers=answers)
     
+    # Удаляем сообщение с кнопками, на которое нажали
+    try:
+        await bot.delete_message(callback.from_user.id, callback.message.message_id)
+    except:
+        pass  # Если не удалось удалить
+    
     # Переходим к следующему вопросу
     await ask_question(callback.from_user.id, index + 1, state)
 
@@ -713,6 +732,14 @@ async def show_fortune(user_id, state: FSMContext):
     """Показывает гадание с разбивкой на несколько сообщений"""
     data = await state.get_data()
     answers = data.get('answers', {})
+    
+    # Удаляем последний вопрос, если он есть
+    last_message_id = data.get('last_message_id')
+    if last_message_id:
+        try:
+            await bot.delete_message(user_id, last_message_id)
+        except:
+            pass
     
     gender = answers.get('gender', 'М')
     age = answers.get('age', 30)
