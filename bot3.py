@@ -1,6 +1,7 @@
 """
-Variatica Bot - для aiogram 3.x
-С определением пола, гендерными вопросами и отдельными интерпретациями
+Гадалка 🔮
+Виртуальная гадалка, которая расскажет о прошлом, настоящем и будущем
+Включая самые сокровенные тайны, желания и интимные подробности
 """
 
 import os
@@ -33,534 +34,501 @@ dp = Dispatcher(storage=storage)
 
 class UserState(StatesGroup):
     gender = State()               # Пол
-    block1_question = State()       # Индекс вопроса блока 1
-    block1_excludes = State()       # Исключённые нарративы
-    narrative = State()             # Основной нарратив
-    second_narrative = State()      # Второй нарратив
-    block2_question = State()       # Индекс вопроса блока 2
-    block2_resources = State()      # Собранные ресурсы
+    question_index = State()        # Индекс текущего вопроса
+    answers = State()               # Все ответы
 
 # ==================== ВОПРОСЫ ====================
 
-# Вопрос 0: Определение пола
-GENDER_QUESTION = {
-    "text": "Для точного определения стратегии мне нужно знать твой пол",
-    "options": {
-        "М": {"text": "👨 Мужской", "gender": "М"},
-        "Ж": {"text": "👩 Женский", "gender": "Ж"}
-    }
-}
-
-# Блок 1: 8 вопросов для определения нарратива (метод исключения)
-QUESTIONS_BLOCK1 = [
-    {
-        "text": "Какой отдых ты предпочитаешь?",
+QUESTIONS = [
+    {  # 0. Пол
+        "text": "Скажи мне, кто ты...",
         "options": {
-            "🔱": {"text": "Активный, соревновательный, спорт", "exclude": "ЧВ"},
-            "🔨": {"text": "Созидательный — что-то сделать своими руками", "exclude": "СБ"},
-            "📚": {"text": "Интеллектуальный — книги, головоломки", "exclude": "ТФ"},
-            "🎭": {"text": "Развлекательный — тусовки, мероприятия", "exclude": "УБ"}
+            "М": {"text": "👨 Мужчина", "scores": {"gender": "М"}},
+            "Ж": {"text": "👩 Женщина", "scores": {"gender": "Ж"}}
         }
     },
-    {
-        "text": "Что ты ценишь в людях больше всего?",
+    {  # 1. Возраст
+        "text": "Сколько тебе лет?",
         "options": {
-            "🥊": {"text": "Силу и уверенность", "exclude": "ЧВ"},
-            "🛠️": {"text": "Трудолюбие и надёжность", "exclude": "СБ"},
-            "📖": {"text": "Ум и глубину", "exclude": "ТФ"},
-            "🎉": {"text": "Харизму и обаяние", "exclude": "УБ"}
+            "1": {"text": "Меньше 20", "scores": {"age": 18, "age_group": "YOUNG"}},
+            "2": {"text": "20-25 лет", "scores": {"age": 22, "age_group": "YOUNG_ADULT"}},
+            "3": {"text": "25-30 лет", "scores": {"age": 27, "age_group": "YOUNG_ADULT"}},
+            "4": {"text": "30-35 лет", "scores": {"age": 32, "age_group": "ADULT"}},
+            "5": {"text": "35-40 лет", "scores": {"age": 37, "age_group": "ADULT"}},
+            "6": {"text": "40-45 лет", "scores": {"age": 42, "age_group": "MIDDLE"}},
+            "7": {"text": "45-50 лет", "scores": {"age": 47, "age_group": "MIDDLE"}},
+            "8": {"text": "50-60 лет", "scores": {"age": 55, "age_group": "MATURE"}},
+            "9": {"text": "Больше 60", "scores": {"age": 65, "age_group": "ELDER"}}
         }
     },
-    {
-        "text": "Какая похвала для тебя ценнее?",
+    {  # 2. Образование
+        "text": "Какое у тебя образование?",
         "options": {
-            "⚔️": {"text": "«Тебя стоит уважать»", "exclude": "ЧВ"},
-            "⚙️": {"text": "«На тебя можно положиться»", "exclude": "СБ"},
-            "🔬": {"text": "«Ты очень умный/умная»", "exclude": "ТФ"},
-            "🎪": {"text": "«Ты душа компании»", "exclude": "УБ"}
+            "1": {"text": "Неполное среднее", "scores": {"education": 2, "edu_level": "LOW"}},
+            "2": {"text": "Среднее (школа)", "scores": {"education": 4, "edu_level": "MEDIUM"}},
+            "3": {"text": "Среднее специальное", "scores": {"education": 6, "edu_level": "MEDIUM"}},
+            "4": {"text": "Высшее", "scores": {"education": 8, "edu_level": "HIGH"}},
+            "5": {"text": "Два и более / учёная степень", "scores": {"education": 10, "edu_level": "VERY_HIGH"}}
         }
     },
-    {
-        "text": "В компании незнакомых людей ты сразу...",
+    {  # 3. Работа
+        "text": "Кем ты работаешь?",
         "options": {
-            "👑": {"text": "Оцениваешь, кто тут главный", "exclude": "ЧВ"},
-            "⏰": {"text": "Ищешь, с кем можно по делу поговорить", "exclude": "СБ"},
-            "🤯": {"text": "Прислушиваешься к умным разговорам", "exclude": "ТФ"},
-            "👻": {"text": "Смотришь, кто в центре внимания", "exclude": "УБ"}
+            "1": {"text": "Не работаю", "scores": {"job": "DEPENDENT", "income": 1}},
+            "2": {"text": "Рабочий, персонал", "scores": {"job": "WORKER", "income": 3}},
+            "3": {"text": "Офисный работник", "scores": {"job": "OFFICE", "income": 4}},
+            "4": {"text": "Специалист (врач, учитель)", "scores": {"job": "PROFESSIONAL", "income": 5}},
+            "5": {"text": "Руководитель", "scores": {"job": "MANAGER", "income": 7}},
+            "6": {"text": "Бизнесмен", "scores": {"job": "BUSINESS", "income": 8}},
+            "7": {"text": "Фрилансер", "scores": {"job": "FREELANCE", "income": 5}},
+            "8": {"text": "Творческая профессия", "scores": {"job": "CREATIVE", "income": 4}}
         }
     },
-    {
-        "text": "Куда бы ты потратил(а) крупную сумму?",
+    {  # 4. Доход
+        "text": "Как у тебя с деньгами?",
         "options": {
-            "🏛️": {"text": "На статусные вещи (машина, часы)", "exclude": "ЧВ"},
-            "🏗️": {"text": "На инструменты, оборудование, свой цех", "exclude": "СБ"},
-            "🧠": {"text": "На обучение, книги, исследования", "exclude": "ТФ"},
-            "🌟": {"text": "На раскрутку имени, пиар", "exclude": "УБ"}
+            "1": {"text": "Едва хватает на еду", "scores": {"money": 1}},
+            "2": {"text": "Хватает на жизнь", "scores": {"money": 3}},
+            "3": {"text": "Могу покупать крупные вещи", "scores": {"money": 5}},
+            "4": {"text": "Обеспечен(а), есть накопления", "scores": {"money": 7}},
+            "5": {"text": "Богат(а), деньги не проблема", "scores": {"money": 9}}
         }
     },
-    {
-        "text": "Что тебя бесит больше всего?",
+    {  # 5. Жильё
+        "text": "Где ты живёшь?",
         "options": {
-            "💎": {"text": "Неуважение, когда меня не ставят ни во что", "exclude": "ЧВ"},
-            "🏭": {"text": "Лень и халява других", "exclude": "СБ"},
-            "📚": {"text": "Глупость и нежелание думать", "exclude": "ТФ"},
-            "📢": {"text": "Когда меня игнорируют, не замечают", "exclude": "УБ"}
+            "1": {"text": "Снимаю угол/комнату", "scores": {"housing": 1}},
+            "2": {"text": "С родителями/родственниками", "scores": {"housing": 2}},
+            "3": {"text": "Снимаю квартиру", "scores": {"housing": 3}},
+            "4": {"text": "Своя квартира/дом", "scores": {"housing": 5}},
+            "5": {"text": "Несколько объектов", "scores": {"housing": 8}}
         }
     },
-    {
-        "text": "Какой подарок тебя порадует больше?",
-        "options": {
-            "🦁": {"text": "Эксклюзивная вещь, подчёркивающая статус", "exclude": "ЧВ"},
-            "🐜": {"text": "Полезный инструмент или техника", "exclude": "СБ"},
-            "🦉": {"text": "Редкая книга или доступ к знаниям", "exclude": "ТФ"},
-            "🦚": {"text": "Приглашение на закрытое мероприятие", "exclude": "УБ"}
-        }
-    },
-    {
-        "text": "Чего ты боишься больше всего?",
-        "options": {
-            "📉": {"text": "Потерять авторитет, стать никем", "exclude": "ЧВ"},
-            "💸": {"text": "Остаться без работы, без денег", "exclude": "СБ"},
-            "🤦": {"text": "Показаться глупым/глупой", "exclude": "ТФ"},
-            "👀": {"text": "Стать незаметным, скучным", "exclude": "УБ"}
-        }
-    }
-]
-
-# Общие вопросы для всех (5 вопросов)
-COMMON_QUESTIONS = [
-    {
+    {  # 6. Рост
         "text": "Какой у тебя рост?",
         "options": {
-            "1": {"text": "Ниже 165 см", "scores": {"height": 2}},
-            "2": {"text": "165-175 см", "scores": {"height": 4}},
-            "3": {"text": "175-185 см", "scores": {"height": 6}},
-            "4": {"text": "185-195 см", "scores": {"height": 8}},
-            "5": {"text": "Выше 195 см", "scores": {"height": 10}}
+            "1": {"text": "Ниже 160 см", "scores": {"height": 2}},
+            "2": {"text": "160-170 см", "scores": {"height": 4}},
+            "3": {"text": "170-180 см", "scores": {"height": 6}},
+            "4": {"text": "180-190 см", "scores": {"height": 8}},
+            "5": {"text": "Выше 190 см", "scores": {"height": 10}}
         }
     },
-    {
+    {  # 7. Внешность
+        "text": "Как ты выглядишь?",
+        "options": {
+            "1": {"text": "Меня не замечают", "scores": {"looks": 2}},
+            "2": {"text": "Обычная внешность", "scores": {"looks": 4}},
+            "3": {"text": "Симпатичный(ая)", "scores": {"looks": 6}},
+            "4": {"text": "Красивый(ая)", "scores": {"looks": 8}},
+            "5": {"text": "Модельная внешность", "scores": {"looks": 10}}
+        }
+    },
+    {  # 8. Здоровье
         "text": "Как часто ты болеешь?",
         "options": {
-            "1": {"text": "Постоянно, каждый месяц", "scores": {"health": 2}},
+            "1": {"text": "Постоянно", "scores": {"health": 2}},
             "2": {"text": "Несколько раз в год", "scores": {"health": 4}},
-            "3": {"text": "Раз в год по сезону", "scores": {"health": 6}},
+            "3": {"text": "Раз в год", "scores": {"health": 6}},
             "4": {"text": "Раз в несколько лет", "scores": {"health": 8}},
             "5": {"text": "Практически никогда", "scores": {"health": 10}}
         }
     },
-    {
-        "text": "Как ты оцениваешь свою внешность?",
+    {  # 9. Семейное положение
+        "text": "Какое у тебя семейное положение?",
         "options": {
-            "1": {"text": "Меня не замечают", "scores": {"attractiveness": 2}},
-            "2": {"text": "Обычная внешность", "scores": {"attractiveness": 4}},
-            "3": {"text": "Симпатичный(ая)", "scores": {"attractiveness": 6}},
-            "4": {"text": "Красивый(ая), привлекаю внимание", "scores": {"attractiveness": 8}},
-            "5": {"text": "Модельная внешность", "scores": {"attractiveness": 10}}
+            "1": {"text": "Никогда не был(а) в браке", "scores": {"marriage": 0, "marriages": 0}},
+            "2": {"text": "В браке / отношениях", "scores": {"marriage": 1, "marriages": 1}},
+            "3": {"text": "Разведен(а) один раз", "scores": {"marriage": 0, "marriages": 1}},
+            "4": {"text": "Разведен(а) дважды", "scores": {"marriage": 0, "marriages": 2}},
+            "5": {"text": "Вдовец/вдова", "scores": {"marriage": 0, "marriages": 1}}
         }
     },
-    {
-        "text": "В школе ты учился(ась)...",
+    {  # 10. Дети
+        "text": "Есть ли у тебя дети?",
         "options": {
-            "1": {"text": "Еле тянул(а), двойки", "scores": {"intelligence": 2}},
-            "2": {"text": "Тройки, кое-как", "scores": {"intelligence": 4}},
-            "3": {"text": "Хорошист(ка), твердая 4", "scores": {"intelligence": 6}},
-            "4": {"text": "Отличник(ца), легко давалось", "scores": {"intelligence": 8}},
-            "5": {"text": "Участвовал(а) в олимпиадах", "scores": {"intelligence": 10}}
+            "1": {"text": "Нет детей", "scores": {"children": 0, "kids": 0}},
+            "2": {"text": "Один ребёнок", "scores": {"children": 1, "kids": 1}},
+            "3": {"text": "Двое детей", "scores": {"children": 2, "kids": 2}},
+            "4": {"text": "Трое и больше", "scores": {"children": 3, "kids": 3}}
         }
     },
-    {
+    {  # 11. Друзья
         "text": "Сколько у тебя близких друзей?",
         "options": {
-            "1": {"text": "Никого, я один(одна)", "scores": {"friends": 2}},
-            "2": {"text": "1-2 друга", "scores": {"friends": 4}},
-            "3": {"text": "3-5 друзей", "scores": {"friends": 6}},
-            "4": {"text": "5-10 человек", "scores": {"friends": 8}},
-            "5": {"text": "Целая команда, много друзей", "scores": {"friends": 10}}
+            "1": {"text": "Никого, я один(а)", "scores": {"friends": 1, "social": 1}},
+            "2": {"text": "1-2 друга", "scores": {"friends": 3, "social": 3}},
+            "3": {"text": "3-5 друзей", "scores": {"friends": 5, "social": 5}},
+            "4": {"text": "5-10 человек", "scores": {"friends": 7, "social": 7}},
+            "5": {"text": "Много друзей", "scores": {"friends": 9, "social": 9}}
         }
     }
 ]
 
-# Мужские вопросы (5 вопросов)
+# Мужские вопросы
 MALE_QUESTIONS = [
-    {
-        "text": "Во сколько лет у тебя начал ломаться голос?",
+    {  # 12. Автомобиль
+        "text": "Какой у тебя автомобиль?",
         "options": {
-            "1": {"text": "Очень рано, в 10-11 лет", "scores": {"testosterone": 9}},
-            "2": {"text": "В 12-13 лет", "scores": {"testosterone": 7}},
-            "3": {"text": "В 14-15 лет", "scores": {"testosterone": 6}},
-            "4": {"text": "В 16-17 лет", "scores": {"testosterone": 4}},
-            "5": {"text": "До сих пор не сломался", "scores": {"testosterone": 2}}
+            "1": {"text": "Нет машины", "scores": {"car": 0, "car_type": "NONE", "status": 1}},
+            "2": {"text": "Отечественный/старый", "scores": {"car": 1, "car_type": "OLD", "status": 2}},
+            "3": {"text": "Бюджетный иномарка", "scores": {"car": 2, "car_type": "BUDGET", "status": 3}},
+            "4": {"text": "Бизнес-класс", "scores": {"car": 3, "car_type": "BUSINESS", "status": 5}},
+            "5": {"text": "Премиум/спортивный", "scores": {"car": 4, "car_type": "PREMIUM", "status": 7}},
+            "6": {"text": "Внедорожник/джип", "scores": {"car": 4, "car_type": "SUV", "status": 6, "compensation": 1}}
         }
     },
-    {
+    {  # 13. Баня
+        "text": "Как часто ты ходишь в баню?",
+        "options": {
+            "1": {"text": "Никогда", "scores": {"banya": 1, "body_confidence": 2}},
+            "2": {"text": "Раз в год по приглашению", "scores": {"banya": 3, "body_confidence": 4}},
+            "3": {"text": "Иногда с друзьями", "scores": {"banya": 5, "body_confidence": 6}},
+            "4": {"text": "Регулярно, традиция", "scores": {"banya": 7, "body_confidence": 8}},
+            "5": {"text": "У меня своя баня", "scores": {"banya": 9, "body_confidence": 7, "status": 5}}
+        }
+    },
+    {  # 14. Измены
+        "text": "Как ты относишься к верности?",
+        "options": {
+            "1": {"text": "Всегда верен", "scores": {"cheating": 1, "loyalty": 9, "sex_drive": 3}},
+            "2": {"text": "Было однажды", "scores": {"cheating": 3, "loyalty": 5, "sex_drive": 5}},
+            "3": {"text": "Бывало, не вижу проблемы", "scores": {"cheating": 5, "loyalty": 3, "sex_drive": 7}},
+            "4": {"text": "Часто меняю женщин", "scores": {"cheating": 7, "loyalty": 1, "sex_drive": 9}},
+            "5": {"text": "Не был в отношениях", "scores": {"cheating": 2, "loyalty": 5, "sex_drive": 4}}
+        }
+    },
+    {  # 15. Растительность
         "text": "Как у тебя с растительностью на лице?",
         "options": {
-            "1": {"text": "Растёт плохо, бреюсь раз в неделю", "scores": {"testosterone": 3}},
-            "2": {"text": "Нормально, бреюсь через день", "scores": {"testosterone": 5}},
-            "3": {"text": "Густая, бреюсь каждый день", "scores": {"testosterone": 7}},
-            "4": {"text": "Очень густая, если не брить — борода", "scores": {"testosterone": 9}},
-            "5": {"text": "Ношу бороду/усы", "scores": {"testosterone": 8}}
+            "1": {"text": "Растёт плохо", "scores": {"testosterone": 3, "masculinity": 3}},
+            "2": {"text": "Нормально, бреюсь через день", "scores": {"testosterone": 5, "masculinity": 5}},
+            "3": {"text": "Густая, бреюсь каждый день", "scores": {"testosterone": 7, "masculinity": 7}},
+            "4": {"text": "Ношу бороду", "scores": {"testosterone": 8, "masculinity": 8}},
+            "5": {"text": "Очень густая борода", "scores": {"testosterone": 9, "masculinity": 9}}
         }
     },
-    {
-        "text": "Какой автомобиль ты предпочитаешь?",
+    {  # 16. Сила
+        "text": "Сколько отжимаешься?",
         "options": {
-            "1": {"text": "Большой внедорожник, джип", "scores": {"car_type": "BIG", "compensation": 8}},
-            "2": {"text": "Спортивную машину", "scores": {"car_type": "SPORT", "compensation": 7}},
-            "3": {"text": "Надёжный седан, универсал", "scores": {"car_type": "PRACTICAL", "compensation": 5}},
-            "4": {"text": "Маленький экономичный автомобиль", "scores": {"car_type": "SMALL", "compensation": 3}},
-            "5": {"text": "У меня нет машины", "scores": {"car_type": "NONE", "compensation": 2}}
+            "1": {"text": "0-5 раз", "scores": {"strength": 2, "fitness": 2}},
+            "2": {"text": "5-15 раз", "scores": {"strength": 4, "fitness": 4}},
+            "3": {"text": "15-30 раз", "scores": {"strength": 6, "fitness": 6}},
+            "4": {"text": "30-50 раз", "scores": {"strength": 8, "fitness": 8}},
+            "5": {"text": "Больше 50", "scores": {"strength": 10, "fitness": 10}}
         }
     },
-    {
-        "text": "Ходишь ли ты в общественные бани, сауны?",
+    {  # 17. Размер (деликатно)
+        "text": "Как ты оцениваешь своё телосложение?",
         "options": {
-            "1": {"text": "Да, регулярно, не стесняюсь", "scores": {"body_confidence": 9}},
-            "2": {"text": "Иногда хожу, нормально себя чувствую", "scores": {"body_confidence": 7}},
-            "3": {"text": "Редко, немного стесняюсь", "scores": {"body_confidence": 5}},
-            "4": {"text": "Не хожу, стесняюсь своего тела", "scores": {"body_confidence": 3}},
-            "5": {"text": "Никогда не ходил и не пойду", "scores": {"body_confidence": 1}}
+            "1": {"text": "Худощавое", "scores": {"body_type": "THIN", "size_confidence": 3}},
+            "2": {"text": "Среднее", "scores": {"body_type": "AVERAGE", "size_confidence": 5}},
+            "3": {"text": "Атлетичное", "scores": {"body_type": "ATHLETIC", "size_confidence": 7}},
+            "4": {"text": "Крупное, мощное", "scores": {"body_type": "BIG", "size_confidence": 8}},
+            "5": {"text": "Полное", "scores": {"body_type": "FULL", "size_confidence": 4}}
         }
     },
-    {
-        "text": "Сколько ты можешь отжаться от пола?",
+    {  # 18. Фантазии
+        "text": "Какие сны тебя будоражат?",
         "options": {
-            "1": {"text": "0-5 раз", "scores": {"strength": 2}},
-            "2": {"text": "5-15 раз", "scores": {"strength": 4}},
-            "3": {"text": "15-30 раз", "scores": {"strength": 6}},
-            "4": {"text": "30-50 раз", "scores": {"strength": 8}},
-            "5": {"text": "Больше 50", "scores": {"strength": 10}}
+            "1": {"text": "О власти и деньгах", "scores": {"fantasy": "POWER", "kink": "DOMINANCE"}},
+            "2": {"text": "О красивых женщинах", "scores": {"fantasy": "WOMEN", "kink": "HAREM"}},
+            "3": {"text": "О приключениях и риске", "scores": {"fantasy": "ADVENTURE", "kink": "EXTREME"}},
+            "4": {"text": "О признании и славе", "scores": {"fantasy": "FAME", "kink": "EXHIBITION"}},
+            "5": {"text": "Не помню сны", "scores": {"fantasy": "NONE", "kink": "VANILLA"}}
         }
     }
 ]
 
-# Женские вопросы (5 вопросов)
+# Женские вопросы
 FEMALE_QUESTIONS = [
-    {
+    {  # 12. Размер груди
         "text": "Какой у тебя размер груди?",
         "options": {
-            "1": {"text": "0-1 размер (маленькая)", "scores": {"breast_size": 3, "feminine_capital": 4}},
-            "2": {"text": "2 размер", "scores": {"breast_size": 5, "feminine_capital": 6}},
-            "3": {"text": "3 размер", "scores": {"breast_size": 7, "feminine_capital": 8}},
-            "4": {"text": "4 размер и больше", "scores": {"breast_size": 9, "feminine_capital": 9}},
-            "5": {"text": "Не хочу отвечать", "scores": {"breast_size": 5, "feminine_capital": 5}}
+            "1": {"text": "0-1 размер", "scores": {"breast": 3, "fem_capital": 4, "body_confidence": 4}},
+            "2": {"text": "2 размер", "scores": {"breast": 5, "fem_capital": 6, "body_confidence": 6}},
+            "3": {"text": "3 размер", "scores": {"breast": 7, "fem_capital": 8, "body_confidence": 8}},
+            "4": {"text": "4 размер и больше", "scores": {"breast": 9, "fem_capital": 9, "body_confidence": 7}},
+            "5": {"text": "Не хочу отвечать", "scores": {"breast": 5, "fem_capital": 5, "body_confidence": 5}}
         }
     },
-    {
-        "text": "Во сколько лет у тебя начались месячные?",
+    {  # 13. Месячные
+        "text": "Во сколько лет начались месячные?",
         "options": {
-            "1": {"text": "Очень рано, до 11 лет", "scores": {"hormonal": 8}},
-            "2": {"text": "В 11-12 лет", "scores": {"hormonal": 7}},
-            "3": {"text": "В 12-14 лет", "scores": {"hormonal": 6}},
-            "4": {"text": "В 14-16 лет", "scores": {"hormonal": 4}},
-            "5": {"text": "После 16 лет", "scores": {"hormonal": 3}}
+            "1": {"text": "До 11 лет", "scores": {"hormones": 8, "maturity": 8}},
+            "2": {"text": "11-12 лет", "scores": {"hormones": 7, "maturity": 7}},
+            "3": {"text": "12-14 лет", "scores": {"hormones": 6, "maturity": 6}},
+            "4": {"text": "14-16 лет", "scores": {"hormones": 4, "maturity": 4}},
+            "5": {"text": "После 16", "scores": {"hormones": 3, "maturity": 3}}
         }
     },
-    {
-        "text": "Какой тип мужчин ты обычно выбираешь?",
+    {  # 14. Выбор мужчин
+        "text": "Какие мужчины тебе нравятся?",
         "options": {
-            "1": {"text": "Сильных, доминантных, которые решают всё", "scores": {"mate_type": "АЛЬФА", "mate_strategy": "DEPENDENT"}},
-            "2": {"text": "Уверенных, но с которыми можно договориться", "scores": {"mate_type": "БЕТА", "mate_strategy": "PARTNERSHIP"}},
-            "3": {"text": "Умных, интеллектуалов", "scores": {"mate_type": "ГАММА", "mate_strategy": "INTELLECTUAL"}},
-            "4": {"text": "Богатых, статусных, которые могут обеспечить", "scores": {"mate_type": "ДЕЛЬТА", "mate_strategy": "PROVIDER"}},
-            "5": {"text": "Красивых, харизматичных", "scores": {"mate_type": "ОМЕГА", "mate_strategy": "STATUS"}}
+            "1": {"text": "Сильные, доминантные", "scores": {"mate": "ALPHA", "strategy": "DEPENDENT", "kink": "SUBMISSIVE"}},
+            "2": {"text": "Уверенные, надёжные", "scores": {"mate": "BETA", "strategy": "PARTNERSHIP", "kink": "VANILLA"}},
+            "3": {"text": "Умные, интеллектуалы", "scores": {"mate": "GAMMA", "strategy": "INTELLECTUAL", "kink": "MENTAL"}},
+            "4": {"text": "Богатые, статусные", "scores": {"mate": "DELTA", "strategy": "PROVIDER", "kink": "SUGAR"}},
+            "5": {"text": "Красивые, харизматичные", "scores": {"mate": "OMEGA", "strategy": "STATUS", "kink": "EXHIBITION"}}
         }
     },
-    {
-        "text": "Что для тебя важнее в мужчине?",
+    {  # 15. Отношения
+        "text": "Сколько у тебя было серьёзных отношений?",
         "options": {
-            "1": {"text": "Чтобы защищал и был надёжной стеной", "scores": {"mate_priority": "PROTECTION", "feminine_strategy": "ЗАВИСИМАЯ"}},
-            "2": {"text": "Чтобы зарабатывал и обеспечивал", "scores": {"mate_priority": "PROVISION", "feminine_strategy": "ПРАГМАТИЧНАЯ"}},
-            "3": {"text": "Чтобы понимал и поддерживал", "scores": {"mate_priority": "SUPPORT", "feminine_strategy": "ПАРТНЁРСКАЯ"}},
-            "4": {"text": "Чтобы был управляемым", "scores": {"mate_priority": "CONTROL", "feminine_strategy": "ДОМИНАНТНАЯ"}},
-            "5": {"text": "Чтобы с ним было весело", "scores": {"mate_priority": "FUN", "feminine_strategy": "ГЕДОНИСТИЧЕСКАЯ"}}
+            "1": {"text": "Ни одного", "scores": {"relationships": 0, "experience": 1}},
+            "2": {"text": "Один", "scores": {"relationships": 1, "experience": 3}},
+            "3": {"text": "2-3", "scores": {"relationships": 2, "experience": 5}},
+            "4": {"text": "4-5", "scores": {"relationships": 3, "experience": 7}},
+            "5": {"text": "Больше 5", "scores": {"relationships": 4, "experience": 9}}
         }
     },
-    {
-        "text": "Как часто ты занимаешься спортом?",
+    {  # 16. Интим-работа
+        "text": "Приходилось ли зарабатывать внешностью?",
         "options": {
-            "1": {"text": "Вообще не занимаюсь", "scores": {"sport": 2}},
-            "2": {"text": "Иногда, без фанатизма", "scores": {"sport": 4}},
-            "3": {"text": "Регулярно 2-3 раза в неделю", "scores": {"sport": 6}},
-            "4": {"text": "Часто, 4-5 раз в неделю", "scores": {"sport": 8}},
-            "5": {"text": "Профессионально", "scores": {"sport": 10}}
+            "1": {"text": "Нет, никогда", "scores": {"sex_work": 0, "taboo": 1}},
+            "2": {"text": "Были спонсоры/подарки", "scores": {"sex_work": 1, "taboo": 3}},
+            "3": {"text": "Работала моделью/эскортом", "scores": {"sex_work": 2, "taboo": 5}},
+            "4": {"text": "Был опыт в интимной сфере", "scores": {"sex_work": 3, "taboo": 7}},
+            "5": {"text": "Не хочу отвечать", "scores": {"sex_work": 1, "taboo": 4}}
+        }
+    },
+    {  # 17. Тело
+        "text": "Что тебе нравится в своём теле?",
+        "options": {
+            "1": {"text": "Грудь", "scores": {"body_pride": "BREAST", "body_confidence": 6}},
+            "2": {"text": "Попа", "scores": {"body_pride": "ASS", "body_confidence": 6}},
+            "3": {"text": "Ноги", "scores": {"body_pride": "LEGS", "body_confidence": 6}},
+            "4": {"text": "Глаза/лицо", "scores": {"body_pride": "FACE", "body_confidence": 6}},
+            "5": {"text": "Ничего не нравится", "scores": {"body_pride": "NONE", "body_confidence": 2}}
+        }
+    },
+    {  # 18. Фантазии
+        "text": "Какие сны тебя будоражат?",
+        "options": {
+            "1": {"text": "О сильном мужчине", "scores": {"fantasy": "ALPHA", "kink": "SUBMISSIVE"}},
+            "2": {"text": "О богатстве и роскоши", "scores": {"fantasy": "WEALTH", "kink": "SUGAR"}},
+            "3": {"text": "О страсти и сексе", "scores": {"fantasy": "PASSION", "kink": "WILD"}},
+            "4": {"text": "О признании и славе", "scores": {"fantasy": "FAME", "kink": "EXHIBITION"}},
+            "5": {"text": "Не помню сны", "scores": {"fantasy": "NONE", "kink": "VANILLA"}}
         }
     }
 ]
 
-# Реакции на стресс (5 вопросов) - общие для всех
-STRESS_QUESTIONS = [
-    {
-        "text": "В детстве, когда на тебя кричали, твое лицо...",
-        "options": {
-            "1": {"text": "Краснело", "scores": {"stress_response": "FIGHT"}},
-            "2": {"text": "Бледнело", "scores": {"stress_response": "FLIGHT"}},
-            "3": {"text": "Каменело, застывало", "scores": {"stress_response": "FREEZE"}},
-            "4": {"text": "Становилось тряпичным", "scores": {"stress_response": "PLAY_DEAD"}},
-            "5": {"text": "Расплывалось в улыбке", "scores": {"stress_response": "FAWN"}},
-            "6": {"text": "Становилось пустым", "scores": {"stress_response": "SURRENDER"}}
-        }
-    },
-    {
-        "text": "Когда кто-то лезет без очереди, ты...",
-        "options": {
-            "1": {"text": "Громко делаю замечание", "scores": {"conflict": "FIGHT"}},
-            "2": {"text": "Молча злюсь", "scores": {"conflict": "FREEZE"}},
-            "3": {"text": "Думаю «да и ладно»", "scores": {"conflict": "SURRENDER"}},
-            "4": {"text": "Пытаюсь объяснить вежливо", "scores": {"conflict": "FAWN"}},
-            "5": {"text": "Ухожу в другую очередь", "scores": {"conflict": "FLIGHT"}}
-        }
-    },
-    {
-        "text": "В конфликте ты скорее...",
-        "options": {
-            "1": {"text": "Нападаю первый", "scores": {"conflict_style": "FIGHT"}},
-            "2": {"text": "Защищаюсь, но не бью", "scores": {"conflict_style": "FREEZE"}},
-            "3": {"text": "Пытаюсь договориться", "scores": {"conflict_style": "FAWN"}},
-            "4": {"text": "Ухожу от конфликта", "scores": {"conflict_style": "FLIGHT"}},
-            "5": {"text": "Уступаю", "scores": {"conflict_style": "SURRENDER"}}
-        }
-    },
-    {
-        "text": "После сильного стресса ты...",
-        "options": {
-            "1": {"text": "Ещё долго заведён(а)", "scores": {"recovery": 2}},
-            "2": {"text": "Быстро прихожу в норму", "scores": {"recovery": 8}},
-            "3": {"text": "Чувствую опустошение", "scores": {"recovery": 4}},
-            "4": {"text": "Хочется есть сладкое", "scores": {"recovery": 5}},
-            "5": {"text": "Хочется спать", "scores": {"recovery": 6}}
-        }
-    },
-    {
-        "text": "Как быстро ты засыпаешь после тяжёлого дня?",
-        "options": {
-            "1": {"text": "Мгновенно", "scores": {"sleep": 10, "nervous": 8}},
-            "2": {"text": "Минут 10-15", "scores": {"sleep": 8, "nervous": 6}},
-            "3": {"text": "Долго ворочаюсь", "scores": {"sleep": 4, "nervous": 4}},
-            "4": {"text": "Не могу уснуть", "scores": {"sleep": 2, "nervous": 2}},
-            "5": {"text": "Просыпаюсь ночью", "scores": {"sleep": 3, "nervous": 3}}
-        }
+# ==================== ФУНКЦИИ ГАДАНИЯ ====================
+
+def get_narrative(data):
+    """Определяем доминирующий нарратив"""
+    scores = {"СБ": 0, "ТФ": 0, "УБ": 0, "ЧВ": 0}
+    
+    job = data.get('job', '')
+    if job in ['MANAGER', 'BUSINESS']:
+        scores["СБ"] += 2
+    elif job in ['WORKER', 'OFFICE']:
+        scores["ТФ"] += 2
+    elif job in ['PROFESSIONAL']:
+        scores["УБ"] += 2
+    elif job in ['CREATIVE']:
+        scores["ЧВ"] += 2
+    
+    if data.get('money', 0) > 5:
+        scores["СБ"] += 1
+    if data.get('housing', 0) > 5:
+        scores["ТФ"] += 1
+    if data.get('education', 0) > 7:
+        scores["УБ"] += 2
+    if data.get('looks', 0) > 7:
+        scores["ЧВ"] += 2
+    
+    gender = data.get('gender', 'М')
+    if gender == 'Ж':
+        if data.get('breast', 0) > 6:
+            scores["ЧВ"] += 1
+        if data.get('mate', '') in ['ALPHA', 'DELTA']:
+            scores["СБ"] += 1
+    else:
+        if data.get('testosterone', 0) > 7:
+            scores["СБ"] += 1
+        if data.get('car_type', '') in ['PREMIUM', 'SUV']:
+            scores["ЧВ"] += 1
+    
+    max_score = max(scores.values())
+    top_narratives = [n for n, s in scores.items() if s == max_score]
+    
+    main = top_narratives[0]
+    second = top_narratives[1] if len(top_narratives) > 1 else None
+    
+    return main, second
+
+def get_level(data, narrative):
+    """Определяем уровень"""
+    base = 3
+    
+    if data.get('money', 0) > 7:
+        base += 1
+    if data.get('housing', 0) > 7:
+        base += 1
+    if data.get('education', 0) > 8:
+        base += 1
+    if data.get('looks', 0) > 8:
+        base += 1
+    if data.get('friends', 0) > 7:
+        base += 1
+    
+    gender = data.get('gender', 'М')
+    if gender == 'Ж':
+        if data.get('breast', 0) > 7:
+            base += 1
+        if data.get('experience', 0) > 7:
+            base += 1
+    else:
+        if data.get('strength', 0) > 7:
+            base += 1
+        if data.get('testosterone', 0) > 7:
+            base += 1
+    
+    return max(1, min(6, base))
+
+def get_role_name(narrative, level, gender):
+    """Получаем название роли"""
+    roles_male = {
+        "СБ": ["Бомж", "Шестёрка", "Смотрящий", "Вольный стрелок", "Разводящий", "Пахан"],
+        "ТФ": ["Иждивенец", "Работяга", "Рантье", "Мастер", "Торгаш", "Хозяин"],
+        "УБ": ["Пустышка", "Специалист", "Учитель", "Исследователь", "Продавец знаний", "Мыслитель"],
+        "ЧВ": ["Зритель", "Помощник", "Лицо бренда", "Творец", "Организатор", "Владелец"]
     }
-]
-
-# Матрица ролей (для отображения названия)
-ROLES_MATRIX = {
-    "СБ": {1: "БОМЖ", 2: "ШНЫРЬ", 3: "СМОТРЯЩИЙ", 4: "ВОЛЬНЫЙ СТРЕЛОК", 5: "РАЗВОДЯЩИЙ", 6: "ПАХАН"},
-    "ТФ": {1: "ИЖДИВЕНЕЦ", 2: "НАЁМНЫЙ РАБОЧИЙ", 3: "АРЕНДОДАТЕЛЬ", 4: "САМОЗАНЯТЫЙ", 5: "СЕЛЛЕР", 6: "ПРОИЗВОДИТЕЛЬ"},
-    "УБ": {1: "ЛЖЕЭКСПЕРТ", 2: "НАЁМНЫЙ СПЕЦИАЛИСТ", 3: "НАСТАВНИК", 4: "ИССЛЕДОВАТЕЛЬ", 5: "ПРОДАВЕЦ ЗНАНИЙ", 6: "ТЕОРЕТИК"},
-    "ЧВ": {1: "ТУСОВЩИК", 2: "ПРОЕКТНЫЙ", 3: "АМБАССАДОР", 4: "АРТИСТ", 5: "АГЕНТ", 6: "МЕДИАМАГНАТ"}
-}
-
-# Соответствие реакции на стресс и уровня
-BIOCHEMICAL_TO_LEVEL = {
-    "FIGHT": 6,
-    "FLIGHT": 4,
-    "FREEZE": 3,
-    "PLAY_DEAD": 2,
-    "FAWN": 5,
-    "SURRENDER": 1
-}
+    roles_female = {
+        "СБ": ["Бомжиха", "Шестёрка", "Смотрящая", "Вольная", "Разводящая", "Паханка"],
+        "ТФ": ["Иждивенка", "Работяга", "Рантье", "Мастерица", "Торгашка", "Хозяйка"],
+        "УБ": ["Пустышка", "Специалистка", "Учительница", "Исследовательница", "Продавщица знаний", "Мыслительница"],
+        "ЧВ": ["Зрительница", "Помощница", "Лицо бренда", "Творица", "Организаторша", "Владелица"]
+    }
+    roles = roles_female if gender == 'Ж' else roles_male
+    return roles[narrative][level-1]
 
 # ==================== ХЕНДЛЕРЫ ====================
 
 @dp.message(Command("start"))
 async def cmd_start(message: types.Message, state: FSMContext):
-    """Начало теста - определение пола"""
-    builder = InlineKeyboardBuilder()
-    for key, option in GENDER_QUESTION["options"].items():
-        builder.button(text=option["text"], callback_data=f"gender_{key}")
-    builder.adjust(1)  # Вертикальное расположение
+    """Начало гадания"""
+    await state.clear()
     
-    await message.answer(
-        "🧠 *Вариатика: твоя жизненная стратегия*\n\n"
-        "Я задам несколько вопросов, чтобы определить твою стратегию.\n"
-        "Отвечай честно — это важно для точного попадания.\n\n"
-        f"*Первый вопрос:*\n{GENDER_QUESTION['text']}",
-        reply_markup=builder.as_markup()
+    welcome = (
+        "🔮 *Виртуальная гадалка* 🔮\n\n"
+        "Я расскажу тебе о прошлом, настоящем и будущем.\n"
+        "Никакой магии — только знание человеческой природы.\n"
+        "Отвечай честно, и я увижу твою судьбу.\n\n"
+        "Готова начать? Тогда первый вопрос..."
     )
+    
+    await message.answer(welcome)
     await state.set_state(UserState.gender)
+    await state.update_data(answers={})
+    await ask_question(message.from_user.id, 0, state)
 
-@dp.callback_query(lambda c: c.data.startswith('gender_'))
-async def process_gender(callback: types.CallbackQuery, state: FSMContext):
-    """Обработка выбора пола"""
-    await callback.answer()
-    gender = callback.data.split('_')[1]
-    await state.update_data(gender=gender)
-    
-    # Переходим к блоку 1
-    await state.set_state(UserState.block1_question)
-    await state.update_data(block1_question=0, block1_excludes=[])
-    await ask_block1_question(callback.from_user.id, 0, state)
-
-async def ask_block1_question(user_id, question_index, state: FSMContext):
-    """Задать вопрос из блока 1"""
-    q = QUESTIONS_BLOCK1[question_index]
-    builder = InlineKeyboardBuilder()
-    for emoji, option in q["options"].items():
-        builder.button(text=f"{emoji} {option['text']}", callback_data=f"b1_{question_index}_{emoji}")
-    builder.adjust(1)  # Вертикальное расположение
-    
-    await bot.send_message(
-        user_id, 
-        f"*Вопрос {question_index+1}/8:*\n{q['text']}", 
-        reply_markup=builder.as_markup()
-    )
-
-@dp.callback_query(lambda c: c.data.startswith('b1_'))
-async def process_block1_answer(callback: types.CallbackQuery, state: FSMContext):
-    """Обработка ответа на вопрос блока 1"""
-    await callback.answer()
-    _, q_index_str, emoji = callback.data.split('_')
-    q_index = int(q_index_str)
-    
+async def ask_question(user_id, index, state: FSMContext):
+    """Задаёт вопрос по индексу"""
     data = await state.get_data()
-    excludes = data.get('block1_excludes', [])
-    excluded = QUESTIONS_BLOCK1[q_index]["options"][emoji]["exclude"]
-    excludes.append(excluded)
-    await state.update_data(block1_excludes=excludes)
+    answers = data.get('answers', {})
+    gender = answers.get('gender', 'М')
     
-    if q_index + 1 < len(QUESTIONS_BLOCK1):
-        await ask_block1_question(callback.from_user.id, q_index + 1, state)
-    else:
-        await determine_narrative(callback.from_user.id, state)
-
-async def determine_narrative(user_id, state: FSMContext):
-    """Определение нарратива методом исключения"""
-    data = await state.get_data()
-    excludes = data.get('block1_excludes', [])
-    
-    counts = {"СБ": 0, "ТФ": 0, "УБ": 0, "ЧВ": 0}
-    for ex in excludes:
-        counts[ex] += 1
-    
-    sorted_narratives = sorted(counts.items(), key=lambda x: x[1])
-    narrative = sorted_narratives[0][0]
-    second_narrative = sorted_narratives[1][0] if sorted_narratives[1][1] - sorted_narratives[0][1] <= 1 else None
-    
-    await state.update_data(narrative=narrative, second_narrative=second_narrative)
-    await state.set_state(UserState.block2_question)
-    await state.update_data(block2_question=0, block2_resources={})
-    
-    gender = data.get('gender')
-    gender_text = "мужчина" if gender == "М" else "женщина"
-    
-    await bot.send_message(
-        user_id, 
-        f"🎯 *Определено:* ты — *{gender_text}* в мире *{NARRATIVE_NAMES[narrative]}*.\n\n"
-        f"Теперь 15 вопросов о твоих ресурсах и реакциях.",
-        reply_markup=None
-    )
-    
-    await ask_block2_question(user_id, 0, state)
-
-async def ask_block2_question(user_id, question_index, state: FSMContext):
-    """Задать вопрос из блока 2 с учётом пола"""
-    data = await state.get_data()
-    gender = data.get('gender')
-    
-    # Определяем, какой вопрос задавать
-    if question_index < 5:
-        # Общие вопросы
-        q = COMMON_QUESTIONS[question_index]
-    elif question_index < 10:
-        # Гендерно-специфичные вопросы
-        if gender == "М":
-            q = MALE_QUESTIONS[question_index - 5]
+    if index < len(QUESTIONS):
+        q = QUESTIONS[index]
+    elif gender == 'М':
+        if index - len(QUESTIONS) < len(MALE_QUESTIONS):
+            q = MALE_QUESTIONS[index - len(QUESTIONS)]
         else:
-            q = FEMALE_QUESTIONS[question_index - 5]
+            await show_fortune(user_id, state)
+            return
     else:
-        # Вопросы про стресс
-        q = STRESS_QUESTIONS[question_index - 10]
+        if index - len(QUESTIONS) < len(FEMALE_QUESTIONS):
+            q = FEMALE_QUESTIONS[index - len(QUESTIONS)]
+        else:
+            await show_fortune(user_id, state)
+            return
     
     builder = InlineKeyboardBuilder()
     for key, option in q["options"].items():
-        text = option['text'] if len(option['text']) <= 40 else option['text'][:38] + ".."
-        builder.button(text=text, callback_data=f"b2_{question_index}_{key}")
-    builder.adjust(1)  # Вертикальное расположение
+        builder.button(text=option["text"], callback_data=f"ans_{index}_{key}")
+    builder.adjust(1)
     
     await bot.send_message(
-        user_id, 
-        f"*Вопрос {question_index+1}/15:*\n{q['text']}", 
+        user_id,
+        f"*Вопрос {index+1}*: {q['text']}",
         reply_markup=builder.as_markup()
     )
 
-@dp.callback_query(lambda c: c.data.startswith('b2_'))
-async def process_block2_answer(callback: types.CallbackQuery, state: FSMContext):
-    """Обработка ответа на вопрос блока 2"""
+@dp.callback_query(lambda c: c.data.startswith('ans_'))
+async def process_answer(callback: types.CallbackQuery, state: FSMContext):
+    """Обработка ответа"""
     await callback.answer()
-    _, q_index_str, answer_key = callback.data.split('_')
-    q_index = int(q_index_str)
+    
+    _, index_str, answer_key = callback.data.split('_')
+    index = int(index_str)
     
     data = await state.get_data()
-    gender = data.get('gender')
-    resources = data.get('block2_resources', {})
+    answers = data.get('answers', {})
+    gender = answers.get('gender', 'М')
     
-    # Определяем, из какого массива вопрос
-    if q_index < 5:
-        q = COMMON_QUESTIONS[q_index]
-    elif q_index < 10:
-        if gender == "М":
-            q = MALE_QUESTIONS[q_index - 5]
-        else:
-            q = FEMALE_QUESTIONS[q_index - 5]
+    # Определяем вопрос
+    if index < len(QUESTIONS):
+        q = QUESTIONS[index]
+    elif gender == 'М':
+        q = MALE_QUESTIONS[index - len(QUESTIONS)]
     else:
-        q = STRESS_QUESTIONS[q_index - 10]
+        q = FEMALE_QUESTIONS[index - len(QUESTIONS)]
     
     scores = q["options"][answer_key]["scores"]
-    
     for key, value in scores.items():
-        resources[key] = value
+        answers[key] = value
     
-    await state.update_data(block2_resources=resources)
-    
-    if q_index + 1 < 15:
-        await ask_block2_question(callback.from_user.id, q_index + 1, state)
-    else:
-        await show_result(callback.from_user.id, state)
+    await state.update_data(answers=answers)
+    await ask_question(callback.from_user.id, index + 1, state)
 
-async def show_result(user_id, state: FSMContext):
-    """Показать финальный результат"""
+async def show_fortune(user_id, state: FSMContext):
+    """Показывает гадание"""
     data = await state.get_data()
-    gender = data.get('gender')
-    narrative = data.get('narrative')
-    second_narrative = data.get('second_narrative')
-    resources = data.get('block2_resources', {})
+    answers = data.get('answers', {})
     
-    # Определяем уровень
-    level = BIOCHEMICAL_TO_LEVEL.get(resources.get('stress_response', 'FREEZE'), 3)
+    gender = answers.get('gender', 'М')
+    age = answers.get('age', 30)
     
-    # Корректировка по физическим данным
-    if gender == "М":
-        if resources.get('testosterone', 0) > 7 and resources.get('strength', 0) > 6:
-            level = min(6, level + 1)
-        if resources.get('body_confidence', 0) < 3:
-            level = max(1, level - 1)
-    else:
-        if resources.get('feminine_capital', 0) > 7:
-            level = min(6, level + 1)
-        if resources.get('breast_size', 0) > 7 and resources.get('attractiveness', 0) > 6:
-            level = min(6, level + 1)
+    narrative, second_narrative = get_narrative(answers)
+    level = get_level(answers, narrative)
+    role = get_role_name(narrative, level, gender)
     
-    # Получаем интерпретацию из отдельного файла
-    role = ROLES_MATRIX[narrative][level]
-    interpretation = get_interpretation(gender, narrative, level, second_narrative)
+    base_interpretation = get_interpretation(gender, narrative, level, second_narrative)
     
-    # Формируем результат
-    result = f"🎯 *Твой фокус:*\n\n"
-    result += f"Ты — *{role}* в мире *{NARRATIVE_NAMES[narrative]}*.\n\n"
-    result += f"{interpretation}\n\n"
+    # Добавляем возрастные прогнозы
+    age_1 = age + 1
+    age_5 = age + 5
+    age_10 = age + 10
+    
+    fortune = f"🔮 *Твоя судьба* 🔮\n\n"
+    fortune += f"Твой мир — *{NARRATIVE_NAMES[narrative]}*\n"
+    fortune += f"Твоя роль — *{role}*\n\n"
+    fortune += base_interpretation
+    
+    # Добавляем возрастные прогнозы
+    fortune += f"\n\n*Твой возраст: {age} лет*\n\n"
+    fortune += f"*Через год, в {age_1} лет:*\n"
+    fortune += f"Ты будешь там же, где и сейчас, если не начнёшь что-то менять. Год пролетит незаметно, а оглянешься — и ничего не изменилось.\n\n"
+    fortune += f"*Через 5 лет, в {age_5} лет:*\n"
+    fortune += f"Это рубеж. Ты либо закрепишься в своей роли, либо начнёшь скатываться. Всё зависит от решений, которые примешь сейчас.\n\n"
+    fortune += f"*Через 10 лет, в {age_10} лет:*\n"
+    fortune += f"Ты оглянешься назад и поймёшь, что главные возможности были упущены. Или наоборот — что ты всё сделала правильно. Выбор за тобой.\n\n"
+    
+    fortune += f"— *Виртуальная гадалка*"
     
     builder = InlineKeyboardBuilder()
-    builder.button(text="🔄 Пройти заново", callback_data="restart")
+    builder.button(text="🔄 Погадать ещё", callback_data="restart")
     builder.adjust(1)
     
-    await bot.send_message(user_id, result, reply_markup=builder.as_markup())
+    await bot.send_message(user_id, fortune, reply_markup=builder.as_markup())
     await state.clear()
 
 @dp.callback_query(lambda c: c.data == 'restart')
-async def restart_test(callback: types.CallbackQuery, state: FSMContext):
-    """Перезапуск теста"""
+async def restart(callback: types.CallbackQuery, state: FSMContext):
+    """Перезапуск"""
     await callback.answer()
     await cmd_start(callback.message, state)
 
