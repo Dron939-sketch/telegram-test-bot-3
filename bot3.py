@@ -1,6 +1,6 @@
 """
-Гадалка 🔮
-Виртуальная гадалка, которая расскажет о прошлом, настоящем и будущем
+Гадалка блять.. 🔮
+Виртуальная бля..гадалка , которая расскажет о прошлом, настоящем и будущем
 Включая самые сокровенные тайны, желания и интимные подробности
 """
 
@@ -710,7 +710,7 @@ async def process_answer(callback: types.CallbackQuery, state: FSMContext):
 
 
 async def show_fortune(user_id, state: FSMContext):
-    """Показывает гадание"""
+    """Показывает гадание с разбивкой на несколько сообщений"""
     data = await state.get_data()
     answers = data.get('answers', {})
     
@@ -732,18 +732,43 @@ async def show_fortune(user_id, state: FSMContext):
         third_narrative=third_narrative
     )
     
-    # Формируем результат
-    fortune = f"🔮 *Твоя судьба* 🔮\n\n"
-    fortune += f"Твой мир — *{NARRATIVE_NAMES[narrative]}*\n"
-    fortune += f"Твоя роль — *{role}*\n\n"
-    fortune += interpretation
+    # Формируем заголовок
+    header = f"🔮 *Твоя судьба* 🔮\n\n"
+    header += f"Твой мир — *{NARRATIVE_NAMES[narrative]}*\n"
+    header += f"Твоя роль — *{role}*\n\n"
+    
+    # Разбиваем интерпретацию на части по 3500 символов
+    max_len = 3500
+    full_text = interpretation
+    
+    # Первое сообщение с заголовком
+    first_part = header + full_text[:max_len]
+    await bot.send_message(user_id, first_part)
+    
+    # Отправляем остальные части
+    remaining = full_text[max_len:]
+    part_num = 2
+    
+    while remaining:
+        # Берем следующий кусок
+        next_part = remaining[:max_len]
+        remaining = remaining[max_len:]
+        
+        # Добавляем индикатор части
+        next_part += f"\n\n*— часть {part_num} —*"
+        
+        await bot.send_message(user_id, next_part)
+        part_num += 1
+        await asyncio.sleep(1)  # небольшая задержка между сообщениями
     
     # Кнопка перезапуска
     builder = InlineKeyboardBuilder()
     builder.button(text="🔄 Погадать ещё", callback_data="restart")
     builder.adjust(1)
     
-    await bot.send_message(user_id, fortune, reply_markup=builder.as_markup())
+    await bot.send_message(user_id, "✨ *Что дальше?* ✨\n\nХочешь узнать свою судьбу ещё раз?", 
+                          reply_markup=builder.as_markup())
+    
     await state.clear()
 
 
