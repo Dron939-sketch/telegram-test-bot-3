@@ -2,6 +2,7 @@
 """
 🔮 ТАЙНЫЙ ШЁПОТ: Виртуальная гадалка v3.0
 С верификационным блоком для подтверждения гипотез
+Полная версия с поддержкой 168 стратегий
 """
 
 import os
@@ -105,8 +106,6 @@ AGE_QUESTION = {
 }
 
 # ==================== БЛОК 1: НАРРАТИВ (8 вопросов) ====================
-# Определяем среду обитания: СБ, ТФ, УБ, ЧВ
-
 def get_narrative_questions(gender, age_group):
     """Возвращает вопросы для определения нарратива с учетом пола и возраста"""
     
@@ -843,7 +842,7 @@ def get_ancient_program(answers):
     scores = {"F1": 0, "F2": 0, "F3": 0, "F4": 0, "F5": 0, "F6": 0}
     
     # Собираем все ancient из ответов
-    for i in range(7):  # 7 вопросов о древних программах
+    for i in range(8):  # максимум 8 вопросов о древних программах
         key = f'ancient_{i}'
         if key in answers:
             program = answers[key]
@@ -882,13 +881,15 @@ def get_level(data, narrative):
     
     gender = data.get('gender', 'М')
     if gender == 'Ж':
+        # Женские бонусы (будут собираться из вопросов)
         if data.get('breast', 0) > 7:
             base += 1
-        if data.get('experience', 0) > 7:
+        if data.get('relationships', 0) > 7:
             base += 1
         if data.get('sex_work', 0) > 2:
             base += 1
     else:
+        # Мужские бонусы
         if data.get('strength', 0) > 7:
             base += 1
         if data.get('testosterone', 0) > 7:
@@ -899,7 +900,7 @@ def get_level(data, narrative):
     return max(1, min(6, base))
 
 def get_role_name(narrative, level, gender):
-    """Название роли"""
+    """Название роли (для заголовка)"""
     roles_male = {
         "СБ": ["Бомж", "Шестёрка", "Смотрящий", "Вольный стрелок", "Разводящий", "Пахан"],
         "ТФ": ["Иждивенец", "Работяга", "Рантье", "Мастер", "Торгаш", "Хозяин"],
@@ -937,28 +938,28 @@ def verify_hypothesis(verification_answers, hypothesis):
                     confirm_count += 1
                 else:
                     # Учитываем альтернативы
-                    alternative_scores[narr] = alternative_scores.get(narr, 0) + 1
-                    alternative_scores[prog] = alternative_scores.get(prog, 0) + 1
+                    if narr in alternative_scores:
+                        alternative_scores[narr] += 1
+                    if prog in alternative_scores:
+                        alternative_scores[prog] += 1
         else:
             # Простой формат
             if answer == hypothesis["narrative"] or answer == hypothesis["program"]:
                 confirm_count += 1
             else:
-                alternative_scores[answer] = alternative_scores.get(answer, 0) + 1
+                if answer in alternative_scores:
+                    alternative_scores[answer] += 1
     
     # Если большинство подтверждает - успех
     if confirm_count >= len(verification_answers) / 2:
         return True, hypothesis
     
-    # Иначе формируем новую гипотезу
-    new_narrative = max(alternative_scores.items(), key=lambda x: x[1] if x[0] in ["СБ","ТФ","УБ","ЧВ"] else 0)[0]
-    new_program = max(alternative_scores.items(), key=lambda x: x[1] if x[0] in ["F1","F2","F3","F4","F5","F6"] else 0)[0]
+    # Находим альтернативы
+    narr_options = [(k, v) for k, v in alternative_scores.items() if k in ["СБ","ТФ","УБ","ЧВ"] and v > 0]
+    prog_options = [(k, v) for k, v in alternative_scores.items() if k in ["F1","F2","F3","F4","F5","F6"] and v > 0]
     
-    # Если не нашли альтернатив, оставляем старую
-    if new_narrative not in ["СБ","ТФ","УБ","ЧВ"]:
-        new_narrative = hypothesis["narrative"]
-    if new_program not in ["F1","F2","F3","F4","F5","F6"]:
-        new_program = hypothesis["program"]
+    new_narrative = max(narr_options, key=lambda x: x[1])[0] if narr_options else hypothesis["narrative"]
+    new_program = max(prog_options, key=lambda x: x[1])[0] if prog_options else hypothesis["program"]
     
     new_hypothesis = {
         "narrative": new_narrative,
@@ -1141,6 +1142,7 @@ async def ask_question(user_id, index, state: FSMContext):
     
     # Определяем блок
     if index < 2:
+        # Вопросы 0-1 уже обработаны отдельно
         return
     elif index < 10:  # 8 нарративных (2-9)
         narrative_q_idx = index - 2
@@ -1167,9 +1169,14 @@ async def ask_question(user_id, index, state: FSMContext):
     
     builder = InlineKeyboardBuilder()
     for key, option in q["options"].items():
+        # Для каждого вопроса сохраняем с правильным префиксом
         score_key = list(option["scores"].keys())[0]
         score_value = option["scores"][score_key]
         callback_data = f"ans_{index}_{key}_{prefix}_{score_key}_{score_value}"
+        # Обрезаем если слишком длинный (макс 64 символа)
+        if len(callback_data) > 64:
+            # Используем сокращенный формат
+            callback_data = f"ans_{index}_{key}"
         builder.button(text=option["text"], callback_data=callback_data)
     builder.adjust(1)
     
@@ -1203,16 +1210,6 @@ async def ask_verification_question(user_id, state: FSMContext):
             await bot.delete_message(user_id, last_id)
         except:
             pass
-    
-    # Названия древних программ для красоты
-    program_names = {
-        "F1": "⚔️",
-        "F2": "🏃", 
-        "F3": "🧊",
-        "F4": "💀",
-        "F5": "🦊",
-        "F6": "🏳️"
-    }
     
     builder = InlineKeyboardBuilder()
     for key, option in q["options"].items():
@@ -1251,12 +1248,13 @@ async def finish_verification(user_id, state: FSMContext):
         await show_fortune(user_id, state, new_hypothesis)
     else:
         # Новый круг верификации
+        new_questions = get_verification_questions(new_hypothesis)
         await state.update_data(
             hypothesis=new_hypothesis,
             verification_round=round_num + 1,
             verification_index=0,
             verification_answers=[],
-            verification_questions=get_verification_questions(new_hypothesis)
+            verification_questions=new_questions
         )
         
         # Сообщаем о новом круге
@@ -1284,11 +1282,13 @@ async def process_gender(callback: types.CallbackQuery, state: FSMContext):
     
     await state.update_data(answers=answers)
     
+    # Удаляем сообщение
     try:
         await bot.delete_message(callback.from_user.id, callback.message.message_id)
     except:
         pass
     
+    # Следующий вопрос - возраст
     await ask_age_question(callback.from_user.id, state)
 
 @dp.callback_query(lambda c: c.data.startswith('age_'))
@@ -1306,11 +1306,13 @@ async def process_age(callback: types.CallbackQuery, state: FSMContext):
     
     await state.update_data(answers=answers)
     
+    # Удаляем сообщение
     try:
         await bot.delete_message(callback.from_user.id, callback.message.message_id)
     except:
         pass
     
+    # Первый нарративный вопрос (индекс 2)
     await ask_question(callback.from_user.id, 2, state)
 
 @dp.callback_query(lambda c: c.data.startswith('ans_'))
@@ -1321,12 +1323,39 @@ async def process_answer(callback: types.CallbackQuery, state: FSMContext):
     parts = callback.data.split('_')
     idx = int(parts[1])
     key = parts[2]
-    prefix = parts[3]
-    score_key = parts[4]
-    score_value = parts[5]
     
     data = await state.get_data()
     answers = data.get('answers', {})
+    gender = answers.get('gender', 'М')
+    age_group = answers.get('age_group', 'ADULT')
+    
+    # Если есть дополнительные данные в callback
+    if len(parts) > 5:
+        prefix = parts[3]
+        score_key = parts[4]
+        score_value = parts[5]
+    else:
+        # Если нет, определяем из контекста
+        if idx < 10:  # нарративные
+            questions = get_narrative_questions(gender, age_group)
+            q_idx = idx - 2
+            q = questions[q_idx]
+            score_key = list(q["options"][key]["scores"].keys())[0]
+            score_value = q["options"][key]["scores"][score_key]
+            prefix = "narrative"
+        elif idx < 20:  # ресурсные
+            q_idx = idx - 10
+            q = COMMON_RESOURCES_QUESTIONS[q_idx]
+            score_key = list(q["options"][key]["scores"].keys())[0]
+            score_value = q["options"][key]["scores"][score_key]
+            prefix = "res"
+        else:  # древние программы
+            questions = get_ancient_program_questions(gender)
+            q_idx = idx - 20
+            q = questions[q_idx]
+            score_key = list(q["options"][key]["scores"].keys())[0]
+            score_value = q["options"][key]["scores"][score_key]
+            prefix = "ancient"
     
     # Сохраняем ответ
     if prefix == "narrative":
@@ -1338,6 +1367,7 @@ async def process_answer(callback: types.CallbackQuery, state: FSMContext):
     
     await state.update_data(answers=answers)
     
+    # Удаляем сообщение
     try:
         await bot.delete_message(callback.from_user.id, callback.message.message_id)
     except:
@@ -1365,6 +1395,7 @@ async def process_verification(callback: types.CallbackQuery, state: FSMContext)
     
     await state.update_data(verification_answers=verification_answers)
     
+    # Удаляем сообщение
     try:
         await bot.delete_message(callback.from_user.id, callback.message.message_id)
     except:
@@ -1418,7 +1449,9 @@ async def start_verification(user_id, state: FSMContext):
     hypothesis = {
         "narrative": narrative,
         "program": program,
-        "level": level
+        "level": level,
+        "second": second,
+        "third": third
     }
     
     logger.info(f"🔍 ГИПОТЕЗА: {hypothesis}")
@@ -1459,6 +1492,10 @@ async def show_fortune(user_id, state: FSMContext, hypothesis):
     narrative = hypothesis["narrative"]
     program = hypothesis["program"]
     level = hypothesis["level"]
+    second = hypothesis.get("second")
+    third = hypothesis.get("third")
+    
+    # Получаем название роли для заголовка
     role = get_role_name(narrative, level, gender)
     
     # Удаляем последний вопрос
@@ -1473,8 +1510,13 @@ async def show_fortune(user_id, state: FSMContext, hypothesis):
     
     # Получаем интерпретацию
     interpretation = get_interpretation(
-        gender=gender, narrative=narrative, level=level, age=age,
-        second_narrative=None, third_narrative=None
+        gender=gender, 
+        narrative=narrative, 
+        level=level, 
+        age=age,
+        program=program,
+        second_narrative=second, 
+        third_narrative=third
     )
     
     # Формируем заголовок
@@ -1505,16 +1547,23 @@ async def show_fortune(user_id, state: FSMContext, hypothesis):
     await bot.send_chat_action(user_id, action="typing")
     await asyncio.sleep(2)
     
-    if len(interpretation) > 3000:
-        mid = len(interpretation) // 2
-        part1 = header + interpretation[:mid]
-        part2 = interpretation[mid:]
+    # Разбиваем на части если длинное сообщение
+    full_text = header + interpretation
+    if len(full_text) > 4000:  # Лимит Telegram
+        mid = len(full_text) // 2
+        # Ищем место для разрыва (конец предложения)
+        break_point = full_text.rfind('\n', 0, mid)
+        if break_point == -1:
+            break_point = mid
+        
+        part1 = full_text[:break_point]
+        part2 = full_text[break_point:]
         
         await bot.send_message(user_id, part1)
         await asyncio.sleep(1)
         await bot.send_message(user_id, part2)
     else:
-        await bot.send_message(user_id, header + interpretation)
+        await bot.send_message(user_id, full_text)
     
     # Кнопка перезапуска
     builder = InlineKeyboardBuilder()
