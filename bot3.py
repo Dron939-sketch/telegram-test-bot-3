@@ -431,16 +431,24 @@ def get_narrative_from_answers(answers):
     """Определяет нарратив на основе ответов на первые 8 вопросов"""
     scores = {"СБ": 0, "ТФ": 0, "УБ": 0, "ЧВ": 0}
     
-    # Собираем все narrative_bias из ответов
-    for key, value in answers.items():
-        if key == 'narrative_bias':
-            # Если это единичное значение
-            if value in scores:
-                scores[value] += 1
-        elif isinstance(value, list) and all(v in scores for v in value):
-            # Если это список значений
-            for v in value:
-                scores[v] += 1
+    # ИСПРАВЛЕНИЕ: собираем все narrative_bias из ответов
+    # Но в наших вопросах только один narrative_bias на вопрос,
+    # поэтому они перезаписываются. Нужно использовать список!
+    
+    # ЛУЧШЕЕ РЕШЕНИЕ: создаём список при сохранении
+    if 'narrative_biases' in answers:
+        for bias in answers['narrative_biases']:
+            if bias in scores:
+                scores[bias] += 1
+    
+    # ИЛИ ЕСЛИ МЫ СОХРАНЯЕМ КАК ОДИНОЧНЫЕ ЗНАЧЕНИЯ:
+    # тогда нам нужно пройти по всем вопросам и собрать значения
+    for i in range(len(NARRATIVE_QUESTIONS)):
+        bias_key = f'narrative_bias_{i}'
+        if bias_key in answers:
+            bias = answers[bias_key]
+            if bias in scores:
+                scores[bias] += 1
     
     # Нормализуем
     total = sum(scores.values())
@@ -553,30 +561,49 @@ async def cmd_start(message: types.Message, state: FSMContext):
     
     await message.answer(intro, reply_markup=builder.as_markup())
 
-@dp.callback_query(lambda c: c.data == "why_details")
-async def why_details(callback: types.CallbackQuery, state: FSMContext):
-    """Объяснение магии"""
+@dp.callback_query(lambda c: c.data.startswith('ans_'))
+async def process_answer(callback: types.CallbackQuery, state: FSMContext):
+    """Обработка ответа"""
     await callback.answer()
     
-    explanation = (
-        f"🔮 *Немного правды о магии* 🔮\n\n"
-        f"{get_separator()}\n\n"
-        f"Я не колдую — я *читаю тебя*.\n\n"
-        f"Каждый твой ответ — это ключ к твоей природе.\n"
-        f"Я вижу:\n"
-        f"• 🧠 Как ты мыслишь\n"
-        f"• 💓 Чего ты хочешь на самом деле\n"
-        f"• 🚀 Куда тебе двигаться\n\n"
-        f"Это не магия — это *знание человеческой души*.\n\n"
-        f"{get_separator()}\n\n"
-        f"*Готов узнать себя настоящего?*"
-    )
+    _, idx_str, key = callback.data.split('_')
+    idx = int(idx_str)
     
-    builder = InlineKeyboardBuilder()
-    builder.button(text="🔮 Да, я готов", callback_data="start_test")
-    builder.adjust(1)
+    data = await state.get_data()
+    answers = data.get('answers', {})
     
-    await callback.message.edit_text(explanation, reply_markup=builder.as_markup())
+    # Определяем вопрос
+    total_narrative = len(NARRATIVE_QUESTIONS)
+    total_common = len(COMMON_QUESTIONS)
+    
+    if idx < total_narrative:
+        q = NARRATIVE_QUESTIONS[idx]
+    elif idx < total_narrative + total_common:
+        q = COMMON_QUESTIONS[idx - total_narrative]
+    else:
+        gender = answers.get('gender', 'М')
+        if gender == 'М':
+            q = MALE_QUESTIONS[idx - total_narrative - total_common]
+        else:
+            q = FEMALE_QUESTIONS[idx - total_narrative - total_common]
+    
+    # Сохраняем ответ
+    for k, v in q["options"][key]["scores"].items():
+        # ИСПРАВЛЕНИЕ: сохраняем narrative_bias напрямую, а не в список
+        if k == 'narrative_bias':
+            answers[k] = v  # ← ИЗМЕНЕНО: сохраняем как одиночное значение
+        else:
+            answers[k] = v
+    
+    await state.update_data(answers=answers)
+    
+    # Удаляем сообщение с кнопками
+    try:
+        await bot.delete_message(callback.from_user.id, callback.message.message_id)
+    except:
+        pass
+    
+    await ask_question(callback.from_user.id, idx + 1, state)
 
 @dp.callback_query(lambda c: c.data == "start_test")
 async def start_test(callback: types.CallbackQuery, state: FSMContext):
