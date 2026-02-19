@@ -2157,6 +2157,34 @@ def get_male_interpretation(narrative, level, program, second_narrative=None, th
             "что_дальше": "Ты либо придумаешь свою собственную стратегию, либо перепройдёшь тест."
         }
 
+# ==================== НОВАЯ ФУНКЦИЯ ДЛЯ СОВМЕСТИМОСТИ С BOT3.PY ====================
+
+def get_interpretation(gender, narrative, level, age, program, second_narrative=None, third_narrative=None):
+    """
+    Универсальная функция для совместимости с bot3.py
+    Пока использует только мужские интерпретации
+    
+    Параметры:
+    - gender: "М" или "Ж" (пока игнорируется)
+    - narrative: основной нарратив (СБ, ТФ, УБ, ЧВ)
+    - level: уровень 1-6
+    - age: возраст (пока игнорируется)
+    - program: древняя программа (F1-F6)
+    - second_narrative: второй нарратив (если есть)
+    - third_narrative: третий нарратив (если есть)
+    
+    Возвращает:
+    - словарь с интерпретацией
+    """
+    # Игнорируем gender и age, используем существующую функцию
+    return get_male_interpretation(
+        narrative=narrative,
+        level=level,
+        program=program,
+        second_narrative=second_narrative,
+        third_narrative=third_narrative
+    )
+
 # ==================== ЭКСПОРТ ====================
 
-__all__ = ['NARRATIVE_NAMES', 'get_male_interpretation', 'MALE_STRATEGIES']
+__all__ = ['NARRATIVE_NAMES', 'get_male_interpretation', 'get_interpretation', 'MALE_STRATEGIES']
