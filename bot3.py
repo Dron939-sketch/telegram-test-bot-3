@@ -33,318 +33,246 @@ QUESTIONS_BLOCK1 = [
     {
         "text": "Что для тебя важнее в жизни?",
         "options": {
-            "А": {"text": "Быть главным, чтобы меня уважали", "exclude": "ЧВ"},
-            "Б": {"text": "Создать что-то полезное своими руками", "exclude": "СБ"},
-            "В": {"text": "Понять, как устроен этот мир", "exclude": "ТФ"},
-            "Г": {"text": "Быть в центре внимания", "exclude": "УБ"}
+            "🔱": {"text": "Быть главным, чтобы меня уважали", "exclude": "ЧВ"},
+            "🔨": {"text": "Создать что-то полезное своими руками", "exclude": "СБ"},
+            "📚": {"text": "Понять, как устроен этот мир", "exclude": "ТФ"},
+            "🎭": {"text": "Быть в центре внимания", "exclude": "УБ"}
         }
     },
     {
         "text": "Чем ты любишь заниматься в свободное время?",
         "options": {
-            "А": {"text": "Спорт, единоборства, активный отдых", "exclude": "ЧВ"},
-            "Б": {"text": "Работать, мастерить, ремонтировать", "exclude": "СБ"},
-            "В": {"text": "Читать, учиться, решать задачи", "exclude": "ТФ"},
-            "Г": {"text": "Тусоваться, ходить на мероприятия", "exclude": "УБ"}
+            "🥊": {"text": "Спорт, единоборства, активный отдых", "exclude": "ЧВ"},
+            "🛠️": {"text": "Работать, мастерить, ремонтировать", "exclude": "СБ"},
+            "📖": {"text": "Читать, учиться, решать задачи", "exclude": "ТФ"},
+            "🎉": {"text": "Тусоваться, ходить на мероприятия", "exclude": "УБ"}
         }
     },
     {
         "text": "Какая фраза про тебя?",
         "options": {
-            "А": {"text": "«Лучше быть сильным, чем правым»", "exclude": "ЧВ"},
-            "Б": {"text": "«Без труда не выловишь и рыбку»", "exclude": "СБ"},
-            "В": {"text": "«Век живи — век учись»", "exclude": "ТФ"},
-            "Г": {"text": "«Главное, чтобы запомнили»", "exclude": "УБ"}
+            "⚔️": {"text": "«Лучше быть сильным, чем правым»", "exclude": "ЧВ"},
+            "⚙️": {"text": "«Без труда не выловишь и рыбку»", "exclude": "СБ"},
+            "🔬": {"text": "«Век живи — век учись»", "exclude": "ТФ"},
+            "🎪": {"text": "«Главное, чтобы запомнили»", "exclude": "УБ"}
         }
     },
     {
         "text": "Что тебя бесит больше всего?",
         "options": {
-            "А": {"text": "Когда меня не уважают, считают слабаком", "exclude": "ЧВ"},
-            "Б": {"text": "Когда я работаю, а другие халявят", "exclude": "СБ"},
-            "В": {"text": "Когда люди несут чушь и не слушают", "exclude": "ТФ"},
-            "Г": {"text": "Когда меня игнорируют, не замечают", "exclude": "УБ"}
+            "👑": {"text": "Когда меня не уважают, считают слабаком", "exclude": "ЧВ"},
+            "⏰": {"text": "Когда я работаю, а другие халявят", "exclude": "СБ"},
+            "🤯": {"text": "Когда люди несут чушь и не слушают", "exclude": "ТФ"},
+            "👻": {"text": "Когда меня игнорируют, не замечают", "exclude": "УБ"}
         }
     },
     {
         "text": "Кем ты восхищаешься?",
         "options": {
-            "А": {"text": "Лидерами, которые умеют подчинять", "exclude": "ЧВ"},
-            "Б": {"text": "Мастерами, которые создают шедевры", "exclude": "СБ"},
-            "В": {"text": "Гениями, которые сделали открытия", "exclude": "ТФ"},
-            "Г": {"text": "Звёздами, которых все знают", "exclude": "УБ"}
+            "🏛️": {"text": "Лидерами, которые умеют подчинять", "exclude": "ЧВ"},
+            "🏗️": {"text": "Мастерами, которые создают шедевры", "exclude": "СБ"},
+            "🧠": {"text": "Гениями, которые сделали открытия", "exclude": "ТФ"},
+            "🌟": {"text": "Звёздами, которых все знают", "exclude": "УБ"}
         }
     },
     {
-        "text": "Куда бы потратил крупную сумму?",
+        "text": "Куда бы ты потратил крупную сумму?",
         "options": {
-            "А": {"text": "На крутую машину, часы, статусные вещи", "exclude": "ЧВ"},
-            "Б": {"text": "На инструменты, оборудование, свой цех", "exclude": "СБ"},
-            "В": {"text": "На обучение, книги, исследования", "exclude": "ТФ"},
-            "Г": {"text": "На раскрутку имени, пиар, вечеринку", "exclude": "УБ"}
+            "💎": {"text": "На крутую машину, часы, статусные вещи", "exclude": "ЧВ"},
+            "🏭": {"text": "На инструменты, оборудование, свой цех", "exclude": "СБ"},
+            "📚": {"text": "На обучение, книги, исследования", "exclude": "ТФ"},
+            "📢": {"text": "На раскрутку имени, пиар, вечеринку", "exclude": "УБ"}
         }
     },
     {
         "text": "В компании незнакомых ты сразу...",
         "options": {
-            "А": {"text": "Оцениваешь, кто тут главный", "exclude": "ЧВ"},
-            "Б": {"text": "Ищешь, с кем можно по делу поговорить", "exclude": "СБ"},
-            "В": {"text": "Слушаешь, кто говорит умные вещи", "exclude": "ТФ"},
-            "Г": {"text": "Смотришь, кто в центре внимания", "exclude": "УБ"}
+            "🦁": {"text": "Оцениваешь, кто тут главный", "exclude": "ЧВ"},
+            "🐜": {"text": "Ищешь, с кем можно по делу поговорить", "exclude": "СБ"},
+            "🦉": {"text": "Слушаешь, кто говорит умные вещи", "exclude": "ТФ"},
+            "🦚": {"text": "Смотришь, кто в центре внимания", "exclude": "УБ"}
         }
     },
     {
         "text": "Чего ты боишься больше всего?",
         "options": {
-            "А": {"text": "Потерять авторитет, стать никем", "exclude": "ЧВ"},
-            "Б": {"text": "Остаться без работы, без денег", "exclude": "СБ"},
-            "В": {"text": "Показаться глупым, некомпетентным", "exclude": "ТФ"},
-            "Г": {"text": "Стать незаметным, скучным, серым", "exclude": "УБ"}
+            "📉": {"text": "Потерять авторитет, стать никем", "exclude": "ЧВ"},
+            "💸": {"text": "Остаться без работы, без денег", "exclude": "СБ"},
+            "🤦": {"text": "Показаться глупым, некомпетентным", "exclude": "ТФ"},
+            "👀": {"text": "Стать незаметным, скучным, серым", "exclude": "УБ"}
         }
     }
 ]
 
-# Блок 2: Вопросы для каждого нарратива
-QUESTIONS_BLOCK2 = {
-    "СБ": [  # Силовой
-        {
-            "text": "Как часто ты занимаешься спортом?",
-            "options": {
-                "1": {"text": "Вообще не занимаюсь", "scores": {"strength": 1}},
-                "2": {"text": "Иногда, без фанатизма", "scores": {"strength": 3}},
-                "3": {"text": "Регулярно 3-4 раза в неделю", "scores": {"strength": 7}},
-                "4": {"text": "Живу спортом, соревнуюсь", "scores": {"strength": 10}}
-            }
-        },
-        {
-            "text": "Был ли ты в драке за последний год?",
-            "options": {
-                "1": {"text": "Нет, избегаю конфликтов", "scores": {"level": 1, "strength": 2}},
-                "2": {"text": "Нет, но провоцировали — ушёл", "scores": {"level": 4, "strength": 4}},
-                "3": {"text": "Был один раз, отстаивал себя", "scores": {"level": 5, "strength": 6}},
-                "4": {"text": "Бывало, участвую в разборках", "scores": {"level": 6, "strength": 8}}
-            }
-        },
-        {
-            "text": "В компании друзей ты обычно...",
-            "options": {
-                "1": {"text": "Молчу, поддакиваю", "scores": {"status": 2}},
-                "2": {"text": "Поддерживаю разговор", "scores": {"status": 4}},
-                "3": {"text": "Предлагаю темы, меня слушают", "scores": {"status": 7}},
-                "4": {"text": "Я главный, без меня не решают", "scores": {"status": 10}}
-            }
-        },
-        {
-            "text": "Если конфликт с незнакомцем, ты...",
-            "options": {
-                "1": {"text": "Извинюсь, даже если не прав", "scores": {"strategy": 1}},
-                "2": {"text": "Попробую договориться", "scores": {"strategy": 2}},
-                "3": {"text": "Замру, буду ждать", "scores": {"strategy": 3}},
-                "4": {"text": "Уйду, чтобы не связываться", "scores": {"strategy": 4}},
-                "5": {"text": "Позову друзей на помощь", "scores": {"strategy": 5}},
-                "6": {"text": "Пойду в разборку", "scores": {"strategy": 6}}
-            }
-        },
-        {
-            "text": "Сколько людей, на которых ты можешь положиться?",
-            "options": {
-                "1": {"text": "Никого, я один", "scores": {"connections": 2}},
-                "2": {"text": "1-2 близких друга", "scores": {"connections": 4}},
-                "3": {"text": "Несколько человек плюс знакомые", "scores": {"connections": 7}},
-                "4": {"text": "Целая команда, клан", "scores": {"connections": 10}}
-            }
-        },
-        {
-            "text": "Как часто носишь с собой что-то, что может быть оружием?",
-            "options": {
-                "1": {"text": "Никогда, не думал об этом", "scores": {"danger": 2}},
-                "2": {"text": "Только в опасное место", "scores": {"danger": 4}},
-                "3": {"text": "Часто, на всякий случай", "scores": {"danger": 7}},
-                "4": {"text": "Всегда, это часть меня", "scores": {"danger": 10}}
-            }
+# Блок 2: 15 универсальных вопросов про ресурсы
+QUESTIONS_BLOCK2 = [
+    {  # 1. Рост
+        "text": "Какой у тебя рост?",
+        "type": "physical",
+        "options": {
+            "1": {"text": "Ниже 165 см", "scores": {"height": 2}},
+            "2": {"text": "165-175 см", "scores": {"height": 4}},
+            "3": {"text": "175-185 см", "scores": {"height": 6}},
+            "4": {"text": "185-195 см", "scores": {"height": 8}},
+            "5": {"text": "Выше 195 см", "scores": {"height": 10}}
         }
-    ],
-    "ТФ": [  # Трудовой
-        {
-            "text": "Во сколько ты встаёшь в будни?",
-            "options": {
-                "1": {"text": "После 10, могу и позже", "scores": {"workaholic": 2}},
-                "2": {"text": "В 8-9, как все", "scores": {"workaholic": 4}},
-                "3": {"text": "В 6-7, чтобы успеть", "scores": {"workaholic": 7}},
-                "4": {"text": "В 4-5, так каждый день", "scores": {"workaholic": 10}}
-            }
-        },
-        {
-            "text": "Что чувствуешь в воскресенье вечером?",
-            "options": {
-                "1": {"text": "Ужас, завтра на работу", "scores": {"attitude": 2}},
-                "2": {"text": "Спокойно, работа есть работа", "scores": {"attitude": 4}},
-                "3": {"text": "Тянет, соскучился по делу", "scores": {"attitude": 7}},
-                "4": {"text": "Нет разницы, работаю и в выходные", "scores": {"attitude": 10}}
-            }
-        },
-        {
-            "text": "Сколько у тебя источников дохода?",
-            "options": {
-                "1": {"text": "Один — зарплата", "scores": {"level": 2}},
-                "2": {"text": "Один, но я сам себе хозяин", "scores": {"level": 4}},
-                "3": {"text": "Два-три, включая пассивные", "scores": {"level": 5}},
-                "4": {"text": "Много, включая бизнес", "scores": {"level": 6}}
-            }
-        },
-        {
-            "text": "Ты когда-нибудь нанимал людей?",
-            "options": {
-                "1": {"text": "Нет, меня самого нанимают", "scores": {"level": 2}},
-                "2": {"text": "Нет, работаю один", "scores": {"level": 4}},
-                "3": {"text": "Да, иногда на разовые работы", "scores": {"level": 5}},
-                "4": {"text": "Да, у меня постоянно работают", "scores": {"level": 6}}
-            }
-        },
-        {
-            "text": "Что купил в прошлом месяце самое дорогое?",
-            "options": {
-                "1": {"text": "Еду, мелочи", "scores": {"money": 2}},
-                "2": {"text": "Одежду, технику", "scores": {"money": 4}},
-                "3": {"text": "Инструмент для работы", "scores": {"money": 7}},
-                "4": {"text": "Недвижимость, машину", "scores": {"money": 10}}
-            }
-        },
-        {
-            "text": "Если потеряешь работу, сколько продержишься?",
-            "options": {
-                "1": {"text": "Неделя, потом голод", "scores": {"savings": 2}},
-                "2": {"text": "Месяц-два, есть заначка", "scores": {"savings": 4}},
-                "3": {"text": "Полгода-год", "scores": {"savings": 7}},
-                "4": {"text": "Мне не страшно, есть пассив", "scores": {"savings": 10}}
-            }
+    },
+    {  # 2. Телосложение в 15 лет
+        "text": "Каким ты был в 15 лет?",
+        "type": "physical",
+        "options": {
+            "1": {"text": "Очень худым, слабым", "scores": {"build": 2}},
+            "2": {"text": "Худощавым", "scores": {"build": 4}},
+            "3": {"text": "Нормальным, средним", "scores": {"build": 6}},
+            "4": {"text": "Плотным, крепким", "scores": {"build": 8}},
+            "5": {"text": "Сильным, меня боялись", "scores": {"build": 10}}
         }
-    ],
-    "УБ": [  # Умственный
-        {
-            "text": "Сколько времени надо, чтобы собрать кубик Рубика?",
-            "options": {
-                "1": {"text": "Не умею", "scores": {"speed": 1}},
-                "2": {"text": "Могу собрать одну сторону", "scores": {"speed": 3}},
-                "3": {"text": "По инструкции за 5-10 минут", "scores": {"speed": 5}},
-                "4": {"text": "Собираю сам без инструкции", "scores": {"speed": 7}},
-                "5": {"text": "Меньше минуты, знаю алгоритмы", "scores": {"speed": 10}}
-            }
-        },
-        {
-            "text": "Какую книгу прочитал последней?",
-            "options": {
-                "1": {"text": "Не читаю книги", "scores": {"depth": 1}},
-                "2": {"text": "Лёгкое чтиво, детектив", "scores": {"depth": 3}},
-                "3": {"text": "Научно-популярная", "scores": {"depth": 6}},
-                "4": {"text": "Серьёзная литература", "scores": {"depth": 8}},
-                "5": {"text": "Научная, специализированная", "scores": {"depth": 10}}
-            }
-        },
-        {
-            "text": "Писал ли статьи длиннее 5000 знаков?",
-            "options": {
-                "1": {"text": "Нет", "scores": {"creativity": 1}},
-                "2": {"text": "Посты в соцсетях", "scores": {"creativity": 3}},
-                "3": {"text": "Статьи для работы", "scores": {"creativity": 5}},
-                "4": {"text": "Научные статьи", "scores": {"creativity": 8}},
-                "5": {"text": "Книги, исследования", "scores": {"creativity": 10}}
-            }
-        },
-        {
-            "text": "Сколько языков (иностранных/программирования) знаешь?",
-            "options": {
-                "1": {"text": "Ни одного или один", "scores": {"education": 2}},
-                "2": {"text": "Один на базовом", "scores": {"education": 4}},
-                "3": {"text": "Один-два свободно", "scores": {"education": 6}},
-                "4": {"text": "Три-четыре", "scores": {"education": 8}},
-                "5": {"text": "Много, я полиглот", "scores": {"education": 10}}
-            }
-        },
-        {
-            "text": "Как быстро засыпаешь над сложной задачей?",
-            "options": {
-                "1": {"text": "Сразу отключаюсь", "scores": {"thinking": 1}},
-                "2": {"text": "Думаю немного", "scores": {"thinking": 3}},
-                "3": {"text": "Могу час ворочаться", "scores": {"thinking": 6}},
-                "4": {"text": "Часа два, пока не решу", "scores": {"thinking": 8}},
-                "5": {"text": "Не усну, пока не найду решение", "scores": {"thinking": 10}}
-            }
-        },
-        {
-            "text": "Помнишь ли свой последний экзамен/тест?",
-            "options": {
-                "1": {"text": "С трудом помню вчера", "scores": {"memory": 1}},
-                "2": {"text": "Помню примерно", "scores": {"memory": 3}},
-                "3": {"text": "Помню основные вопросы", "scores": {"memory": 5}},
-                "4": {"text": "Помню почти всё", "scores": {"memory": 7}},
-                "5": {"text": "Помню даже одежду", "scores": {"memory": 10}}
-            }
+    },
+    {  # 3. Здоровье
+        "text": "Как часто ты болеешь?",
+        "type": "physical",
+        "options": {
+            "1": {"text": "Постоянно, каждый месяц", "scores": {"health": 2}},
+            "2": {"text": "Несколько раз в год", "scores": {"health": 4}},
+            "3": {"text": "Раз в год по сезону", "scores": {"health": 6}},
+            "4": {"text": "Раз в несколько лет", "scores": {"health": 8}},
+            "5": {"text": "Практически никогда", "scores": {"health": 10}}
         }
-    ],
-    "ЧВ": [  # Артистический
-        {
-            "text": "Сколько у тебя подписчиков в соцсетях?",
-            "options": {
-                "1": {"text": "Нет аккаунтов", "scores": {"fame": 1}},
-                "2": {"text": "До 500 — друзья", "scores": {"fame": 3}},
-                "3": {"text": "500-5000", "scores": {"fame": 5}},
-                "4": {"text": "5000-50000", "scores": {"fame": 7}},
-                "5": {"text": "Более 50000", "scores": {"fame": 10}}
-            }
-        },
-        {
-            "text": "Как часто узнают на улице?",
-            "options": {
-                "1": {"text": "Никогда", "scores": {"recognition": 1}},
-                "2": {"text": "Редко, раз в год", "scores": {"recognition": 3}},
-                "3": {"text": "Пару раз в месяц", "scores": {"recognition": 5}},
-                "4": {"text": "Пару раз в неделю", "scores": {"recognition": 7}},
-                "5": {"text": "Каждый день", "scores": {"recognition": 10}}
-            }
-        },
-        {
-            "text": "Сколько мероприятий посетил за месяц?",
-            "options": {
-                "1": {"text": "0, я домосед", "scores": {"involvement": 1}},
-                "2": {"text": "1-2", "scores": {"involvement": 3}},
-                "3": {"text": "3-5", "scores": {"involvement": 5}},
-                "4": {"text": "6-10", "scores": {"involvement": 7}},
-                "5": {"text": "Более 10", "scores": {"involvement": 10}}
-            }
-        },
-        {
-            "text": "Сколько полезных людей в записной книжке?",
-            "options": {
-                "1": {"text": "Никого", "scores": {"connections": 1}},
-                "2": {"text": "10-20 знакомых", "scores": {"connections": 3}},
-                "3": {"text": "50-100", "scores": {"connections": 5}},
-                "4": {"text": "100-500", "scores": {"connections": 7}},
-                "5": {"text": "Более 500", "scores": {"connections": 10}}
-            }
-        },
-        {
-            "text": "Снимался ли в видео, давал интервью?",
-            "options": {
-                "1": {"text": "Нет, боюсь", "scores": {"level": 1}},
-                "2": {"text": "Пару раз для галочки", "scores": {"level": 2}},
-                "3": {"text": "Регулярно снимаю сторис", "scores": {"level": 3}},
-                "4": {"text": "Веду блог, канал", "scores": {"level": 4}},
-                "5": {"text": "Я медийное лицо", "scores": {"level": 5}}
-            }
-        },
-        {
-            "text": "Сколько времени в телефоне (не по работе)?",
-            "options": {
-                "1": {"text": "Меньше часа", "scores": {"consumption": 1}},
-                "2": {"text": "1-3 часа", "scores": {"consumption": 3}},
-                "3": {"text": "3-6 часов", "scores": {"consumption": 5}},
-                "4": {"text": "6-9 часов", "scores": {"consumption": 7}},
-                "5": {"text": "Более 9 часов", "scores": {"consumption": 10}}
-            }
+    },
+    {  # 4. Внешность
+        "text": "Как ты выглядишь?",
+        "type": "physical",
+        "options": {
+            "1": {"text": "Меня не замечают", "scores": {"attractiveness": 2}},
+            "2": {"text": "Обычная внешность", "scores": {"attractiveness": 4}},
+            "3": {"text": "Симпатичный, приятный", "scores": {"attractiveness": 6}},
+            "4": {"text": "Красивый, привлекаю внимание", "scores": {"attractiveness": 8}},
+            "5": {"text": "Модельная внешность", "scores": {"attractiveness": 10}}
         }
-    ]
-}
+    },
+    {  # 5. Сила
+        "text": "Сколько ты можешь отжаться от пола?",
+        "type": "physical",
+        "options": {
+            "1": {"text": "0-5 раз", "scores": {"strength": 2}},
+            "2": {"text": "5-15 раз", "scores": {"strength": 4}},
+            "3": {"text": "15-30 раз", "scores": {"strength": 6}},
+            "4": {"text": "30-50 раз", "scores": {"strength": 8}},
+            "5": {"text": "Больше 50", "scores": {"strength": 10}}
+        }
+    },
+    {  # 6. Школьная успеваемость
+        "text": "В школе ты учился...",
+        "type": "intellectual",
+        "options": {
+            "1": {"text": "Еле тянул, двойки", "scores": {"intelligence": 2}},
+            "2": {"text": "Тройки, кое-как", "scores": {"intelligence": 4}},
+            "3": {"text": "Хорошист, твердая 4", "scores": {"intelligence": 6}},
+            "4": {"text": "Отличник, легко давалось", "scores": {"intelligence": 8}},
+            "5": {"text": "Гений, олимпиады, скучал", "scores": {"intelligence": 10}}
+        }
+    },
+    {  # 7. Скорость обучения
+        "text": "Сколько времени нужно, чтобы выучить 50 иностранных слов?",
+        "type": "intellectual",
+        "options": {
+            "1": {"text": "Неделя и больше", "scores": {"learning_speed": 2}},
+            "2": {"text": "Несколько дней", "scores": {"learning_speed": 4}},
+            "3": {"text": "Один день", "scores": {"learning_speed": 6}},
+            "4": {"text": "Несколько часов", "scores": {"learning_speed": 8}},
+            "5": {"text": "Час или меньше", "scores": {"learning_speed": 10}}
+        }
+    },
+    {  # 8. Память на лица
+        "text": "Ты хорошо запоминаешь лица и имена?",
+        "type": "intellectual",
+        "options": {
+            "1": {"text": "Постоянно путаю, забываю", "scores": {"memory": 2}},
+            "2": {"text": "Запоминаю только близких", "scores": {"memory": 4}},
+            "3": {"text": "Запоминаю тех, кто важен", "scores": {"memory": 6}},
+            "4": {"text": "Запоминаю большинство", "scores": {"memory": 8}},
+            "5": {"text": "Фотографическая память", "scores": {"memory": 10}}
+        }
+    },
+    {  # 9. Креативность
+        "text": "Если сломается бытовая техника, ты...",
+        "type": "intellectual",
+        "options": {
+            "1": {"text": "Выброшу и куплю новую", "scores": {"creativity": 2}},
+            "2": {"text": "Позову мастера", "scores": {"creativity": 4}},
+            "3": {"text": "Попробую починить по инструкции", "scores": {"creativity": 6}},
+            "4": {"text": "Разберусь сам и починю", "scores": {"creativity": 8}},
+            "5": {"text": "Улучшу, сделаю лучше чем было", "scores": {"creativity": 10}}
+        }
+    },
+    {  # 10. Семья (стартовый капитал)
+        "text": "Кем работали твои родители?",
+        "type": "social",
+        "options": {
+            "1": {"text": "Безработные, алкоголики", "scores": {"family": 2}},
+            "2": {"text": "Рабочие, низкий квалификация", "scores": {"family": 4}},
+            "3": {"text": "Служащие, специалисты", "scores": {"family": 6}},
+            "4": {"text": "Бизнесмены, руководители", "scores": {"family": 8}},
+            "5": {"text": "Элита, чиновники высокого уровня", "scores": {"family": 10}}
+        }
+    },
+    {  # 11. Близкие друзья
+        "text": "Сколько у тебя близких друзей, на которых реально можно положиться?",
+        "type": "social",
+        "options": {
+            "1": {"text": "Никого, я совсем один", "scores": {"friends": 2}},
+            "2": {"text": "1-2 друга", "scores": {"friends": 4}},
+            "3": {"text": "3-5 друзей", "scores": {"friends": 6}},
+            "4": {"text": "5-10 человек", "scores": {"friends": 8}},
+            "5": {"text": "Целая команда, много друзей", "scores": {"friends": 10}}
+        }
+    },
+    {  # 12. Финансовая подушка
+        "text": "Если срочно понадобится крупная сумма (как месячная зарплата), ты...",
+        "type": "social",
+        "options": {
+            "1": {"text": "Негде взять, катастрофа", "scores": {"money": 2}},
+            "2": {"text": "Занять у друзей/родных", "scores": {"money": 4}},
+            "3": {"text": "Взять кредит", "scores": {"money": 6}},
+            "4": {"text": "У меня есть накопления", "scores": {"money": 8}},
+            "5": {"text": "Для меня это мелочь", "scores": {"money": 10}}
+        }
+    },
+    {  # 13. Полезные связи
+        "text": "Сколько у тебя знакомых, которые могут помочь с работой/вопросом?",
+        "type": "social",
+        "options": {
+            "1": {"text": "Никого", "scores": {"connections": 2}},
+            "2": {"text": "1-2 человека", "scores": {"connections": 4}},
+            "3": {"text": "Несколько знакомых", "scores": {"connections": 6}},
+            "4": {"text": "Много полезных контактов", "scores": {"connections": 8}},
+            "5": {"text": "Я знаю всех, кого нужно", "scores": {"connections": 10}}
+        }
+    },
+    {  # 14. Реакция на стресс (биохимия)
+        "text": "В детстве, когда на тебя кричали, твое лицо...",
+        "type": "biochemical",
+        "options": {
+            "1": {"text": "Краснело", "scores": {"stress_response": "FIGHT"}},
+            "2": {"text": "Бледнело", "scores": {"stress_response": "FLIGHT"}},
+            "3": {"text": "Каменело, застывало", "scores": {"stress_response": "FREEZE"}},
+            "4": {"text": "Становилось тряпичным, обмякало", "scores": {"stress_response": "PLAY_DEAD"}},
+            "5": {"text": "Расплывалось в улыбке", "scores": {"stress_response": "FAWN"}},
+            "6": {"text": "Становилось пустым, безразличным", "scores": {"stress_response": "SURRENDER"}}
+        }
+    },
+    {  # 15. Сон (тип нервной системы)
+        "text": "Как ты засыпаешь после тяжелого дня?",
+        "type": "biochemical",
+        "options": {
+            "1": {"text": "Мгновенно, как выключили", "scores": {"nervous_system": "strong", "sleep": 10}},
+            "2": {"text": "Долго ворочаюсь, мысли в голове", "scores": {"nervous_system": "anxious", "sleep": 4}},
+            "3": {"text": "Засыпаю, но просыпаюсь ночью", "scores": {"nervous_system": "unstable", "sleep": 3}},
+            "4": {"text": "Не могу уснуть без таблеток/алкоголя", "scores": {"nervous_system": "exhausted", "sleep": 1}},
+            "5": {"text": "Засыпаю, но снятся кошмары", "scores": {"nervous_system": "stressed", "sleep": 5}}
+        }
+    }
+]
 
 # Матрица ролей (24 стратегии)
 ROLES_MATRIX = {
@@ -426,15 +354,26 @@ NARRATIVE_NAMES = {
     "ЧВ": "ВНИМАНИЯ"
 }
 
+# Соответствие биохимии и уровня
+BIOCHEMICAL_TO_LEVEL = {
+    "FIGHT": 6,
+    "FLIGHT": 4,
+    "FREEZE": 3,
+    "PLAY_DEAD": 2,
+    "FAWN": 5,
+    "SURRENDER": 1
+}
+
 # ==================== СОСТОЯНИЯ ====================
 
 class UserState(StatesGroup):
-    block1_question = State()  # Какой вопрос из блока 1 сейчас
-    block1_answers = State()   # Список исключённых нарративов
+    block1_question = State()  # Индекс текущего вопроса блока 1
+    block1_excludes = State()  # Список исключённых нарративов
     narrative = State()        # Определённый нарратив
-    block2_question = State()  # Какой вопрос из блока 2
-    block2_data = State()      # Собранные данные (уровень, ресурсы)
-    block2_answers = State()   # Счётчик ответов
+    second_narrative = State() # Второй нарратив (если есть)
+    block2_question = State()  # Индекс текущего вопроса блока 2
+    block2_resources = State() # Собранные ресурсы
+    block2_answers = State()   # Количество отвеченных вопросов
 
 # ==================== ХЕНДЛЕРЫ ====================
 
@@ -444,30 +383,28 @@ async def cmd_start(message: types.Message):
     await message.answer(
         "🧠 *Вариатика: твоя жизненная стратегия*\n\n"
         "Я задам 8 вопросов, чтобы понять, в каком мире ты живёшь.\n"
-        "Потом ещё несколько — чтобы определить твою роль.\n\n"
+        "Потом ещё 15 — чтобы узнать твои ресурсы.\n\n"
         "Готов? Поехали!",
         parse_mode="Markdown"
     )
     
     # Инициализация состояний
     await UserState.block1_question.set()
-    await UserState.block1_answers.set(0)  # Счётчик вопросов
+    await state.update_data(block1_question=0, block1_excludes=[])
     
     # Задаём первый вопрос
-    await ask_block1_question(message.from_user.id, 0)
+    await ask_block1_question(message.from_user.id, 0, state)
 
-async def ask_block1_question(user_id, question_index):
+async def ask_block1_question(user_id, question_index, state: FSMContext):
     """Задать вопрос из блока 1"""
-    state = dp.current_state(user=user_id)
-    
     q = QUESTIONS_BLOCK1[question_index]
     
     # Создаём клавиатуру
     keyboard = types.InlineKeyboardMarkup(row_width=2)
-    for key, value in q["options"].items():
+    for emoji, option in q["options"].items():
         keyboard.add(types.InlineKeyboardButton(
-            text=f"{key}. {value['text'][:30]}...",
-            callback_data=f"b1_{question_index}_{key}"
+            text=f"{emoji} {option['text']}",
+            callback_data=f"b1_{question_index}_{emoji}"
         ))
     
     await bot.send_message(
@@ -483,25 +420,22 @@ async def process_block1_answer(callback: types.CallbackQuery, state: FSMContext
     await callback.answer()
     
     # Парсим callback_data
-    _, q_index_str, answer_key = callback.data.split('_')
+    _, q_index_str, emoji = callback.data.split('_')
     q_index = int(q_index_str)
     
     # Получаем данные состояния
     data = await state.get_data()
-    answers_count = data.get('block1_answers', 0)
+    excludes = data.get('block1_excludes', [])
     
     # Получаем исключаемый нарратив
-    excluded = QUESTIONS_BLOCK1[q_index]["options"][answer_key]["exclude"]
-    
-    # Сохраняем исключение (можно в массив)
-    excludes = data.get('excludes', [])
+    excluded = QUESTIONS_BLOCK1[q_index]["options"][emoji]["exclude"]
     excludes.append(excluded)
-    await state.update_data(excludes=excludes)
+    await state.update_data(block1_excludes=excludes)
     
     # Следующий вопрос или переход к блоку 2
     if q_index + 1 < len(QUESTIONS_BLOCK1):
         # Ещё есть вопросы
-        await ask_block1_question(callback.from_user.id, q_index + 1)
+        await ask_block1_question(callback.from_user.id, q_index + 1, state)
     else:
         # Вопросы кончились - определяем нарратив
         await determine_narrative(callback.from_user.id, state)
@@ -509,7 +443,7 @@ async def process_block1_answer(callback: types.CallbackQuery, state: FSMContext
 async def determine_narrative(user_id, state: FSMContext):
     """Определение нарратива методом исключения"""
     data = await state.get_data()
-    excludes = data.get('excludes', [])
+    excludes = data.get('block1_excludes', [])
     
     # Считаем, сколько раз исключали каждый нарратив
     counts = {"СБ": 0, "ТФ": 0, "УБ": 0, "ЧВ": 0}
@@ -520,14 +454,11 @@ async def determine_narrative(user_id, state: FSMContext):
     # Сортируем по возрастанию исключений
     sorted_narratives = sorted(counts.items(), key=lambda x: x[1])
     
-    if sorted_narratives[0][1] < sorted_narratives[1][1]:
-        # Чёткий лидер
-        narrative = sorted_narratives[0][0]
-        second_narrative = None
-    else:
-        # Возможно два с одинаковым счётом
-        # Берём первый и второй, но первый как основной
-        narrative = sorted_narratives[0][0]
+    narrative = sorted_narratives[0][0]
+    second_narrative = None
+    
+    # Если второй тоже мало исключался
+    if sorted_narratives[1][1] - sorted_narratives[0][1] <= 1:
         second_narrative = sorted_narratives[1][0]
     
     # Сохраняем нарратив
@@ -535,8 +466,8 @@ async def determine_narrative(user_id, state: FSMContext):
         narrative=narrative,
         second_narrative=second_narrative,
         block2_question=0,
-        block2_answers=[],
-        resources={}
+        block2_resources={},
+        block2_answers=0
     )
     
     # Переходим к блоку 2
@@ -544,33 +475,33 @@ async def determine_narrative(user_id, state: FSMContext):
     
     await bot.send_message(
         user_id,
-        f"*Определено:* твой мир — *{NARRATIVE_NAMES[narrative]}*.\n\n"
-        f"Теперь {len(QUESTIONS_BLOCK2[narrative])} вопросов, чтобы понять твою роль.",
+        f"🎯 *Определено:* твой мир — *{NARRATIVE_NAMES[narrative]}*.\n\n"
+        f"Теперь 15 вопросов о твоих ресурсах. Отвечай честно — это важно для точного попадания.",
         parse_mode="Markdown"
     )
     
     # Задаём первый вопрос блока 2
-    await ask_block2_question(user_id, 0, narrative, state)
+    await ask_block2_question(user_id, 0, state)
 
-async def ask_block2_question(user_id, q_index, narrative, state):
+async def ask_block2_question(user_id, question_index, state: FSMContext):
     """Задать вопрос из блока 2"""
-    q = QUESTIONS_BLOCK2[narrative][q_index]
+    q = QUESTIONS_BLOCK2[question_index]
     
     # Создаём клавиатуру
     keyboard = types.InlineKeyboardMarkup(row_width=2)
-    for key, value in q["options"].items():
+    for key, option in q["options"].items():
         # Укорачиваем текст для кнопок
-        btn_text = value['text']
+        btn_text = option['text']
         if len(btn_text) > 30:
             btn_text = btn_text[:28] + ".."
         keyboard.add(types.InlineKeyboardButton(
             text=btn_text,
-            callback_data=f"b2_{q_index}_{key}"
+            callback_data=f"b2_{question_index}_{key}"
         ))
     
     await bot.send_message(
         user_id,
-        f"*Вопрос {q_index+1}/{len(QUESTIONS_BLOCK2[narrative])}:*\n{q['text']}",
+        f"*Вопрос {question_index+1}/15:*\n{q['text']}",
         reply_markup=keyboard,
         parse_mode="Markdown"
     )
@@ -586,34 +517,26 @@ async def process_block2_answer(callback: types.CallbackQuery, state: FSMContext
     
     # Получаем данные состояния
     data = await state.get_data()
-    narrative = data.get('narrative')
+    resources = data.get('block2_resources', {})
+    answers_count = data.get('block2_answers', 0)
     
     # Получаем баллы за ответ
-    q = QUESTIONS_BLOCK2[narrative][q_index]
+    q = QUESTIONS_BLOCK2[q_index]
     scores = q["options"][answer_key]["scores"]
     
-    # Сохраняем ответ
-    answers = data.get('block2_answers', [])
-    answers.append({
-        "q_index": q_index,
-        "answer": answer_key,
-        "scores": scores
-    })
-    
     # Обновляем ресурсы
-    resources = data.get('resources', {})
     for key, value in scores.items():
-        if key in resources:
-            resources[key] = (resources[key] + value) / 2  # Среднее
-        else:
-            resources[key] = value
+        resources[key] = value
     
-    await state.update_data(block2_answers=answers, resources=resources)
+    await state.update_data(
+        block2_resources=resources,
+        block2_answers=answers_count + 1
+    )
     
     # Следующий вопрос или результат
-    if q_index + 1 < len(QUESTIONS_BLOCK2[narrative]):
+    if q_index + 1 < len(QUESTIONS_BLOCK2):
         # Ещё есть вопросы
-        await ask_block2_question(callback.from_user.id, q_index + 1, narrative, state)
+        await ask_block2_question(callback.from_user.id, q_index + 1, state)
     else:
         # Вопросы кончились - показываем результат
         await show_result(callback.from_user.id, state)
@@ -623,31 +546,60 @@ async def show_result(user_id, state: FSMContext):
     data = await state.get_data()
     narrative = data.get('narrative')
     second_narrative = data.get('second_narrative')
-    resources = data.get('resources', {})
-    answers = data.get('block2_answers', [])
+    resources = data.get('block2_resources', {})
     
     # Определяем уровень
-    # Ищем прямые указания уровня в ответах
-    level_from_answers = None
-    for ans in answers:
-        if 'level' in ans['scores']:
-            level_from_answers = ans['scores']['level']
-            break
+    level = 3  # По умолчанию
     
-    if level_from_answers:
-        level = level_from_answers
-    else:
-        # Вычисляем средний уровень по ресурсам
-        # По умолчанию 3
-        level = 3
+    # Если есть прямая биохимическая реакция
+    if 'stress_response' in resources:
+        level = BIOCHEMICAL_TO_LEVEL.get(resources['stress_response'], 3)
     
-    # Корректировка по ресурсам (упрощённо)
-    if 'strength' in resources and resources['strength'] > 8:
-        level = min(6, level + 1)
-    if 'money' in resources and resources['money'] > 8:
-        level = min(6, level + 1)
-    if 'fame' in resources and resources['fame'] > 8:
-        level = min(6, level + 1)
+    # Корректировка по физическим ресурсам
+    physical_avg = 0
+    physical_count = 0
+    for key in ['strength', 'height', 'build', 'health']:
+        if key in resources:
+            physical_avg += resources[key]
+            physical_count += 1
+    
+    if physical_count > 0:
+        physical_avg /= physical_count
+        if physical_avg > 7:
+            level = min(6, level + 1)
+        elif physical_avg < 3:
+            level = max(1, level - 1)
+    
+    # Корректировка по интеллектуальным
+    intel_avg = 0
+    intel_count = 0
+    for key in ['intelligence', 'learning_speed', 'memory', 'creativity']:
+        if key in resources:
+            intel_avg += resources[key]
+            intel_count += 1
+    
+    if intel_count > 0:
+        intel_avg /= intel_count
+        if intel_avg > 8 and narrative == "УБ":
+            level = min(6, level + 1)
+    
+    # Корректировка по социальным
+    social_avg = 0
+    social_count = 0
+    for key in ['family', 'friends', 'money', 'connections']:
+        if key in resources:
+            social_avg += resources[key]
+            social_count += 1
+    
+    if social_count > 0:
+        social_avg /= social_count
+        if social_avg > 8:
+            if narrative == "ТФ":
+                level = 6  # ПРОИЗВОДИТЕЛЬ
+            elif narrative == "СБ":
+                level = 6  # ПАХАН
+            elif narrative == "ЧВ":
+                level = 6  # МЕДИАМАГНАТ
     
     role = ROLES_MATRIX[narrative][level]
     description = DESCRIPTIONS[narrative][level]
@@ -655,15 +607,29 @@ async def show_result(user_id, state: FSMContext):
     # Формируем результат
     result = f"🎯 *Твой фокус:*\n\n"
     result += f"Ты — *{role}* в мире *{NARRATIVE_NAMES[narrative]}*.\n\n"
-    result += f"{description}\n\n"
+    result += f"_{description}_\n\n"
     
     if second_narrative:
         result += f"*При этом* ты используешь мир *{NARRATIVE_NAMES[second_narrative]}* как средство.\n\n"
+    
+    # Добавляем немного персонализации по ресурсам
+    if 'stress_response' in resources:
+        stress_map = {
+            "FIGHT": "Твоя реакция на стресс — атаковать. Ты краснеешь в конфликте.",
+            "FLIGHT": "Твоя реакция на стресс — убегать. Ты бледнеешь в конфликте.",
+            "FREEZE": "Твоя реакция на стресс — замирать. Ты каменеешь в конфликте.",
+            "PLAY_DEAD": "Твоя реакция на стресс — притворяться мертвым. Ты обмякаешь в конфликте.",
+            "FAWN": "Твоя реакция на стресс — заискивать. Ты улыбаешься в конфликте.",
+            "SURRENDER": "Твоя реакция на стресс — сдаваться. Ты пустеешь в конфликте."
+        }
+        result += f"{stress_map.get(resources['stress_response'], '')}\n\n"
     
     # Следующий уровень
     if level < 6:
         next_role = ROLES_MATRIX[narrative][level + 1]
         result += f"*Если хочешь расти:* твой следующий уровень — *{next_role}*.\n"
+    else:
+        result += f"*Ты на вершине* своего мира. Дальше только смена нарратива.\n"
     
     # Кнопка для перезапуска
     keyboard = types.InlineKeyboardMarkup()
