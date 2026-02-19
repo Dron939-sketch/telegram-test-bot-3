@@ -72,85 +72,85 @@ def get_mystic_symbol() -> str:
 
 # ==================== ВОПРОС 0: ПОЛ ====================
 GENDER_QUESTION = {
-    "text": "Кто ты в этом мире?",
+    "text": "Кем ты приходишь в этот мир?",
     "options": {
-        "М": {"text": "👨 Мужчина", "scores": {"gender": "М"}},
-        "Ж": {"text": "👩 Женщина", "scores": {"gender": "Ж"}}
+        "М": {"text": "👨 Мужчиной", "scores": {"gender": "М"}},
+        "Ж": {"text": "👩 Женщиной", "scores": {"gender": "Ж"}}
     }
 }
 
-# ==================== БЛОК 1: НАРРАТИВ (8 вопросов, общие для всех) ====================
+# ==================== БЛОК 1: НАРРАТИВ (8 вопросов, максимально бытовые) ====================
 NARRATIVE_QUESTIONS = [
-    {  # Вопрос 1
-        "text": "Какой отдых ты предпочитаешь?",
+    {  # Вопрос 1. Выходной
+        "text": "Твой идеальный выходной — это...",
         "options": {
-            "🔱": {"text": "Активный, соревновательный, спорт", "scores": {"narrative_bias": "СБ"}},
-            "🔨": {"text": "Созидательный — что-то сделать своими руками", "scores": {"narrative_bias": "ТФ"}},
-            "📚": {"text": "Интеллектуальный — книги, головоломки", "scores": {"narrative_bias": "УБ"}},
-            "🎭": {"text": "Развлекательный — тусовки, мероприятия", "scores": {"narrative_bias": "ЧВ"}}
+            "1": {"text": "Поваляться в постели, потом телек, потом просто ничегонеделание", "scores": {"narrative_bias": "ЧВ"}},
+            "2": {"text": "С утра по делам, потом встретиться с друзьями или родными", "scores": {"narrative_bias": "СБ"}},
+            "3": {"text": "Заняться домашними делами, что-то прибрать, приготовить", "scores": {"narrative_bias": "ТФ"}},
+            "4": {"text": "Уехать на природу, в лес, на дачу — подальше от всех", "scores": {"narrative_bias": "УБ"}}
         }
     },
-    {  # Вопрос 2
-        "text": "Что ты ценишь в людях больше всего?",
+    {  # Вопрос 2. Друг
+        "text": "Какой друг для тебя самый ценный?",
         "options": {
-            "🥊": {"text": "Силу и уверенность", "scores": {"narrative_bias": "СБ"}},
-            "🛠️": {"text": "Трудолюбие и надёжность", "scores": {"narrative_bias": "ТФ"}},
-            "📖": {"text": "Ум и глубину", "scores": {"narrative_bias": "УБ"}},
-            "🎉": {"text": "Харизму и обаяние", "scores": {"narrative_bias": "ЧВ"}}
+            "1": {"text": "Который всегда придет на помощь, даже ночью", "scores": {"narrative_bias": "ТФ"}},
+            "2": {"text": "С которым можно поржать до упаду", "scores": {"narrative_bias": "ЧВ"}},
+            "3": {"text": "Который даст дельный совет, поможет разобраться", "scores": {"narrative_bias": "УБ"}},
+            "4": {"text": "Который никого не боится и заступится", "scores": {"narrative_bias": "СБ"}}
         }
     },
-    {  # Вопрос 3
-        "text": "Какая похвала для тебя ценнее?",
+    {  # Вопрос 3. Комплимент
+        "text": "От какого комплимента ты растаешь?",
         "options": {
-            "⚔️": {"text": "«Тебя стоит уважать»", "scores": {"narrative_bias": "СБ"}},
-            "⚙️": {"text": "«На тебя можно положиться»", "scores": {"narrative_bias": "ТФ"}},
-            "🔬": {"text": "«Ты очень умный(ая)»", "scores": {"narrative_bias": "УБ"}},
-            "🎪": {"text": "«Ты душа компании»", "scores": {"narrative_bias": "ЧВ"}}
+            "1": {"text": "«Ты такой надёжный, с тобой спокойно»", "scores": {"narrative_bias": "ТФ"}},
+            "2": {"text": "«С тобой так весело, ты заряжаешь»", "scores": {"narrative_bias": "ЧВ"}},
+            "3": {"text": "«Ты такой умный, с тобой интересно»", "scores": {"narrative_bias": "УБ"}},
+            "4": {"text": "«Ты крутой, тебя все уважают»", "scores": {"narrative_bias": "СБ"}}
         }
     },
-    {  # Вопрос 4
-        "text": "В компании незнакомых людей ты сразу...",
+    {  # Вопрос 4. Новая компания
+        "text": "Ты пришел в новую компанию. Что ты будешь делать?",
         "options": {
-            "👑": {"text": "Оцениваешь, кто тут главный", "scores": {"narrative_bias": "СБ"}},
-            "⏰": {"text": "Ищешь, с кем можно по делу поговорить", "scores": {"narrative_bias": "ТФ"}},
-            "🤯": {"text": "Прислушиваешься к умным разговорам", "scores": {"narrative_bias": "УБ"}},
-            "👻": {"text": "Смотришь, кто в центре внимания", "scores": {"narrative_bias": "ЧВ"}}
+            "1": {"text": "Осмотрюсь, пойму, кто тут главный, и буду с ним общаться", "scores": {"narrative_bias": "СБ"}},
+            "2": {"text": "Найду, с кем можно поговорить о деле", "scores": {"narrative_bias": "ТФ"}},
+            "3": {"text": "Послушаю, о чем говорят, вступлю, если тема интересная", "scores": {"narrative_bias": "УБ"}},
+            "4": {"text": "Буду со всеми общаться, знакомиться, шутить", "scores": {"narrative_bias": "ЧВ"}}
         }
     },
-    {  # Вопрос 5
-        "text": "Куда бы ты потратил(а) крупную сумму?",
+    {  # Вопрос 5. Премия
+        "text": "Тебе дали премию 10 тысяч. На что потратишь?",
         "options": {
-            "🏛️": {"text": "На статусные вещи (машина, часы)", "scores": {"narrative_bias": "СБ"}},
-            "🏗️": {"text": "На инструменты, оборудование, свой цех", "scores": {"narrative_bias": "ТФ"}},
-            "🧠": {"text": "На обучение, книги, исследования", "scores": {"narrative_bias": "УБ"}},
-            "🌟": {"text": "На раскрутку имени, пиар", "scores": {"narrative_bias": "ЧВ"}}
+            "1": {"text": "Куплю что-то для дома, технику, инструменты", "scores": {"narrative_bias": "ТФ"}},
+            "2": {"text": "Схожу в ресторан, приглашу девушку или парня", "scores": {"narrative_bias": "ЧВ"}},
+            "3": {"text": "Куплю курс, книгу, что-то для развития", "scores": {"narrative_bias": "УБ"}},
+            "4": {"text": "Куплю хорошую одежду, часы, аксессуар", "scores": {"narrative_bias": "СБ"}}
         }
     },
-    {  # Вопрос 6
-        "text": "Что тебя бесит больше всего?",
+    {  # Вопрос 6. Раздражает
+        "text": "Что тебя больше всего раздражает в людях?",
         "options": {
-            "💎": {"text": "Неуважение, когда меня не ставят ни во что", "scores": {"narrative_bias": "СБ"}},
-            "🏭": {"text": "Лень и халява других", "scores": {"narrative_bias": "ТФ"}},
-            "📚": {"text": "Глупость и нежелание думать", "scores": {"narrative_bias": "УБ"}},
-            "📢": {"text": "Когда меня игнорируют, не замечают", "scores": {"narrative_bias": "ЧВ"}}
+            "1": {"text": "Когда люди опаздывают и не держат слово", "scores": {"narrative_bias": "ТФ"}},
+            "2": {"text": "Когда люди тупят и не понимают очевидного", "scores": {"narrative_bias": "УБ"}},
+            "3": {"text": "Когда люди хамят и не уважают других", "scores": {"narrative_bias": "СБ"}},
+            "4": {"text": "Когда люди скучные, с ними не о чем говорить", "scores": {"narrative_bias": "ЧВ"}}
         }
     },
-    {  # Вопрос 7
-        "text": "Какой подарок тебя порадует больше?",
+    {  # Вопрос 7. Подарок
+        "text": "Какой подарок тебя порадует больше всего?",
         "options": {
-            "🦁": {"text": "Эксклюзивная вещь, подчёркивающая статус", "scores": {"narrative_bias": "СБ"}},
-            "🐜": {"text": "Полезный инструмент или техника", "scores": {"narrative_bias": "ТФ"}},
-            "🦉": {"text": "Редкая книга или доступ к знаниям", "scores": {"narrative_bias": "УБ"}},
-            "🦚": {"text": "Приглашение на закрытое мероприятие", "scores": {"narrative_bias": "ЧВ"}}
+            "1": {"text": "Что-то полезное для дома или работы", "scores": {"narrative_bias": "ТФ"}},
+            "2": {"text": "Крутой гаджет, приставка, навороченный телефон", "scores": {"narrative_bias": "СБ"}},
+            "3": {"text": "Интересная книга, подписка на курсы", "scores": {"narrative_bias": "УБ"}},
+            "4": {"text": "Путешествие, билет на концерт, впечатления", "scores": {"narrative_bias": "ЧВ"}}
         }
     },
-    {  # Вопрос 8
-        "text": "Чего ты боишься больше всего?",
+    {  # Вопрос 8. Страх
+        "text": "Чего ты боишься больше всего в жизни?",
         "options": {
-            "📉": {"text": "Потерять авторитет, стать никем", "scores": {"narrative_bias": "СБ"}},
-            "💸": {"text": "Остаться без работы, без денег", "scores": {"narrative_bias": "ТФ"}},
-            "🤦": {"text": "Показаться глупым(ой)", "scores": {"narrative_bias": "УБ"}},
-            "👀": {"text": "Стать незаметным, скучным", "scores": {"narrative_bias": "ЧВ"}}
+            "1": {"text": "Бедности, остаться без средств", "scores": {"narrative_bias": "ТФ"}},
+            "2": {"text": "Одиночества, что никому не буду нужен", "scores": {"narrative_bias": "ЧВ"}},
+            "3": {"text": "Болезни, немощи, зависимости от других", "scores": {"narrative_bias": "СБ"}},
+            "4": {"text": "Глупости, деградации, что перестану понимать", "scores": {"narrative_bias": "УБ"}}
         }
     }
 ]
@@ -158,64 +158,64 @@ NARRATIVE_QUESTIONS = [
 # ==================== БЛОК 2: ОБЩИЕ ВОПРОСЫ (для всех) ====================
 COMMON_QUESTIONS = [
     {  # Вопрос 9. Возраст
-        "text": "Сколько зим минуло с твоего рождения?",
+        "text": "Сколько тебе лет?",
         "options": {
             "1": {"text": "Меньше 20", "scores": {"age": 18, "age_group": "YOUNG"}},
-            "2": {"text": "20-25 лет", "scores": {"age": 22, "age_group": "YOUNG_ADULT"}},
-            "3": {"text": "25-30 лет", "scores": {"age": 27, "age_group": "YOUNG_ADULT"}},
-            "4": {"text": "30-35 лет", "scores": {"age": 32, "age_group": "ADULT"}},
-            "5": {"text": "35-40 лет", "scores": {"age": 37, "age_group": "ADULT"}},
-            "6": {"text": "40-45 лет", "scores": {"age": 42, "age_group": "MIDDLE"}},
-            "7": {"text": "45-50 лет", "scores": {"age": 47, "age_group": "MIDDLE"}},
-            "8": {"text": "50-60 лет", "scores": {"age": 55, "age_group": "MATURE"}},
+            "2": {"text": "20-25", "scores": {"age": 22, "age_group": "YOUNG_ADULT"}},
+            "3": {"text": "25-30", "scores": {"age": 27, "age_group": "YOUNG_ADULT"}},
+            "4": {"text": "30-35", "scores": {"age": 32, "age_group": "ADULT"}},
+            "5": {"text": "35-40", "scores": {"age": 37, "age_group": "ADULT"}},
+            "6": {"text": "40-45", "scores": {"age": 42, "age_group": "MIDDLE"}},
+            "7": {"text": "45-50", "scores": {"age": 47, "age_group": "MIDDLE"}},
+            "8": {"text": "50-60", "scores": {"age": 55, "age_group": "MATURE"}},
             "9": {"text": "Больше 60", "scores": {"age": 65, "age_group": "ELDER"}}
         }
     },
     {  # Вопрос 10. Образование
-        "text": "Какие знания ты нёс через годы?",
+        "text": "Какое у тебя образование?",
         "options": {
             "1": {"text": "Неполное среднее", "scores": {"education": 2, "edu_level": "LOW"}},
             "2": {"text": "Среднее (школа)", "scores": {"education": 4, "edu_level": "MEDIUM"}},
-            "3": {"text": "Среднее специальное", "scores": {"education": 6, "edu_level": "MEDIUM"}},
+            "3": {"text": "Среднее специальное (техникум, колледж)", "scores": {"education": 6, "edu_level": "MEDIUM"}},
             "4": {"text": "Высшее", "scores": {"education": 8, "edu_level": "HIGH"}},
-            "5": {"text": "Два и более / учёная степень", "scores": {"education": 10, "edu_level": "VERY_HIGH"}}
+            "5": {"text": "Два высших или учёная степень", "scores": {"education": 10, "edu_level": "VERY_HIGH"}}
         }
     },
     {  # Вопрос 11. Работа
-        "text": "Чем ты наполняешь свои дни?",
+        "text": "Кем ты работаешь?",
         "options": {
             "1": {"text": "Не работаю", "scores": {"job": "DEPENDENT", "income": 1}},
             "2": {"text": "Рабочий, персонал", "scores": {"job": "WORKER", "income": 3}},
             "3": {"text": "Офисный работник", "scores": {"job": "OFFICE", "income": 4}},
-            "4": {"text": "Специалист (врач, учитель)", "scores": {"job": "PROFESSIONAL", "income": 5}},
-            "5": {"text": "Руководитель", "scores": {"job": "MANAGER", "income": 7}},
-            "6": {"text": "Бизнесмен", "scores": {"job": "BUSINESS", "income": 8}},
-            "7": {"text": "Фрилансер", "scores": {"job": "FREELANCE", "income": 5}},
+            "4": {"text": "Специалист (врач, учитель, инженер)", "scores": {"job": "PROFESSIONAL", "income": 5}},
+            "5": {"text": "Руководитель, начальник", "scores": {"job": "MANAGER", "income": 7}},
+            "6": {"text": "Свой бизнес", "scores": {"job": "BUSINESS", "income": 8}},
+            "7": {"text": "Фрилансер, сам на себя", "scores": {"job": "FREELANCE", "income": 5}},
             "8": {"text": "Творческая профессия", "scores": {"job": "CREATIVE", "income": 4}}
         }
     },
     {  # Вопрос 12. Доход
-        "text": "Как щедра к тебе судьба в монетах?",
+        "text": "Как у тебя с деньгами?",
         "options": {
             "1": {"text": "Едва хватает на еду", "scores": {"money": 1}},
             "2": {"text": "Хватает на жизнь", "scores": {"money": 3}},
             "3": {"text": "Могу покупать крупные вещи", "scores": {"money": 5}},
             "4": {"text": "Обеспечен(а), есть накопления", "scores": {"money": 7}},
-            "5": {"text": "Богат(а), деньги не проблема", "scores": {"money": 9}}
+            "5": {"text": "Деньги не проблема", "scores": {"money": 9}}
         }
     },
     {  # Вопрос 13. Жильё
-        "text": "Где приютилась твоя душа?",
+        "text": "Где ты живёшь?",
         "options": {
-            "1": {"text": "Снимаю угол/комнату", "scores": {"housing": 1}},
-            "2": {"text": "С родителями/родственниками", "scores": {"housing": 2}},
+            "1": {"text": "Снимаю угол или комнату", "scores": {"housing": 1}},
+            "2": {"text": "С родителями или родственниками", "scores": {"housing": 2}},
             "3": {"text": "Снимаю квартиру", "scores": {"housing": 3}},
-            "4": {"text": "Своя квартира/дом", "scores": {"housing": 5}},
-            "5": {"text": "Несколько объектов", "scores": {"housing": 8}}
+            "4": {"text": "Своя квартира или дом", "scores": {"housing": 5}},
+            "5": {"text": "Несколько объектов недвижимости", "scores": {"housing": 8}}
         }
     },
     {  # Вопрос 14. Рост
-        "text": "Как высоко ты над землёй?",
+        "text": "Какой у тебя рост?",
         "options": {
             "1": {"text": "Ниже 160 см", "scores": {"height": 2}},
             "2": {"text": "160-170 см", "scores": {"height": 4}},
@@ -225,7 +225,7 @@ COMMON_QUESTIONS = [
         }
     },
     {  # Вопрос 15. Внешность
-        "text": "Как оценивают твой облик прохожие?",
+        "text": "Как ты оцениваешь свою внешность?",
         "options": {
             "1": {"text": "Меня не замечают", "scores": {"looks": 2}},
             "2": {"text": "Обычная внешность", "scores": {"looks": 4}},
@@ -235,7 +235,7 @@ COMMON_QUESTIONS = [
         }
     },
     {  # Вопрос 16. Здоровье
-        "text": "Как часто тело напоминает о себе?",
+        "text": "Как часто ты болеешь?",
         "options": {
             "1": {"text": "Постоянно", "scores": {"health": 2}},
             "2": {"text": "Несколько раз в год", "scores": {"health": 4}},
@@ -245,17 +245,17 @@ COMMON_QUESTIONS = [
         }
     },
     {  # Вопрос 17. Семейное положение
-        "text": "Кого согреваешь теплом своим?",
+        "text": "Как у тебя с семьёй?",
         "options": {
             "1": {"text": "Никогда не был(а) в браке", "scores": {"marriage": 0, "marriages": 0}},
-            "2": {"text": "В браке / в отношениях", "scores": {"marriage": 1, "marriages": 1}},
+            "2": {"text": "В браке или в отношениях", "scores": {"marriage": 1, "marriages": 1}},
             "3": {"text": "Разведен(а) один раз", "scores": {"marriage": 0, "marriages": 1}},
             "4": {"text": "Разведен(а) дважды", "scores": {"marriage": 0, "marriages": 2}},
-            "5": {"text": "Вдовец/вдова", "scores": {"marriage": 0, "marriages": 1}}
+            "5": {"text": "Вдовец или вдова", "scores": {"marriage": 0, "marriages": 1}}
         }
     },
     {  # Вопрос 18. Дети
-        "text": "Оставил(а) ли след в потомках?",
+        "text": "Есть ли у тебя дети?",
         "options": {
             "1": {"text": "Нет детей", "scores": {"children": 0, "kids": 0}},
             "2": {"text": "Один ребёнок", "scores": {"children": 1, "kids": 1}},
@@ -264,7 +264,7 @@ COMMON_QUESTIONS = [
         }
     },
     {  # Вопрос 19. Друзья
-        "text": "Сколько душ готовы прийти на зов?",
+        "text": "Сколько у тебя близких друзей?",
         "options": {
             "1": {"text": "Никого, я один(а)", "scores": {"friends": 1, "social": 1}},
             "2": {"text": "1-2 друга", "scores": {"friends": 3, "social": 3}},
@@ -277,75 +277,75 @@ COMMON_QUESTIONS = [
 
 # ==================== БЛОК 3: МУЖСКИЕ ВОПРОСЫ ====================
 MALE_QUESTIONS = [
-    {  # Вопрос 20. Автомобиль
-        "text": "Какое железное сердце служит тебе?",
+    {  # Вопрос 20. Машина
+        "text": "Какая у тебя машина?",
         "options": {
             "1": {"text": "Нет машины", "scores": {"car": 0, "car_type": "NONE", "status": 1}},
-            "2": {"text": "Отечественный/старый", "scores": {"car": 1, "car_type": "OLD", "status": 2}},
-            "3": {"text": "Бюджетный иномарка", "scores": {"car": 2, "car_type": "BUDGET", "status": 3}},
+            "2": {"text": "Отечественная или старая", "scores": {"car": 1, "car_type": "OLD", "status": 2}},
+            "3": {"text": "Бюджетная иномарка", "scores": {"car": 2, "car_type": "BUDGET", "status": 3}},
             "4": {"text": "Бизнес-класс", "scores": {"car": 3, "car_type": "BUSINESS", "status": 5}},
-            "5": {"text": "Премиум/спортивный", "scores": {"car": 4, "car_type": "PREMIUM", "status": 7}},
-            "6": {"text": "Внедорожник/джип", "scores": {"car": 4, "car_type": "SUV", "status": 6}}
+            "5": {"text": "Премиум или спортивная", "scores": {"car": 4, "car_type": "PREMIUM", "status": 7}},
+            "6": {"text": "Внедорожник или джип", "scores": {"car": 4, "car_type": "SUV", "status": 6}}
         }
     },
     {  # Вопрос 21. Баня
-        "text": "Как часто очищаешь тело и дух в бане?",
+        "text": "Как часто ходишь в баню?",
         "options": {
             "1": {"text": "Никогда", "scores": {"banya": 1, "body_confidence": 2}},
             "2": {"text": "Раз в год", "scores": {"banya": 3, "body_confidence": 4}},
-            "3": {"text": "Иногда с друзьями", "scores": {"banya": 5, "body_confidence": 6}},
-            "4": {"text": "Регулярно", "scores": {"banya": 7, "body_confidence": 8}},
-            "5": {"text": "У меня своя баня", "scores": {"banya": 9, "body_confidence": 7}}
+            "3": {"text": "Пару раз в год с друзьями", "scores": {"banya": 5, "body_confidence": 6}},
+            "4": {"text": "Регулярно, раз в месяц", "scores": {"banya": 7, "body_confidence": 8}},
+            "5": {"text": "Часто, у меня своя баня", "scores": {"banya": 9, "body_confidence": 7}}
         }
     },
     {  # Вопрос 22. Верность
-        "text": "Что для тебя значит верность?",
+        "text": "Как у тебя с верностью в отношениях?",
         "options": {
-            "1": {"text": "Святое, никогда не изменял", "scores": {"cheating": 1, "loyalty": 9, "sex_drive": 3}},
+            "1": {"text": "Никогда не изменял", "scores": {"cheating": 1, "loyalty": 9, "sex_drive": 3}},
             "2": {"text": "Было однажды, жалею", "scores": {"cheating": 3, "loyalty": 5, "sex_drive": 5}},
-            "3": {"text": "Бывало, не вижу проблемы", "scores": {"cheating": 5, "loyalty": 3, "sex_drive": 7}},
+            "3": {"text": "Бывало, не вижу в этом проблемы", "scores": {"cheating": 5, "loyalty": 3, "sex_drive": 7}},
             "4": {"text": "Часто меняю женщин", "scores": {"cheating": 7, "loyalty": 1, "sex_drive": 9}},
             "5": {"text": "Не был в отношениях", "scores": {"cheating": 2, "loyalty": 5, "sex_drive": 4}}
         }
     },
     {  # Вопрос 23. Растительность
-        "text": "Как щедра природа на лице?",
+        "text": "Как у тебя с растительностью на лице?",
         "options": {
-            "1": {"text": "Растёт плохо", "scores": {"testosterone": 3, "masculinity": 3}},
-            "2": {"text": "Нормально", "scores": {"testosterone": 5, "masculinity": 5}},
-            "3": {"text": "Густая", "scores": {"testosterone": 7, "masculinity": 7}},
+            "1": {"text": "Растёт плохо, почти нет", "scores": {"testosterone": 3, "masculinity": 3}},
+            "2": {"text": "Нормально, но не густо", "scores": {"testosterone": 5, "masculinity": 5}},
+            "3": {"text": "Густая щетина", "scores": {"testosterone": 7, "masculinity": 7}},
             "4": {"text": "Ношу бороду", "scores": {"testosterone": 8, "masculinity": 8}},
             "5": {"text": "Очень густая борода", "scores": {"testosterone": 9, "masculinity": 9}}
         }
     },
     {  # Вопрос 24. Сила
-        "text": "Сколько раз можешь оторвать себя от земли?",
+        "text": "Сколько отжиманий можешь сделать?",
         "options": {
             "1": {"text": "0-5 раз", "scores": {"strength": 2, "fitness": 2}},
             "2": {"text": "5-15 раз", "scores": {"strength": 4, "fitness": 4}},
             "3": {"text": "15-30 раз", "scores": {"strength": 6, "fitness": 6}},
             "4": {"text": "30-50 раз", "scores": {"strength": 8, "fitness": 8}},
-            "5": {"text": "Больше 50", "scores": {"strength": 10, "fitness": 10}}
+            "5": {"text": "Больше 50 раз", "scores": {"strength": 10, "fitness": 10}}
         }
     },
     {  # Вопрос 25. Телосложение
-        "text": "Какова твоя телесная форма?",
+        "text": "Какое у тебя телосложение?",
         "options": {
             "1": {"text": "Худощавое", "scores": {"body_type": "THIN", "size_confidence": 3}},
-            "2": {"text": "Среднее", "scores": {"body_type": "AVERAGE", "size_confidence": 5}},
-            "3": {"text": "Атлетичное", "scores": {"body_type": "ATHLETIC", "size_confidence": 7}},
-            "4": {"text": "Крупное", "scores": {"body_type": "BIG", "size_confidence": 8}},
-            "5": {"text": "Полное", "scores": {"body_type": "FULL", "size_confidence": 4}}
+            "2": {"text": "Среднее, обычное", "scores": {"body_type": "AVERAGE", "size_confidence": 5}},
+            "3": {"text": "Атлетичное, спортивное", "scores": {"body_type": "ATHLETIC", "size_confidence": 7}},
+            "4": {"text": "Крупное, мощное", "scores": {"body_type": "BIG", "size_confidence": 8}},
+            "5": {"text": "Полное, есть лишний вес", "scores": {"body_type": "FULL", "size_confidence": 4}}
         }
     },
-    {  # Вопрос 26. Фантазии
-        "text": "Какие тайные желания будоражат ночами?",
+    {  # Вопрос 26. Сны
+        "text": "Что тебе чаще всего снится?",
         "options": {
-            "1": {"text": "О власти и деньгах", "scores": {"fantasy": "POWER", "kink": "DOMINANCE"}},
-            "2": {"text": "О красивых женщинах", "scores": {"fantasy": "WOMEN", "kink": "HAREM"}},
-            "3": {"text": "О приключениях", "scores": {"fantasy": "ADVENTURE", "kink": "EXTREME"}},
-            "4": {"text": "О признании и славе", "scores": {"fantasy": "FAME", "kink": "EXHIBITION"}},
-            "5": {"text": "Не помню сны", "scores": {"fantasy": "NONE", "kink": "VANILLA"}}
+            "1": {"text": "Как я добиваюсь успеха, власти", "scores": {"fantasy": "POWER", "kink": "DOMINANCE"}},
+            "2": {"text": "Красивые женщины, секс", "scores": {"fantasy": "WOMEN", "kink": "HAREM"}},
+            "3": {"text": "Приключения, путешествия", "scores": {"fantasy": "ADVENTURE", "kink": "EXTREME"}},
+            "4": {"text": "Что я знаменит, меня узнают", "scores": {"fantasy": "FAME", "kink": "EXHIBITION"}},
+            "5": {"text": "Не помню сны или редко снюсь", "scores": {"fantasy": "NONE", "kink": "VANILLA"}}
         }
     }
 ]
@@ -353,7 +353,7 @@ MALE_QUESTIONS = [
 # ==================== БЛОК 3: ЖЕНСКИЕ ВОПРОСЫ ====================
 FEMALE_QUESTIONS = [
     {  # Вопрос 20. Размер груди
-        "text": "Каков твой знак женственности?",
+        "text": "Какой у тебя размер груди?",
         "options": {
             "1": {"text": "0-1 размер", "scores": {"breast": 3, "fem_capital": 4, "body_confidence": 4}},
             "2": {"text": "2 размер", "scores": {"breast": 5, "fem_capital": 6, "body_confidence": 6}},
@@ -363,7 +363,7 @@ FEMALE_QUESTIONS = [
         }
     },
     {  # Вопрос 21. Месячные
-        "text": "Когда природа впервые заявила о себе?",
+        "text": "Во сколько лет у тебя начались месячные?",
         "options": {
             "1": {"text": "До 11 лет", "scores": {"hormones": 8, "maturity": 8}},
             "2": {"text": "11-12 лет", "scores": {"hormones": 7, "maturity": 7}},
@@ -373,17 +373,17 @@ FEMALE_QUESTIONS = [
         }
     },
     {  # Вопрос 22. Выбор мужчин
-        "text": "К какому типу мужчин тянется душа?",
+        "text": "Какие мужчины тебе нравятся?",
         "options": {
-            "1": {"text": "Сильные, доминантные", "scores": {"mate": "ALPHA", "strategy": "DEPENDENT", "kink": "SUBMISSIVE"}},
-            "2": {"text": "Уверенные, надёжные", "scores": {"mate": "BETA", "strategy": "PARTNERSHIP", "kink": "VANILLA"}},
-            "3": {"text": "Умные, интеллектуалы", "scores": {"mate": "GAMMA", "strategy": "INTELLECTUAL", "kink": "MENTAL"}},
-            "4": {"text": "Богатые, статусные", "scores": {"mate": "DELTA", "strategy": "PROVIDER", "kink": "SUGAR"}},
-            "5": {"text": "Красивые, харизматичные", "scores": {"mate": "OMEGA", "strategy": "STATUS", "kink": "EXHIBITION"}}
+            "1": {"text": "Сильные, властные, доминантные", "scores": {"mate": "ALPHA", "strategy": "DEPENDENT", "kink": "SUBMISSIVE"}},
+            "2": {"text": "Уверенные, надёжные, спокойные", "scores": {"mate": "BETA", "strategy": "PARTNERSHIP", "kink": "VANILLA"}},
+            "3": {"text": "Умные, интеллектуалы, с ними есть о чём поговорить", "scores": {"mate": "GAMMA", "strategy": "INTELLECTUAL", "kink": "MENTAL"}},
+            "4": {"text": "Богатые, статусные, успешные", "scores": {"mate": "DELTA", "strategy": "PROVIDER", "kink": "SUGAR"}},
+            "5": {"text": "Красивые, харизматичные, за ними интересно наблюдать", "scores": {"mate": "OMEGA", "strategy": "STATUS", "kink": "EXHIBITION"}}
         }
     },
     {  # Вопрос 23. Количество отношений
-        "text": "Скольким дарила своё сердце?",
+        "text": "Сколькими мужчинами у тебя были серьёзные отношения?",
         "options": {
             "1": {"text": "Ни одного", "scores": {"relationships": 0, "experience": 1}},
             "2": {"text": "Один", "scores": {"relationships": 1, "experience": 3}},
@@ -393,33 +393,33 @@ FEMALE_QUESTIONS = [
         }
     },
     {  # Вопрос 24. Интимный опыт
-        "text": "Приходилось ли платить телом за блага?",
+        "text": "Были ли у тебя отношения с подарками, спонсорством?",
         "options": {
             "1": {"text": "Нет, никогда", "scores": {"sex_work": 0, "taboo": 1}},
-            "2": {"text": "Были спонсоры", "scores": {"sex_work": 1, "taboo": 3}},
-            "3": {"text": "Работала моделью/эскортом", "scores": {"sex_work": 2, "taboo": 5}},
-            "4": {"text": "Был опыт", "scores": {"sex_work": 3, "taboo": 7}},
+            "2": {"text": "Были спонсоры, покровители", "scores": {"sex_work": 1, "taboo": 3}},
+            "3": {"text": "Работала моделью или в эскорте", "scores": {"sex_work": 2, "taboo": 5}},
+            "4": {"text": "Был такой опыт", "scores": {"sex_work": 3, "taboo": 7}},
             "5": {"text": "Не хочу отвечать", "scores": {"sex_work": 1, "taboo": 4}}
         }
     },
     {  # Вопрос 25. Любимая часть тела
-        "text": "Что в себе ты любишь больше всего?",
+        "text": "Что тебе больше всего нравится в своей внешности?",
         "options": {
             "1": {"text": "Грудь", "scores": {"body_pride": "BREAST", "body_confidence": 6}},
             "2": {"text": "Попа", "scores": {"body_pride": "ASS", "body_confidence": 6}},
             "3": {"text": "Ноги", "scores": {"body_pride": "LEGS", "body_confidence": 6}},
-            "4": {"text": "Глаза/лицо", "scores": {"body_pride": "FACE", "body_confidence": 6}},
+            "4": {"text": "Глаза, лицо", "scores": {"body_pride": "FACE", "body_confidence": 6}},
             "5": {"text": "Ничего не нравится", "scores": {"body_pride": "NONE", "body_confidence": 2}}
         }
     },
-    {  # Вопрос 26. Фантазии
-        "text": "Какие тайные желания будоражат ночами?",
+    {  # Вопрос 26. Сны
+        "text": "Что тебе чаще всего снится?",
         "options": {
-            "1": {"text": "О сильном мужчине", "scores": {"fantasy": "ALPHA", "kink": "SUBMISSIVE"}},
-            "2": {"text": "О богатстве", "scores": {"fantasy": "WEALTH", "kink": "SUGAR"}},
-            "3": {"text": "О страсти", "scores": {"fantasy": "PASSION", "kink": "WILD"}},
-            "4": {"text": "О славе", "scores": {"fantasy": "FAME", "kink": "EXHIBITION"}},
-            "5": {"text": "Не помню сны", "scores": {"fantasy": "NONE", "kink": "VANILLA"}}
+            "1": {"text": "Сильный мужчина, который меня защищает", "scores": {"fantasy": "ALPHA", "kink": "SUBMISSIVE"}},
+            "2": {"text": "Богатство, роскошь, красивая жизнь", "scores": {"fantasy": "WEALTH", "kink": "SUGAR"}},
+            "3": {"text": "Страсть, любовь, романтика", "scores": {"fantasy": "PASSION", "kink": "WILD"}},
+            "4": {"text": "Слава, признание, внимание", "scores": {"fantasy": "FAME", "kink": "EXHIBITION"}},
+            "5": {"text": "Не помню сны или редко снятся", "scores": {"fantasy": "NONE", "kink": "VANILLA"}}
         }
     }
 ]
