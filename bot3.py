@@ -1510,14 +1510,14 @@ async def show_fortune(user_id, state: FSMContext, hypothesis):
     
     # Получаем интерпретацию
     interpretation = get_interpretation(
-        gender=gender, 
-        narrative=narrative, 
-        level=level, 
-        age=age,
-        program=program,
-        second_narrative=second, 
-        third_narrative=third
-    )
+    gender=gender, 
+    narrative=narrative, 
+    level=level, 
+    age=age,
+    program=program,
+    second_narrative=second, 
+    third_narrative=third
+)
     
     # Формируем заголовок
     season = get_life_season(age)
