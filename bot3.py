@@ -1897,7 +1897,7 @@ async def show_fortune(user_id, state: FSMContext, hypothesis):
     logger.info(f"🔍 ФИНАЛ: нарратив={narrative}, программа={program}, уровень={level}, роль={role}")
     
     # Получаем интерпретацию
-    interpretation = get_interpretation(
+    interpretation_data = get_interpretation(
         gender=gender, 
         narrative=narrative, 
         level=level, 
@@ -1906,6 +1906,39 @@ async def show_fortune(user_id, state: FSMContext, hypothesis):
         second_narrative=second, 
         third_narrative=third
     )
+    
+    # Проверяем тип полученных данных и форматируем
+    if isinstance(interpretation_data, dict):
+        # Извлекаем данные из словаря
+        role_text = interpretation_data.get("роль", role)
+        diagnosis = interpretation_data.get("диагноз", "")
+        portrait = interpretation_data.get("портрет", [])
+        why = interpretation_data.get("почему_так", "")
+        what_next = interpretation_data.get("что_дальше", "")
+        
+        # Форматируем портрет
+        portrait_text = ""
+        if portrait and isinstance(portrait, list):
+            portrait_text = "\n".join([f"• {line}" for line in portrait])
+        else:
+            portrait_text = "• Твоя уникальность не описывается словами"
+        
+        # Формируем интерпретацию
+        interpretation = f"""*{role_text}*
+
+*Диагноз:* {diagnosis}
+
+*Портрет:*
+{portrait_text}
+
+*Почему так вышло:*
+{why}
+
+*Что дальше:*
+{what_next}"""
+    else:
+        # Если вернулась строка (старая версия или ошибка)
+        interpretation = str(interpretation_data)
     
     # Формируем заголовок
     season = get_life_season(age)
@@ -1935,11 +1968,11 @@ async def show_fortune(user_id, state: FSMContext, hypothesis):
     await bot.send_chat_action(user_id, action="typing")
     await asyncio.sleep(2)
     
-    # Разбиваем на части если длинное сообщение
     full_text = header + interpretation
-    if len(full_text) > 4000:  # Лимит Telegram
+    
+    # Разбиваем на части если длинное сообщение
+    if len(full_text) > 4000:
         mid = len(full_text) // 2
-        # Ищем место для разрыва (конец предложения)
         break_point = full_text.rfind('\n', 0, mid)
         if break_point == -1:
             break_point = mid
