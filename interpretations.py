@@ -15,7 +15,7 @@ from female_interpretations import FEMALE_STRATEGIES
 
 NARRATIVE_NAMES = {
     "СБ": "СИЛЫ",
-    "ТФ": "ТРУДА",
+    "ТФ": "ТРУДА", 
     "УБ": "ЗНАНИЙ",
     "ЧВ": "ВНИМАНИЯ"
 }
@@ -23,9 +23,13 @@ NARRATIVE_NAMES = {
 logger = logging.getLogger(__name__)
 
 # Проверка загрузки
-logger.info(f"✅ Загружено мужских стратегий: {len(MALE_STRATEGIES)}")
-logger.info(f"✅ Загружено женских стратегий: {len(FEMALE_STRATEGIES)}")
-logger.info(f"✅ Всего стратегий: {len(MALE_STRATEGIES) + len(FEMALE_STRATEGIES)}")
+male_count = len(MALE_STRATEGIES)
+female_count = len(FEMALE_STRATEGIES)
+total_count = male_count + female_count
+
+logger.info(f"✅ Загружено мужских стратегий: {male_count}")
+logger.info(f"✅ Загружено женских стратегий: {female_count}")
+logger.info(f"✅ ВСЕГО стратегий: {total_count}")
 
 # ==================== ФУНКЦИИ ПОЛУЧЕНИЯ ИНТЕРПРЕТАЦИЙ ====================
 
