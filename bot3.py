@@ -3,13 +3,14 @@
 🔮 ТАЙНЫЙ ШЁПОТ: Виртуальная гадалка v3.1
 С верификационным блоком для подтверждения гипотез
 Полная версия с поддержкой 168 стратегий
-Исправленная версия с улучшенной отладкой
+ИСПРАВЛЕННАЯ ВЕРСИЯ с корректными женскими вопросами и логированием
 """
 
 import os
 import logging
 import random
 import asyncio
+import sys
 from dotenv import load_dotenv
 from aiogram import Bot, Dispatcher, types
 from aiogram.client.default import DefaultBotProperties
@@ -28,21 +29,39 @@ BOT_TOKEN = os.getenv("BOT_TOKEN")
 if not BOT_TOKEN:
     raise ValueError("❌ Токен не найден! Загляни в переменные окружения...")
 
-# Настройка логирования
+# ==================== НАСТРОЙКА ЛОГИРОВАНИЯ ====================
 logging.basicConfig(
-    level=logging.DEBUG,  # Изменено на DEBUG для более детального логирования
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    level=logging.DEBUG,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler('bot_debug.log', encoding='utf-8'),
+        logging.StreamHandler(sys.stdout)
+    ]
 )
 logger = logging.getLogger(__name__)
 
-# Добавьте после импортов для проверки загрузки интерпретаций
+# ==================== ПРОВЕРКА ЗАГРУЗКИ ИНТЕРПРЕТАЦИЙ ====================
 try:
-    from interpretations import get_interpretation, NARRATIVE_NAMES, MALE_STRATEGIES
+    from interpretations import get_interpretation, NARRATIVE_NAMES, MALE_STRATEGIES, FEMALE_STRATEGIES
     logger.info(f"✅ Модуль интерпретаций загружен успешно")
-    logger.info(f"📊 Доступно стратегий: {len(MALE_STRATEGIES)}")
-    # Проверим несколько ключей для примера
-    sample_keys = list(MALE_STRATEGIES.keys())[:3]
-    logger.info(f"📝 Примеры ключей: {sample_keys}")
+    logger.info(f"📊 Мужских стратегий: {len(MALE_STRATEGIES)}")
+    logger.info(f"📊 Женских стратегий: {len(FEMALE_STRATEGIES)}")
+    
+    # Проверяем женские стратегии
+    if FEMALE_STRATEGIES:
+        female_keys = list(FEMALE_STRATEGIES.keys())
+        logger.info(f"📝 Примеры женских ключей: {female_keys[:5]}")
+        
+        # Проверяем наличие базовых ключей
+        test_keys = ["ЧВ_3_F3", "СБ_3_F3", "ТФ_3_F3", "УБ_3_F3"]
+        for key in test_keys:
+            if key in FEMALE_STRATEGIES:
+                logger.info(f"✅ Найден ключ {key}")
+            else:
+                logger.warning(f"⚠️ Отсутствует ключ {key}")
+    else:
+        logger.error("❌ ЖЕНСКИЕ СТРАТЕГИИ НЕ ЗАГРУЖЕНЫ!")
+        
 except Exception as e:
     logger.error(f"❌ Ошибка загрузки интерпретаций: {e}")
     logger.error("Убедитесь, что файл interpretations.py находится в той же папке")
@@ -278,7 +297,7 @@ def get_narrative_questions(gender, age_group):
                     }
                 }
             ]
-    else:  # Женщины
+    else:  # Женщины - ИСПРАВЛЕННЫЕ ВОПРОСЫ
         if age_group in ["YOUNG", "YOUNG_ADULT"]:
             # Молодые женщины
             return [
@@ -631,6 +650,7 @@ def get_ancient_program_questions(gender):
         ]
         return common + male_specific
     else:
+        # Женщины - ИСПРАВЛЕННЫЕ ВОПРОСЫ (убраны баня/борода/машина)
         female_specific = [
             {  # Вопрос 25. Одежда
                 "text": "Как ты одеваешься летом?",
@@ -1146,7 +1166,7 @@ def get_narrative_from_answers(answers):
     logger.info(f"📊 Нарративы: main={main}, second={second}, third={third}, scores={dict(scores)}")
     
     return main, second, third
-    
+
 def get_ancient_program(answers):
     """Определяет доминирующую древнюю программу (F1-F6)"""
     scores = {"F1": 0, "F2": 0, "F3": 0, "F4": 0, "F5": 0, "F6": 0}
@@ -1176,7 +1196,7 @@ def get_level(data, narrative):
     """Определяет уровень (1-6) на основе ресурсов"""
     base = 3
     
-    # Бонусы
+    # Бонусы - ИСПРАВЛЕНО: убраны несуществующие переменные
     if data.get('money', 0) > 7:
         base += 1
         logger.info(f"💰 Бонус за деньги: {data.get('money')} -> +1")
@@ -1201,29 +1221,8 @@ def get_level(data, narrative):
         base -= 1
         logger.info(f"⚠️ Штраф за здоровье: {data.get('health')} -> -1")
     
-    gender = data.get('gender', 'М')
-    if gender == 'Ж':
-        # Женские бонусы
-        if data.get('breast', 0) > 7:
-            base += 1
-            logger.info(f"💃 Бонус за грудь: {data.get('breast')} -> +1")
-        if data.get('relationships', 0) > 7:
-            base += 1
-            logger.info(f"❤️ Бонус за отношения: {data.get('relationships')} -> +1")
-        if data.get('sex_work', 0) > 2:
-            base += 1
-            logger.info(f"💋 Бонус за опыт: {data.get('sex_work')} -> +1")
-    else:
-        # Мужские бонусы
-        if data.get('strength', 0) > 7:
-            base += 1
-            logger.info(f"💪 Бонус за силу: {data.get('strength')} -> +1")
-        if data.get('testosterone', 0) > 7:
-            base += 1
-            logger.info(f"🧔 Бонус за тестостерон: {data.get('testosterone')} -> +1")
-        if data.get('car', 0) > 3:
-            base += 1
-            logger.info(f"🚗 Бонус за машину: {data.get('car')} -> +1")
+    # Убраны гендерно-специфичные бонусы, так как они нигде не собираются
+    # Это и была причина проблем с женскими профилями
     
     level = max(1, min(6, base))
     logger.info(f"📊 Итоговый уровень: {level}")
@@ -1804,7 +1803,9 @@ async def show_results(callback: types.CallbackQuery, state: FSMContext):
             hypothesis = {
                 "narrative": narrative,
                 "program": program,
-                "level": level
+                "level": level,
+                "second": second,
+                "third": third
             }
             await show_fortune(callback.from_user.id, state, hypothesis)
     else:
@@ -2027,6 +2028,7 @@ async def main():
     print("="*50)
     print("🚀 Бот запущен и готов к работе...\n")
     print("📝 Логирование включено (уровень DEBUG)")
+    print("📁 Лог сохраняется в bot_debug.log")
     print("="*50 + "\n")
     
     await dp.start_polling(bot)
