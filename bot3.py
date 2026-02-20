@@ -35,6 +35,18 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Добавьте после импортов для проверки загрузки интерпретаций
+try:
+    from interpretations import get_interpretation, NARRATIVE_NAMES, MALE_STRATEGIES
+    logger.info(f"✅ Модуль интерпретаций загружен успешно")
+    logger.info(f"📊 Доступно стратегий: {len(MALE_STRATEGIES)}")
+    # Проверим несколько ключей для примера
+    sample_keys = list(MALE_STRATEGIES.keys())[:3]
+    logger.info(f"📝 Примеры ключей: {sample_keys}")
+except Exception as e:
+    logger.error(f"❌ Ошибка загрузки интерпретаций: {e}")
+    logger.error("Убедитесь, что файл interpretations.py находится в той же папке")
+
 # Инициализация бота
 bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.MARKDOWN))
 storage = MemoryStorage()
