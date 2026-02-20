@@ -935,16 +935,44 @@ def get_male_interpretation(narrative, level, program, second_narrative=None, th
 
 def get_interpretation(gender, narrative, level, age, program, second_narrative=None, third_narrative=None):
     """
-    Универсальная функция для совместимости с bot3.py
+    Универсальная функция для получения интерпретации с учётом пола
     """
-    return get_male_interpretation(
-        narrative=narrative,
-        level=level,
-        program=program,
-        second_narrative=second_narrative,
-        third_narrative=third_narrative
-    )
+    # Формируем ключ
+    if second_narrative and third_narrative:
+        key = f"{narrative}-{second_narrative}-{third_narrative}_{level}_{program}"
+    elif second_narrative:
+        key = f"{narrative}-{second_narrative}_{level}_{program}"
+    else:
+        key = f"{narrative}_{level}_{program}"
+    
+    # Выбираем словарь по полу
+    if gender == "Ж":
+        from female_interpretations import FEMALE_STRATEGIES
+        strategies = FEMALE_STRATEGIES
+    else:
+        strategies = MALE_STRATEGIES
+    
+    # Ищем стратегию
+    strategy = strategies.get(key)
+    
+    if strategy:
+        return strategy
+    else:
+        logger.warning(f"⚠️ Стратегия не найдена: {key} для пола {gender}")
+        # Заглушка с учётом пола
+        if gender == "Ж":
+            return {
+                "детство": "Твоя уникальность не вписывается в шаблоны. Ты сама создаёшь свой путь.",
+                "идентичность": "Ты — та, кто ищет себя за пределами готовых решений.",
+                "окружение": "Твой мир — там, где ты сама."
+            }
+        else:
+            return {
+                "детство": "Твоя уникальность не вписывается в шаблоны. Ты сам создаёшь свой путь.",
+                "идентичность": "Ты — тот, кто ищет себя за пределами готовых решений.",
+                "окружение": "Твой мир — там, где ты сам."
+            }
 
 # ==================== ЭКСПОРТ ====================
 
-__all__ = ['NARRATIVE_NAMES', 'get_male_interpretation', 'get_interpretation', 'MALE_STRATEGIES']
+__all__ = ['NARRATIVE_NAMES', 'get_interpretation', 'MALE_STRATEGIES']
