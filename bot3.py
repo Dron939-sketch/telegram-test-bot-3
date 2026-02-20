@@ -1103,26 +1103,29 @@ def get_narrative_from_answers(answers):
     # ОТЛАДКА: посмотрим, какие ключи есть в answers
     logger.info(f"📋 Все ключи answers: {list(answers.keys())}")
     
-    # Собираем все narrative из ответов (только первые 8 вопросов)
+    # Собираем все narrative из ответов
     narrative_keys = [k for k in answers.keys() if k.startswith('narrative_')]
     logger.info(f"🔑 Найдены narrative ключи: {narrative_keys}")
     
-    for i in range(8):  # Только 8 нарративных вопросов (индексы 0-7)
+    for i in range(8):  # Только 8 нарративных вопросов
         key = f'narrative_{i}'
         if key in answers:
             narr = answers[key]
-            if narr in scores:
+            # Проверяем, что нарратив не None и не пустой
+            if narr and narr in scores:
                 scores[narr] += 1
                 logger.info(f"✅ {key} = {narr}")
             else:
-                logger.warning(f"⚠️ Неизвестный нарратив: {narr}")
+                logger.warning(f"⚠️ Неверное значение нарратива: {narr}")
         else:
             logger.warning(f"❌ Отсутствует {key}")
     
-    # Если нет данных - дефолт
+    # Если нет данных - используем дефолтный на основе пола
     if sum(scores.values()) == 0:
-        logger.warning("⚠️ Нет нарративных ответов, использую СБ")
-        return "СБ", None, None
+        gender = answers.get('gender', 'М')
+        logger.warning(f"⚠️ Нет нарративных ответов, использую дефолт для пола {gender}")
+        # Для мужчин чаще СБ, для женщин чаще ЧВ
+        return ("СБ" if gender == "М" else "ЧВ"), None, None
     
     # Сортируем
     sorted_narr = sorted(scores.items(), key=lambda x: x[1], reverse=True)
@@ -1134,7 +1137,6 @@ def get_narrative_from_answers(answers):
     logger.info(f"📊 Нарративы: main={main}, second={second}, third={third}, scores={dict(scores)}")
     
     return main, second, third
-
 def get_ancient_program(answers):
     """Определяет доминирующую древнюю программу (F1-F6)"""
     scores = {"F1": 0, "F2": 0, "F3": 0, "F4": 0, "F5": 0, "F6": 0}
