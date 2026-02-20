@@ -28,7 +28,10 @@ if not BOT_TOKEN:
     raise ValueError("❌ Токен не найден! Загляни в переменные окружения...")
 
 # Настройка логирования
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
 logger = logging.getLogger(__name__)
 
 # Инициализация бота
@@ -659,6 +662,8 @@ def get_verification_questions(hypothesis):
     narrative = hypothesis["narrative"]
     program = hypothesis["program"]
     
+    logger.info(f"🔍 Получаем верификационные вопросы для {narrative}+{program}")
+    
     # База верификационных вопросов для разных комбинаций
     verification_db = {
         # ===== СБ + F1 (Силовой мир + Бей) =====
@@ -784,9 +789,12 @@ def get_verification_questions(hypothesis):
     # Ищем точное совпадение
     key = (narrative, program)
     if key in verification_db:
-        return verification_db[key]
+        questions = verification_db[key]
+        logger.info(f"✅ Найдены специализированные вопросы ({len(questions)} шт.)")
+        return questions
     
     # Если нет точного, возвращаем универсальные вопросы
+    logger.info(f"⚠️ Спецвопросы не найдены, использую универсальные")
     return [
         {
             "text": "Как ты обычно реагируешь на неожиданности?",
@@ -824,6 +832,7 @@ def get_narrative_from_answers(answers):
     
     # Если нет данных - дефолт
     if sum(scores.values()) == 0:
+        logger.warning("⚠️ Нет нарративных ответов, использую СБ")
         return "СБ", None, None
     
     # Сортируем
@@ -853,6 +862,7 @@ def get_ancient_program(answers):
     
     # Если нет данных - дефолт
     if sum(scores.values()) == 0:
+        logger.warning("⚠️ Нет данных о древних программах, использую F3")
         return "F3"
     
     return max(scores.items(), key=lambda x: x[1])[0]
@@ -864,40 +874,55 @@ def get_level(data, narrative):
     # Бонусы
     if data.get('money', 0) > 7:
         base += 1
+        logger.info(f"💰 Бонус за деньги: {data.get('money')} -> +1")
     if data.get('housing', 0) > 7:
         base += 1
+        logger.info(f"🏠 Бонус за жильё: {data.get('housing')} -> +1")
     if data.get('education', 0) > 8:
         base += 1
+        logger.info(f"🎓 Бонус за образование: {data.get('education')} -> +1")
     if data.get('looks', 0) > 8:
         base += 1
+        logger.info(f"👀 Бонус за внешность: {data.get('looks')} -> +1")
     if data.get('friends', 0) > 7:
         base += 1
+        logger.info(f"👥 Бонус за друзей: {data.get('friends')} -> +1")
     
     # Штрафы
     if data.get('money', 5) < 3:
         base -= 1
+        logger.info(f"⚠️ Штраф за низкие деньги: {data.get('money')} -> -1")
     if data.get('health', 5) < 3:
         base -= 1
+        logger.info(f"⚠️ Штраф за здоровье: {data.get('health')} -> -1")
     
     gender = data.get('gender', 'М')
     if gender == 'Ж':
-        # Женские бонусы (будут собираться из вопросов)
+        # Женские бонусы
         if data.get('breast', 0) > 7:
             base += 1
+            logger.info(f"💃 Бонус за грудь: {data.get('breast')} -> +1")
         if data.get('relationships', 0) > 7:
             base += 1
+            logger.info(f"❤️ Бонус за отношения: {data.get('relationships')} -> +1")
         if data.get('sex_work', 0) > 2:
             base += 1
+            logger.info(f"💋 Бонус за опыт: {data.get('sex_work')} -> +1")
     else:
         # Мужские бонусы
         if data.get('strength', 0) > 7:
             base += 1
+            logger.info(f"💪 Бонус за силу: {data.get('strength')} -> +1")
         if data.get('testosterone', 0) > 7:
             base += 1
+            logger.info(f"🧔 Бонус за тестостерон: {data.get('testosterone')} -> +1")
         if data.get('car', 0) > 3:
             base += 1
+            logger.info(f"🚗 Бонус за машину: {data.get('car')} -> +1")
     
-    return max(1, min(6, base))
+    level = max(1, min(6, base))
+    logger.info(f"📊 Итоговый уровень: {level}")
+    return level
 
 def get_role_name(narrative, level, gender):
     """Название роли (для заголовка)"""
@@ -921,7 +946,10 @@ def verify_hypothesis(verification_answers, hypothesis):
     Возвращает (успех, новая_гипотеза)
     """
     if not verification_answers:
+        logger.info("❌ Нет ответов для верификации")
         return False, hypothesis
+    
+    logger.info(f"🔍 Проверка гипотезы {hypothesis} с ответами {verification_answers}")
     
     # Считаем подтверждения
     confirm_count = 0
@@ -936,25 +964,32 @@ def verify_hypothesis(verification_answers, hypothesis):
                 # Проверяем совпадение с гипотезой
                 if narr == hypothesis["narrative"] and prog == hypothesis["program"]:
                     confirm_count += 1
+                    logger.info(f"✅ Ответ {answer} подтверждает гипотезу")
                 else:
                     # Учитываем альтернативы
                     if narr in alternative_scores:
                         alternative_scores[narr] += 1
                     if prog in alternative_scores:
                         alternative_scores[prog] += 1
+                    logger.info(f"🔄 Ответ {answer} указывает на {narr}+{prog}")
         else:
             # Простой формат
             if answer == hypothesis["narrative"] or answer == hypothesis["program"]:
                 confirm_count += 1
+                logger.info(f"✅ Ответ {answer} подтверждает гипотезу")
             else:
                 if answer in alternative_scores:
                     alternative_scores[answer] += 1
+                    logger.info(f"🔄 Ответ {answer} указывает на {answer}")
     
     # Если большинство подтверждает - успех
     if confirm_count >= len(verification_answers) / 2:
+        logger.info(f"🎉 Гипотеза подтверждена ({confirm_count}/{len(verification_answers)})")
         return True, hypothesis
     
     # Находим альтернативы
+    logger.info(f"📊 Альтернативные оценки: {alternative_scores}")
+    
     narr_options = [(k, v) for k, v in alternative_scores.items() if k in ["СБ","ТФ","УБ","ЧВ"] and v > 0]
     prog_options = [(k, v) for k, v in alternative_scores.items() if k in ["F1","F2","F3","F4","F5","F6"] and v > 0]
     
@@ -1197,12 +1232,20 @@ async def ask_verification_question(user_id, state: FSMContext):
     v_index = data.get('verification_index', 0)
     v_questions = data.get('verification_questions', [])
     
-    if not v_questions or v_index >= len(v_questions):
-        # Верификация завершена
+    logger.info(f"❓ Верификация: индекс={v_index}, всего вопросов={len(v_questions)}")
+    
+    if not v_questions:
+        logger.error("❌ Список верификационных вопросов пуст!")
+        await finish_verification(user_id, state)
+        return
+    
+    if v_index >= len(v_questions):
+        logger.info("✅ Все верификационные вопросы заданы")
         await finish_verification(user_id, state)
         return
     
     q = v_questions[v_index]
+    logger.info(f"📝 Задаю вопрос {v_index+1}: {q['text']}")
     
     last_id = data.get('last_message_id')
     if last_id:
@@ -1240,14 +1283,17 @@ async def finish_verification(user_id, state: FSMContext):
     verification_answers = data.get('verification_answers', [])
     round_num = data.get('verification_round', 1)
     
+    logger.info(f"🏁 Завершение верификации, круг {round_num}, ответов: {len(verification_answers)}")
+    
     # Проверяем гипотезу
     success, new_hypothesis = verify_hypothesis(verification_answers, hypothesis)
     
     if success or round_num >= 2:
-        # Гипотеза подтверждена или закончились попытки
+        logger.info(f"🎉 Финальная гипотеза: {new_hypothesis}")
         await show_fortune(user_id, state, new_hypothesis)
     else:
         # Новый круг верификации
+        logger.info(f"🔄 Новый круг верификации с гипотезой {new_hypothesis}")
         new_questions = get_verification_questions(new_hypothesis)
         await state.update_data(
             hypothesis=new_hypothesis,
@@ -1275,6 +1321,7 @@ async def process_gender(callback: types.CallbackQuery, state: FSMContext):
     await callback.answer()
     
     gender = callback.data.split('_')[1]
+    logger.info(f"👤 Выбран пол: {gender}")
     
     data = await state.get_data()
     answers = data.get('answers', {})
@@ -1298,6 +1345,8 @@ async def process_age(callback: types.CallbackQuery, state: FSMContext):
     
     age_key = callback.data.split('_')[1]
     age_data = AGE_QUESTION["options"][age_key]["scores"]
+    
+    logger.info(f"📅 Выбран возраст: {age_data['age']} лет")
     
     data = await state.get_data()
     answers = data.get('answers', {})
@@ -1323,6 +1372,8 @@ async def process_answer(callback: types.CallbackQuery, state: FSMContext):
     parts = callback.data.split('_')
     idx = int(parts[1])
     key = parts[2]
+    
+    logger.info(f"📝 Получен ответ на вопрос {idx+1}, вариант {key}")
     
     data = await state.get_data()
     answers = data.get('answers', {})
@@ -1360,10 +1411,13 @@ async def process_answer(callback: types.CallbackQuery, state: FSMContext):
     # Сохраняем ответ
     if prefix == "narrative":
         answers[f'narrative_{idx-2}'] = score_value
+        logger.info(f"  → Сохранено narrative_{idx-2} = {score_value}")
     elif prefix == "res":
         answers[score_key] = int(score_value) if score_value.isdigit() else score_value
+        logger.info(f"  → Сохранено {score_key} = {answers[score_key]}")
     elif prefix == "ancient":
         answers[f'ancient_{idx-20}'] = score_value
+        logger.info(f"  → Сохранено ancient_{idx-20} = {score_value}")
     
     await state.update_data(answers=answers)
     
@@ -1375,7 +1429,7 @@ async def process_answer(callback: types.CallbackQuery, state: FSMContext):
     
     # Проверяем, все ли вопросы заданы
     if idx + 1 >= 27:
-        # Все основные вопросы отвечены - переходим к верификации
+        logger.info("✅ Все 27 вопросов отвечены, переходим к верификации")
         await start_verification(callback.from_user.id, state)
     else:
         await ask_question(callback.from_user.id, idx + 1, state)
@@ -1388,6 +1442,8 @@ async def process_verification(callback: types.CallbackQuery, state: FSMContext)
     parts = callback.data.split('_')
     v_idx = int(parts[1])
     score = parts[3]
+    
+    logger.info(f"✅ Получен верификационный ответ: {score}")
     
     data = await state.get_data()
     verification_answers = data.get('verification_answers', [])
@@ -1407,6 +1463,7 @@ async def process_verification(callback: types.CallbackQuery, state: FSMContext)
 @dp.callback_query(lambda c: c.data == "restart")
 async def restart(callback: types.CallbackQuery, state: FSMContext):
     """Перезапуск"""
+    logger.info("🔄 Перезапуск теста")
     await callback.answer()
     await state.clear()
     await cmd_start(callback.message, state)
@@ -1459,6 +1516,24 @@ async def start_verification(user_id, state: FSMContext):
     # Получаем верификационные вопросы
     v_questions = get_verification_questions(hypothesis)
     
+    # Проверяем, что вопросы не пустые
+    if not v_questions:
+        logger.error("❌ КРИТИЧЕСКАЯ ОШИБКА: Нет верификационных вопросов!")
+        # Используем заглушку
+        v_questions = [
+            {
+                "text": "Как ты обычно реагируешь на неожиданности?",
+                "options": {
+                    "1": {"text": "Сразу действую", "scores": {"verify": "F1"}},
+                    "2": {"text": "Стараюсь уйти", "scores": {"verify": "F2"}},
+                    "3": {"text": "Замираю", "scores": {"verify": "F3"}},
+                    "4": {"text": "Не замечаю", "scores": {"verify": "F4"}}
+                }
+            }
+        ]
+    
+    logger.info(f"📋 Получено {len(v_questions)} верификационных вопросов")
+    
     await state.update_data(
         hypothesis=hypothesis,
         verification_round=1,
@@ -1510,14 +1585,14 @@ async def show_fortune(user_id, state: FSMContext, hypothesis):
     
     # Получаем интерпретацию
     interpretation = get_interpretation(
-    gender=gender, 
-    narrative=narrative, 
-    level=level, 
-    age=age,
-    program=program,
-    second_narrative=second, 
-    third_narrative=third
-)
+        gender=gender, 
+        narrative=narrative, 
+        level=level, 
+        age=age,
+        program=program,
+        second_narrative=second, 
+        third_narrative=third
+    )
     
     # Формируем заголовок
     season = get_life_season(age)
@@ -1583,6 +1658,13 @@ async def show_fortune(user_id, state: FSMContext, hypothesis):
 
 async def main():
     """Запуск бота"""
+    # Сбрасываем вебхук перед запуском (на всякий случай)
+    try:
+        await bot.delete_webhook(drop_pending_updates=True)
+        logger.info("✅ Вебхук сброшен")
+    except Exception as e:
+        logger.warning(f"⚠️ Не удалось сбросить вебхук: {e}")
+    
     print("\n" + "="*50)
     print("🔮 ТАЙНЫЙ ШЁПОТ v3.0")
     print("="*50)
