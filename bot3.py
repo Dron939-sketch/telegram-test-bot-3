@@ -1131,12 +1131,22 @@ def get_narrative_from_answers(answers):
     sorted_narr = sorted(scores.items(), key=lambda x: x[1], reverse=True)
     
     main = sorted_narr[0][0]
-    second = sorted_narr[1][0] if len(sorted_narr) > 1 and sorted_narr[1][1] > 2 else None
-    third = sorted_narr[2][0] if len(sorted_narr) > 2 and sorted_narr[2][1] > 1 else None
+    # Исправление: проверяем на None и используем правильные условия
+    second = None
+    third = None
+    
+    if len(sorted_narr) > 1:
+        if sorted_narr[1][1] > 0:  # Если второй нарратив имеет хоть какие-то очки
+            second = sorted_narr[1][0]
+    
+    if len(sorted_narr) > 2:
+        if sorted_narr[2][1] > 0:  # Если третий нарратив имеет хоть какие-то очки
+            third = sorted_narr[2][0]
     
     logger.info(f"📊 Нарративы: main={main}, second={second}, third={third}, scores={dict(scores)}")
     
     return main, second, third
+    
 def get_ancient_program(answers):
     """Определяет доминирующую древнюю программу (F1-F6)"""
     scores = {"F1": 0, "F2": 0, "F3": 0, "F4": 0, "F5": 0, "F6": 0}
