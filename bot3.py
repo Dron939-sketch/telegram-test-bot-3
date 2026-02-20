@@ -1921,33 +1921,20 @@ async def show_fortune(user_id, state: FSMContext, hypothesis):
     
     # Проверяем тип полученных данных и форматируем
     if isinstance(interpretation_data, dict):
-        # Извлекаем данные из словаря
-        role_text = interpretation_data.get("роль", role)
-        diagnosis = interpretation_data.get("диагноз", "")
-        portrait = interpretation_data.get("портрет", [])
-        why = interpretation_data.get("почему_так", "")
-        what_next = interpretation_data.get("что_дальше", "")
+        # Извлекаем данные из словаря (новая структура)
+        detstvo = interpretation_data.get("детство", "")
+        identichnost = interpretation_data.get("идентичность", "")
+        okruzhenie = interpretation_data.get("окружение", "")
         
-        # Форматируем портрет
-        portrait_text = ""
-        if portrait and isinstance(portrait, list):
-            portrait_text = "\n".join([f"• {line}" for line in portrait])
-        else:
-            portrait_text = "• Твоя уникальность не описывается словами"
-        
-        # Формируем интерпретацию
-        interpretation = f"""*{role_text}*
+        # Формируем интерпретацию в новом формате
+        interpretation = f"""*🌱 Как ты стал таким:*
+{detstvo}
 
-*Диагноз:* {diagnosis}
+*🎭 Кто ты есть на самом деле:*
+{identichnost}
 
-*Портрет:*
-{portrait_text}
-
-*Почему так вышло:*
-{why}
-
-*Что дальше:*
-{what_next}"""
+*🏠 Где и с кем ты живёшь:*
+{okruzhenie}"""
     else:
         # Если вернулась строка (старая версия или ошибка)
         interpretation = str(interpretation_data)
