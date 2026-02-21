@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
 """
-🔮 ТАЙНЫЙ ШЁПОТ: Виртуальная гадалка v3.1
-С верификационным блоком для подтверждения гипотез
-Полная версия с поддержкой 168 стратегий
-ИСПРАВЛЕННАЯ ВЕРСИЯ с корректными женскими вопросами и логированием
+🔮 ТАЙНЫЙ ШЁПОТ: Виртуальная гадалка v4.0
+С интегрированным научно-обоснованным MBTI тестом
+Полная версия с поддержкой 168 стратегий и MBTI
 """
 
 import os
@@ -21,6 +20,7 @@ from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from interpretations import get_interpretation, NARRATIVE_NAMES
+from mbti_questions import get_mbti_questions, MBTI_SCALE, calculate_mbti_type, get_mbti_interpretation
 
 # Загружаем токен
 load_dotenv()
@@ -81,12 +81,17 @@ class UserState(StatesGroup):
     gender = State()                # Пол пользователя
     age_group = State()             # Возрастная группа
     
-    # Этап верификации
+    # Этап верификации (для классического режима)
     hypothesis = State()            # Текущая гипотеза {нарратив, программа, уровень}
     verification_round = State()    # Номер попытки верификации
     verification_questions = State() # Список верификационных вопросов
     verification_index = State()     # Индекс текущего верификационного вопроса
     verification_answers = State()   # Ответы на верификацию
+    
+    # Режим тестирования
+    test_mode = State()              # Режим теста: "original" или "mbti"
+    mbti_questions = State()         # Список вопросов MBTI
+    mbti_total = State()             # Общее количество MBTI вопросов
 
 # ==================== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ====================
 
@@ -297,7 +302,7 @@ def get_narrative_questions(gender, age_group):
                     }
                 }
             ]
-    else:  # Женщины - ИСПРАВЛЕННЫЕ ВОПРОСЫ
+    else:  # Женщины
         if age_group in ["YOUNG", "YOUNG_ADULT"]:
             # Молодые женщины
             return [
@@ -650,7 +655,7 @@ def get_ancient_program_questions(gender):
         ]
         return common + male_specific
     else:
-        # Женщины - ИСПРАВЛЕННЫЕ ВОПРОСЫ (убраны баня/борода/машина)
+        # Женщины
         female_specific = [
             {  # Вопрос 25. Одежда
                 "text": "Как ты одеваешься летом?",
@@ -1196,7 +1201,7 @@ def get_level(data, narrative):
     """Определяет уровень (1-6) на основе ресурсов"""
     base = 3
     
-    # Бонусы - ИСПРАВЛЕНО: убраны несуществующие переменные
+    # Бонусы
     if data.get('money', 0) > 7:
         base += 1
         logger.info(f"💰 Бонус за деньги: {data.get('money')} -> +1")
@@ -1220,9 +1225,6 @@ def get_level(data, narrative):
     if data.get('health', 5) < 3:
         base -= 1
         logger.info(f"⚠️ Штраф за здоровье: {data.get('health')} -> -1")
-    
-    # Убраны гендерно-специфичные бонусы, так как они нигде не собираются
-    # Это и была причина проблем с женскими профилями
     
     level = max(1, min(6, base))
     logger.info(f"📊 Итоговый уровень: {level}")
@@ -1338,7 +1340,7 @@ async def cmd_start(message: types.Message, state: FSMContext):
         await message.answer(welcome_back, reply_markup=builder.as_markup())
         return
     
-    # Новый пользователь
+    # Новый пользователь - выбор режима
     user_name = message.from_user.first_name or "путник"
     mystic = get_mystic_symbol()
     
@@ -1346,18 +1348,15 @@ async def cmd_start(message: types.Message, state: FSMContext):
         f"{mystic} *Тайный шёпот* {mystic}\n\n"
         f"Здравствуй, {user_name}...\n\n"
         f"{get_separator()}\n\n"
-        f"Я вижу твою душу сквозь время. Хочешь узнать, что скрыто от глаз?\n\n"
-        f"За несколько вопросов я расскажу:\n"
-        f"• 👶 *О том, что сформировало тебя*\n"
-        f"• 🔍 *Кто ты есть на самом деле*\n"
-        f"• 🔥 *О твоих тайных желаниях*\n"
-        f"• ⏳ *Что ждёт тебя впереди*\n\n"
-        f"{get_separator()}\n\n"
-        f"*Готов заглянуть за завесу?*"
+        f"Я вижу твою душу сквозь время. Выбери, что хочешь узнать:\n\n"
+        f"🔮 *Классическое гадание* — 27 вопросов о твоей судьбе\n"
+        f"🧠 *MBTI тест* — 81 вопрос о твоём психологическом типе\n\n"
+        f"{get_separator()}"
     )
     
     builder = InlineKeyboardBuilder()
-    builder.button(text="🔮 Начать", callback_data="start_test")
+    builder.button(text="🔮 Классическое гадание", callback_data="mode_original")
+    builder.button(text="🧠 MBTI тест (81 вопрос)", callback_data="mode_mbti")
     builder.button(text="❓ Что это?", callback_data="why_details")
     builder.adjust(1)
     
@@ -1376,42 +1375,66 @@ async def why_details(callback: types.CallbackQuery):
         f"• 🧠 Как ты мыслишь\n"
         f"• 💓 Чего ты хочешь\n"
         f"• 🚀 Куда тебе двигаться\n\n"
+        f"MBTI тест основан на научных психометрических методах и включает 81 вопрос.\n\n"
         f"{get_separator()}\n\n"
         f"*Готов?*"
     )
     
     builder = InlineKeyboardBuilder()
-    builder.button(text="🔮 Да", callback_data="start_test")
+    builder.button(text="🔮 Начать", callback_data="mode_original")
+    builder.button(text="🧠 MBTI", callback_data="mode_mbti")
     builder.adjust(1)
     
     await callback.message.edit_text(explanation, reply_markup=builder.as_markup())
 
-@dp.callback_query(lambda c: c.data == "start_test")
-async def start_test(callback: types.CallbackQuery, state: FSMContext):
-    """Начало теста"""
+@dp.callback_query(lambda c: c.data.startswith('mode_'))
+async def process_mode(callback: types.CallbackQuery, state: FSMContext):
+    """Обработка выбора режима"""
     await callback.answer()
+    
+    mode = callback.data.split('_')[1]
+    logger.info(f"🎮 Выбран режим: {mode}")
     
     # Очищаем состояние
     await state.clear()
     await state.update_data(
         answers={}, 
         last_message_id=None,
-        verification_round=0,
-        verification_answers=[]
+        test_mode=mode
     )
-    await state.set_state(UserState.question_index)
     
-    # Вступление
-    mystic = get_mystic_symbol()
-    await callback.message.edit_text(
-        f"{mystic} *Сосредоточься...*\n\n"
-        f"Я задам несколько вопросов. Отвечай честно.\n\n"
-        f"*Первый вопрос...*"
-    )
-    await asyncio.sleep(2)
-    
-    # Вопрос о поле
-    await ask_gender_question(callback.from_user.id, state)
+    if mode == "mbti":
+        # Загружаем вопросы MBTI
+        mbti_questions = get_mbti_questions("М")  # пол определим позже
+        await state.update_data(
+            mbti_questions=mbti_questions,
+            mbti_total=len(mbti_questions)
+        )
+        await state.set_state(UserState.question_index)
+        
+        # Вступление для MBTI
+        mystic = get_mystic_symbol()
+        await callback.message.edit_text(
+            f"{mystic} *Сосредоточься...*\n\n"
+            f"Я задам 81 вопрос о твоём характере.\n"
+            f"Отвечай честно, выбирая по шкале от 1 до 5.\n\n"
+            f"*Первый вопрос...*"
+        )
+        await asyncio.sleep(2)
+        
+        # Вопрос о поле
+        await ask_gender_question(callback.from_user.id, state)
+    else:
+        # Оригинальный режим
+        await state.set_state(UserState.question_index)
+        mystic = get_mystic_symbol()
+        await callback.message.edit_text(
+            f"{mystic} *Сосредоточься...*\n\n"
+            f"Я задам несколько вопросов. Отвечай честно.\n\n"
+            f"*Первый вопрос...*"
+        )
+        await asyncio.sleep(2)
+        await ask_gender_question(callback.from_user.id, state)
 
 async def ask_gender_question(user_id, state: FSMContext):
     """Вопрос о поле"""
@@ -1431,7 +1454,7 @@ async def ask_gender_question(user_id, state: FSMContext):
     
     sent = await bot.send_message(
         user_id,
-        f"{get_mystic_symbol()} *Вопрос 1/27*\n\n"
+        f"{get_mystic_symbol()} *Вопрос 1/2*\n\n"
         f"*{GENDER_QUESTION['text']}*",
         reply_markup=builder.as_markup()
     )
@@ -1441,6 +1464,8 @@ async def ask_gender_question(user_id, state: FSMContext):
 async def ask_age_question(user_id, state: FSMContext):
     """Вопрос о возрасте"""
     data = await state.get_data()
+    test_mode = data.get('test_mode', 'original')
+    total_questions = 2 if test_mode == "mbti" else 27
     
     last_id = data.get('last_message_id')
     if last_id:
@@ -1456,7 +1481,7 @@ async def ask_age_question(user_id, state: FSMContext):
     
     sent = await bot.send_message(
         user_id,
-        f"{get_mystic_symbol()} *Вопрос 2/27*\n\n"
+        f"{get_mystic_symbol()} *Вопрос 2/{total_questions}*\n\n"
         f"*{AGE_QUESTION['text']}*",
         reply_markup=builder.as_markup()
     )
@@ -1469,6 +1494,7 @@ async def ask_question(user_id, index, state: FSMContext):
     answers = data.get('answers', {})
     gender = answers.get('gender', 'М')
     age_group = answers.get('age_group', 'ADULT')
+    test_mode = data.get('test_mode', 'original')
     
     last_id = data.get('last_message_id')
     if last_id:
@@ -1477,62 +1503,405 @@ async def ask_question(user_id, index, state: FSMContext):
         except:
             pass
     
-    total_questions = 27
-    logger.info(f"📌 Задаём вопрос с индексом {index} (номер {index+1}/{total_questions})")
+    if test_mode == "mbti":
+        # MBTI режим
+        mbti_questions = data.get('mbti_questions', [])
+        total = data.get('mbti_total', 81)
+        
+        # Индекс 0-1 это пол и возраст, затем MBTI вопросы с индекса 2
+        if index < 2:
+            # Вопросы 0-1 уже обработаны отдельно
+            logger.error(f"❌ Неожиданный вызов ask_question для индекса {index}")
+            return
+        
+        mbti_idx = index - 2
+        if mbti_idx >= len(mbti_questions):
+            logger.error(f"❌ Индекс MBTI {mbti_idx} вне диапазона")
+            await show_mbti_result(user_id, state)  # Переходим к результату
+            return
+        
+        q = mbti_questions[mbti_idx]
+        progress = "█" * int((mbti_idx + 1) / total * 10) + "░" * (10 - int((mbti_idx + 1) / total * 10))
+        
+        # Для MBTI используем шкалу 1-5
+        builder = InlineKeyboardBuilder()
+        for key, scale in MBTI_SCALE.items():
+            callback_data = f"mbti_{index}_{key}"
+            builder.button(text=scale["text"], callback_data=callback_data)
+        builder.adjust(1)
+        
+        sent = await bot.send_message(
+            user_id,
+            f"{get_mystic_symbol()} *MBTI • Вопрос {mbti_idx+1}/{total}*\n"
+            f"`{progress}`\n\n"
+            f"*{q['text']}*\n\n"
+            f"Оцени по шкале от 1 до 5:",
+            reply_markup=builder.as_markup()
+        )
+        
+        await state.update_data(last_message_id=sent.message_id)
+        
+    else:
+        # Оригинальный режим
+        total_questions = 27
+        
+        # Определяем блок
+        if index < 2:
+            # Вопросы 0-1 уже обработаны отдельно
+            logger.error(f"❌ Неожиданный вызов ask_question для индекса {index}")
+            return
+        elif index < 10:  # 8 нарративных (2-9)
+            narrative_q_idx = index - 2
+            questions = get_narrative_questions(gender, age_group)
+            q = questions[narrative_q_idx]
+            block = "ПЕРВЫЙ КРУГ"
+            q_num = index + 1
+            prefix = "narrative"
+        elif index < 20:  # 10 ресурсных (10-19)
+            res_q_idx = index - 10
+            q = COMMON_RESOURCES_QUESTIONS[res_q_idx]
+            block = "ВТОРОЙ КРУГ"
+            q_num = index + 1
+            prefix = "res"
+        else:  # 7 древних программ (20-26)
+            ancient_q_idx = index - 20
+            questions = get_ancient_program_questions(gender)
+            q = questions[ancient_q_idx]
+            block = "ТРЕТИЙ КРУГ"
+            q_num = index + 1
+            prefix = "ancient"
+        
+        progress = "█" * int((index + 1) / total_questions * 10) + "░" * (10 - int((index + 1) / total_questions * 10))
+        
+        builder = InlineKeyboardBuilder()
+        for key, option in q["options"].items():
+            # Для каждого вопроса сохраняем с правильным префиксом
+            score_key = list(option["scores"].keys())[0]
+            score_value = option["scores"][score_key]
+            callback_data = f"ans_{index}_{key}_{prefix}_{score_key}_{score_value}"
+            # Обрезаем если слишком длинный (макс 64 символа)
+            if len(callback_data) > 64:
+                # Используем сокращенный формат
+                callback_data = f"ans_{index}_{key}"
+            builder.button(text=option["text"], callback_data=callback_data)
+        builder.adjust(1)
+        
+        sent = await bot.send_message(
+            user_id,
+            f"{get_mystic_symbol()} *{block} • Вопрос {q_num}/{total_questions}*\n"
+            f"`{progress}`\n\n"
+            f"*{q['text']}*",
+            reply_markup=builder.as_markup()
+        )
+        
+        await state.update_data(last_message_id=sent.message_id)
+
+@dp.callback_query(lambda c: c.data.startswith('gender_'))
+async def process_gender(callback: types.CallbackQuery, state: FSMContext):
+    """Обработка пола"""
+    await callback.answer()
     
-    # Определяем блок
-    if index < 2:
-        # Вопросы 0-1 уже обработаны отдельно
-        logger.error(f"❌ Неожиданный вызов ask_question для индекса {index}")
+    gender = callback.data.split('_')[1]
+    logger.info(f"👤 Выбран пол: {gender}")
+    
+    data = await state.get_data()
+    answers = data.get('answers', {})
+    answers['gender'] = gender
+    
+    await state.update_data(answers=answers)
+    
+    # Удаляем сообщение
+    try:
+        await bot.delete_message(callback.from_user.id, callback.message.message_id)
+    except:
+        pass
+    
+    # Следующий вопрос - возраст
+    await ask_age_question(callback.from_user.id, state)
+
+@dp.callback_query(lambda c: c.data.startswith('age_'))
+async def process_age(callback: types.CallbackQuery, state: FSMContext):
+    """Обработка возраста"""
+    await callback.answer()
+    
+    age_key = callback.data.split('_')[1]
+    age_data = AGE_QUESTION["options"][age_key]["scores"]
+    
+    logger.info(f"📅 Выбран возраст: {age_data['age']} лет")
+    
+    data = await state.get_data()
+    answers = data.get('answers', {})
+    answers['age'] = age_data['age']
+    answers['age_group'] = age_data['age_group']
+    
+    await state.update_data(answers=answers)
+    
+    # Удаляем сообщение
+    try:
+        await bot.delete_message(callback.from_user.id, callback.message.message_id)
+    except:
+        pass
+    
+    # Переходим к следующему вопросу (индекс 2)
+    await ask_question(callback.from_user.id, 2, state)
+
+@dp.callback_query(lambda c: c.data.startswith('ans_'))
+async def process_answer(callback: types.CallbackQuery, state: FSMContext):
+    """Обработка обычных ответов (оригинальный режим)"""
+    await callback.answer()
+    
+    parts = callback.data.split('_')
+    idx = int(parts[1])
+    key = parts[2]
+    
+    logger.info(f"📝 Получен ответ на вопрос с индексом {idx} (номер {idx+1}), вариант {key}")
+    
+    data = await state.get_data()
+    test_mode = data.get('test_mode', 'original')
+    
+    if test_mode != "original":
+        # Если это не оригинальный режим, игнорируем
         return
-    elif index < 10:  # 8 нарративных (2-9)
-        narrative_q_idx = index - 2
-        questions = get_narrative_questions(gender, age_group)
-        q = questions[narrative_q_idx]
-        block = "ПЕРВЫЙ КРУГ"
-        q_num = index + 1
-        prefix = "narrative"
-        logger.info(f"📖 Нарративный вопрос {narrative_q_idx+1}/8")
-    elif index < 20:  # 10 ресурсных (10-19)
-        res_q_idx = index - 10
-        q = COMMON_RESOURCES_QUESTIONS[res_q_idx]
-        block = "ВТОРОЙ КРУГ"
-        q_num = index + 1
-        prefix = "res"
-        logger.info(f"💰 Ресурсный вопрос {res_q_idx+1}/10")
-    else:  # 7 древних программ (20-26)
-        ancient_q_idx = index - 20
-        questions = get_ancient_program_questions(gender)
-        q = questions[ancient_q_idx]
-        block = "ТРЕТИЙ КРУГ"
-        q_num = index + 1
-        prefix = "ancient"
-        logger.info(f"⚔️ Древняя программа {ancient_q_idx+1}/7")
     
-    progress = "█" * int((index + 1) / total_questions * 10) + "░" * (10 - int((index + 1) / total_questions * 10))
+    answers = data.get('answers', {})
+    gender = answers.get('gender', 'М')
+    age_group = answers.get('age_group', 'ADULT')
     
-    builder = InlineKeyboardBuilder()
-    for key, option in q["options"].items():
-        # Для каждого вопроса сохраняем с правильным префиксом
-        score_key = list(option["scores"].keys())[0]
-        score_value = option["scores"][score_key]
-        callback_data = f"ans_{index}_{key}_{prefix}_{score_key}_{score_value}"
-        # Обрезаем если слишком длинный (макс 64 символа)
-        if len(callback_data) > 64:
-            # Используем сокращенный формат
-            callback_data = f"ans_{index}_{key}"
-        builder.button(text=option["text"], callback_data=callback_data)
-    builder.adjust(1)
+    # Если есть дополнительные данные в callback
+    if len(parts) > 5:
+        prefix = parts[3]
+        score_key = parts[4]
+        score_value = parts[5]
+        logger.info(f"  → Из callback: prefix={prefix}, {score_key}={score_value}")
+    else:
+        # Если нет, определяем из контекста
+        if idx < 10:  # нарративные
+            questions = get_narrative_questions(gender, age_group)
+            q_idx = idx - 2
+            q = questions[q_idx]
+            score_key = list(q["options"][key]["scores"].keys())[0]
+            score_value = q["options"][key]["scores"][score_key]
+            prefix = "narrative"
+        elif idx < 20:  # ресурсные
+            q_idx = idx - 10
+            q = COMMON_RESOURCES_QUESTIONS[q_idx]
+            score_key = list(q["options"][key]["scores"].keys())[0]
+            score_value = q["options"][key]["scores"][score_key]
+            prefix = "res"
+        else:  # древние программы
+            questions = get_ancient_program_questions(gender)
+            q_idx = idx - 20
+            q = questions[q_idx]
+            score_key = list(q["options"][key]["scores"].keys())[0]
+            score_value = q["options"][key]["scores"][score_key]
+            prefix = "ancient"
     
-    sent = await bot.send_message(
-        user_id,
-        f"{get_mystic_symbol()} *{block} • Вопрос {q_num}/{total_questions}*\n"
-        f"`{progress}`\n\n"
-        f"*{q['text']}*",
-        reply_markup=builder.as_markup()
+    # Сохраняем ответ
+    if prefix == "narrative":
+        # Для нарративных сохраняем с индексом от 0 до 7
+        narr_idx = idx - 2
+        answers[f'narrative_{narr_idx}'] = score_value
+    elif prefix == "res":
+        answers[score_key] = int(score_value) if str(score_value).isdigit() else score_value
+    elif prefix == "ancient":
+        ancient_idx = idx - 20
+        answers[f'ancient_{ancient_idx}'] = score_value
+    
+    await state.update_data(answers=answers)
+    
+    # Удаляем сообщение
+    try:
+        await bot.delete_message(callback.from_user.id, callback.message.message_id)
+    except:
+        pass
+    
+    # Проверяем, все ли вопросы заданы (индексы 0-26, всего 27 вопросов)
+    if idx + 1 >= 27:  # idx это индекс от 0 до 26, idx+1 это номер от 1 до 27
+        logger.info(f"✅ Все 27 вопросов отвечены (последний индекс {idx})")
+        await start_verification(callback.from_user.id, state)
+    else:
+        await ask_question(callback.from_user.id, idx + 1, state)
+
+@dp.callback_query(lambda c: c.data.startswith('mbti_'))
+async def process_mbti_answer(callback: types.CallbackQuery, state: FSMContext):
+    """Обработка MBTI ответов"""
+    await callback.answer()
+    
+    parts = callback.data.split('_')
+    idx = int(parts[1])
+    value = int(parts[2])
+    
+    logger.info(f"📝 Получен MBTI ответ на вопрос с индексом {idx}, значение {value}")
+    
+    data = await state.get_data()
+    answers = data.get('answers', {})
+    
+    # Сохраняем ответ (индекс вопроса MBTI = idx - 2, так как idx=2 это первый MBTI вопрос)
+    mbti_idx = idx - 2
+    answers[f'mbti_{mbti_idx}'] = value
+    await state.update_data(answers=answers)
+    
+    # Удаляем сообщение
+    try:
+        await bot.delete_message(callback.from_user.id, callback.message.message_id)
+    except:
+        pass
+    
+    # Проверяем, все ли вопросы заданы
+    mbti_total = data.get('mbti_total', 81)
+    if mbti_idx + 1 >= mbti_total:  # Все MBTI вопросы отвечены
+        logger.info(f"✅ Все MBTI вопросы отвечены (последний индекс {mbti_idx})")
+        await show_mbti_result(callback.from_user.id, state)
+    else:
+        await ask_question(callback.from_user.id, idx + 1, state)
+
+@dp.callback_query(lambda c: c.data.startswith('verif_'))
+async def process_verification(callback: types.CallbackQuery, state: FSMContext):
+    """Обработка верификационных ответов"""
+    await callback.answer()
+    
+    parts = callback.data.split('_')
+    v_idx = int(parts[1])
+    score = parts[3]
+    
+    logger.info(f"✅ Получен верификационный ответ: {score}")
+    
+    data = await state.get_data()
+    verification_answers = data.get('verification_answers', [])
+    verification_answers.append(score)
+    
+    await state.update_data(verification_answers=verification_answers)
+    
+    # Удаляем сообщение
+    try:
+        await bot.delete_message(callback.from_user.id, callback.message.message_id)
+    except:
+        pass
+    
+    # Следующий верификационный вопрос или завершение
+    await ask_verification_question(callback.from_user.id, state)
+
+@dp.callback_query(lambda c: c.data == "restart")
+async def restart(callback: types.CallbackQuery, state: FSMContext):
+    """Перезапуск"""
+    logger.info("🔄 Перезапуск теста")
+    await callback.answer()
+    await state.clear()
+    await cmd_start(callback.message, state)
+
+@dp.callback_query(lambda c: c.data == "show_results")
+async def show_results(callback: types.CallbackQuery, state: FSMContext):
+    """Показать результаты (если есть)"""
+    await callback.answer()
+    data = await state.get_data()
+    test_mode = data.get('test_mode', 'original')
+    
+    if data.get('answers'):
+        if test_mode == "mbti":
+            # Показываем MBTI результаты
+            await show_mbti_result(callback.from_user.id, state)
+        else:
+            # Оригинальные результаты
+            hypothesis = data.get('hypothesis')
+            if hypothesis:
+                await show_fortune(callback.from_user.id, state, hypothesis)
+            else:
+                # Формируем гипотезу из ответов
+                answers = data.get('answers', {})
+                narrative, second, third = get_narrative_from_answers(answers)
+                program = get_ancient_program(answers)
+                level = get_level(answers, narrative)
+                hypothesis = {
+                    "narrative": narrative,
+                    "program": program,
+                    "level": level,
+                    "second": second,
+                    "third": third
+                }
+                await show_fortune(callback.from_user.id, state, hypothesis)
+    else:
+        await callback.message.answer("❌ Нет сохранённых результатов. Начни сначала /start")
+
+async def start_verification(user_id, state: FSMContext):
+    """Начинает верификацию после основных вопросов"""
+    data = await state.get_data()
+    answers = data.get('answers', {})
+    
+    # ОТЛАДКА: посмотрим все ответы
+    logger.info("📊 ВСЕ ОТВЕТЫ:")
+    for key, value in answers.items():
+        logger.info(f"  {key}: {value}")
+    
+    # Формируем гипотезу
+    narrative, second, third = get_narrative_from_answers(answers)
+    program = get_ancient_program(answers)
+    level = get_level(answers, narrative)
+    
+    # Если нарратив не определился, используем дефолт
+    if not narrative:
+        logger.error("❌ Нарратив не определен! Использую СБ")
+        narrative = "СБ"
+        program = "F3"
+        level = 3
+    
+    hypothesis = {
+        "narrative": narrative,
+        "program": program,
+        "level": level,
+        "second": second,
+        "third": third
+    }
+    
+    logger.info(f"🔍 ГИПОТЕЗА: {hypothesis}")
+    
+    # Получаем верификационные вопросы
+    v_questions = get_verification_questions(hypothesis)
+    
+    # Проверяем, что вопросы не пустые
+    if not v_questions:
+        logger.error("❌ Нет верификационных вопросов! Использую заглушку")
+        v_questions = [
+            {
+                "text": "Как ты обычно реагируешь на неожиданности?",
+                "options": {
+                    "1": {"text": "Сразу действую", "scores": {"verify": "F1"}},
+                    "2": {"text": "Стараюсь уйти", "scores": {"verify": "F2"}},
+                    "3": {"text": "Замираю", "scores": {"verify": "F3"}},
+                    "4": {"text": "Не замечаю", "scores": {"verify": "F4"}}
+                }
+            },
+            {
+                "text": "Что для тебя важнее?",
+                "options": {
+                    "1": {"text": "Власть", "scores": {"verify": "СБ"}},
+                    "2": {"text": "Деньги", "scores": {"verify": "ТФ"}},
+                    "3": {"text": "Знания", "scores": {"verify": "УБ"}},
+                    "4": {"text": "Отношения", "scores": {"verify": "ЧВ"}}
+                }
+            }
+        ]
+    
+    logger.info(f"📋 Получено {len(v_questions)} верификационных вопросов")
+    
+    await state.update_data(
+        hypothesis=hypothesis,
+        verification_round=1,
+        verification_index=0,
+        verification_answers=[],
+        verification_questions=v_questions
     )
     
-    await state.update_data(last_message_id=sent.message_id)
+    # Сообщаем о переходе к верификации
+    mystic = get_mystic_symbol()
+    await bot.send_message(
+        user_id,
+        f"{mystic} *Я почти вижу твою суть...*\n\n"
+        f"Осталось уточнить несколько деталей."
+    )
+    await asyncio.sleep(2)
+    
+    # Начинаем верификацию
+    await ask_verification_question(user_id, state)
 
 async def ask_verification_question(user_id, state: FSMContext):
     """Задаёт верификационный вопрос"""
@@ -1624,276 +1993,8 @@ async def finish_verification(user_id, state: FSMContext):
         # Начинаем новый круг
         await ask_verification_question(user_id, state)
 
-@dp.callback_query(lambda c: c.data.startswith('gender_'))
-async def process_gender(callback: types.CallbackQuery, state: FSMContext):
-    """Обработка пола"""
-    await callback.answer()
-    
-    gender = callback.data.split('_')[1]
-    logger.info(f"👤 Выбран пол: {gender}")
-    
-    data = await state.get_data()
-    answers = data.get('answers', {})
-    answers['gender'] = gender
-    
-    await state.update_data(answers=answers)
-    
-    # Удаляем сообщение
-    try:
-        await bot.delete_message(callback.from_user.id, callback.message.message_id)
-    except:
-        pass
-    
-    # Следующий вопрос - возраст
-    await ask_age_question(callback.from_user.id, state)
-
-@dp.callback_query(lambda c: c.data.startswith('age_'))
-async def process_age(callback: types.CallbackQuery, state: FSMContext):
-    """Обработка возраста"""
-    await callback.answer()
-    
-    age_key = callback.data.split('_')[1]
-    age_data = AGE_QUESTION["options"][age_key]["scores"]
-    
-    logger.info(f"📅 Выбран возраст: {age_data['age']} лет")
-    
-    data = await state.get_data()
-    answers = data.get('answers', {})
-    answers['age'] = age_data['age']
-    answers['age_group'] = age_data['age_group']
-    
-    await state.update_data(answers=answers)
-    
-    # Удаляем сообщение
-    try:
-        await bot.delete_message(callback.from_user.id, callback.message.message_id)
-    except:
-        pass
-    
-    # Первый нарративный вопрос (индекс 2)
-    await ask_question(callback.from_user.id, 2, state)
-
-@dp.callback_query(lambda c: c.data.startswith('ans_'))
-async def process_answer(callback: types.CallbackQuery, state: FSMContext):
-    """Обработка обычных ответов"""
-    await callback.answer()
-    
-    parts = callback.data.split('_')
-    idx = int(parts[1])
-    key = parts[2]
-    
-    logger.info(f"📝 Получен ответ на вопрос с индексом {idx} (номер {idx+1}), вариант {key}")
-    
-    data = await state.get_data()
-    answers = data.get('answers', {})
-    gender = answers.get('gender', 'М')
-    age_group = answers.get('age_group', 'ADULT')
-    
-    # Если есть дополнительные данные в callback
-    if len(parts) > 5:
-        prefix = parts[3]
-        score_key = parts[4]
-        score_value = parts[5]
-        logger.info(f"  → Из callback: prefix={prefix}, {score_key}={score_value}")
-    else:
-        # Если нет, определяем из контекста
-        if idx < 10:  # нарративные
-            questions = get_narrative_questions(gender, age_group)
-            q_idx = idx - 2
-            q = questions[q_idx]
-            score_key = list(q["options"][key]["scores"].keys())[0]
-            score_value = q["options"][key]["scores"][score_key]
-            prefix = "narrative"
-            logger.info(f"  → Определено: нарративный вопрос {q_idx}")
-        elif idx < 20:  # ресурсные
-            q_idx = idx - 10
-            q = COMMON_RESOURCES_QUESTIONS[q_idx]
-            score_key = list(q["options"][key]["scores"].keys())[0]
-            score_value = q["options"][key]["scores"][score_key]
-            prefix = "res"
-            logger.info(f"  → Определено: ресурсный вопрос {q_idx}")
-        else:  # древние программы
-            questions = get_ancient_program_questions(gender)
-            q_idx = idx - 20
-            q = questions[q_idx]
-            score_key = list(q["options"][key]["scores"].keys())[0]
-            score_value = q["options"][key]["scores"][score_key]
-            prefix = "ancient"
-            logger.info(f"  → Определено: древняя программа {q_idx}")
-    
-    # Сохраняем ответ
-    if prefix == "narrative":
-        # Для нарративных сохраняем с индексом от 0 до 7
-        narr_idx = idx - 2
-        answers[f'narrative_{narr_idx}'] = score_value
-        logger.info(f"  → Сохранено narrative_{narr_idx} = {score_value}")
-    elif prefix == "res":
-        answers[score_key] = int(score_value) if str(score_value).isdigit() else score_value
-        logger.info(f"  → Сохранено {score_key} = {answers[score_key]}")
-    elif prefix == "ancient":
-        ancient_idx = idx - 20
-        answers[f'ancient_{ancient_idx}'] = score_value
-        logger.info(f"  → Сохранено ancient_{ancient_idx} = {score_value}")
-    
-    await state.update_data(answers=answers)
-    
-    # Удаляем сообщение
-    try:
-        await bot.delete_message(callback.from_user.id, callback.message.message_id)
-    except:
-        pass
-    
-    # Проверяем, все ли вопросы заданы (индексы 0-26, всего 27 вопросов)
-    if idx + 1 >= 27:  # idx это индекс от 0 до 26, idx+1 это номер от 1 до 27
-        logger.info(f"✅ Все 27 вопросов отвечены (последний индекс {idx})")
-        await start_verification(callback.from_user.id, state)
-    else:
-        await ask_question(callback.from_user.id, idx + 1, state)
-
-@dp.callback_query(lambda c: c.data.startswith('verif_'))
-async def process_verification(callback: types.CallbackQuery, state: FSMContext):
-    """Обработка верификационных ответов"""
-    await callback.answer()
-    
-    parts = callback.data.split('_')
-    v_idx = int(parts[1])
-    score = parts[3]
-    
-    logger.info(f"✅ Получен верификационный ответ: {score}")
-    
-    data = await state.get_data()
-    verification_answers = data.get('verification_answers', [])
-    verification_answers.append(score)
-    
-    await state.update_data(verification_answers=verification_answers)
-    
-    # Удаляем сообщение
-    try:
-        await bot.delete_message(callback.from_user.id, callback.message.message_id)
-    except:
-        pass
-    
-    # Следующий верификационный вопрос или завершение
-    await ask_verification_question(callback.from_user.id, state)
-
-@dp.callback_query(lambda c: c.data == "restart")
-async def restart(callback: types.CallbackQuery, state: FSMContext):
-    """Перезапуск"""
-    logger.info("🔄 Перезапуск теста")
-    await callback.answer()
-    await state.clear()
-    await cmd_start(callback.message, state)
-
-@dp.callback_query(lambda c: c.data == "show_results")
-async def show_results(callback: types.CallbackQuery, state: FSMContext):
-    """Показать результаты (если есть)"""
-    await callback.answer()
-    data = await state.get_data()
-    if data.get('answers'):
-        # Используем последнюю гипотезу или формируем новую
-        hypothesis = data.get('hypothesis')
-        if hypothesis:
-            await show_fortune(callback.from_user.id, state, hypothesis)
-        else:
-            # Формируем гипотезу из ответов
-            answers = data.get('answers', {})
-            narrative, second, third = get_narrative_from_answers(answers)
-            program = get_ancient_program(answers)
-            level = get_level(answers, narrative)
-            hypothesis = {
-                "narrative": narrative,
-                "program": program,
-                "level": level,
-                "second": second,
-                "third": third
-            }
-            await show_fortune(callback.from_user.id, state, hypothesis)
-    else:
-        await callback.message.answer("❌ Нет сохранённых результатов. Начни сначала /start")
-
-async def start_verification(user_id, state: FSMContext):
-    """Начинает верификацию после основных вопросов"""
-    data = await state.get_data()
-    answers = data.get('answers', {})
-    
-    # ОТЛАДКА: посмотрим все ответы
-    logger.info("📊 ВСЕ ОТВЕТЫ:")
-    for key, value in answers.items():
-        logger.info(f"  {key}: {value}")
-    
-    # Формируем гипотезу
-    narrative, second, third = get_narrative_from_answers(answers)
-    program = get_ancient_program(answers)
-    level = get_level(answers, narrative)
-    
-    # Если нарратив не определился, используем дефолт
-    if not narrative:
-        logger.error("❌ Нарратив не определен! Использую СБ")
-        narrative = "СБ"
-        program = "F3"
-        level = 3
-    
-    hypothesis = {
-        "narrative": narrative,
-        "program": program,
-        "level": level,
-        "second": second,
-        "third": third
-    }
-    
-    logger.info(f"🔍 ГИПОТЕЗА: {hypothesis}")
-    
-    # Получаем верификационные вопросы
-    v_questions = get_verification_questions(hypothesis)
-    
-    # Проверяем, что вопросы не пустые
-    if not v_questions:
-        logger.error("❌ Нет верификационных вопросов! Использую заглушку")
-        v_questions = [
-            {
-                "text": "Как ты обычно реагируешь на неожиданности?",
-                "options": {
-                    "1": {"text": "Сразу действую", "scores": {"verify": "F1"}},
-                    "2": {"text": "Стараюсь уйти", "scores": {"verify": "F2"}},
-                    "3": {"text": "Замираю", "scores": {"verify": "F3"}},
-                    "4": {"text": "Не замечаю", "scores": {"verify": "F4"}}
-                }
-            },
-            {
-                "text": "Что для тебя важнее?",
-                "options": {
-                    "1": {"text": "Власть", "scores": {"verify": "СБ"}},
-                    "2": {"text": "Деньги", "scores": {"verify": "ТФ"}},
-                    "3": {"text": "Знания", "scores": {"verify": "УБ"}},
-                    "4": {"text": "Отношения", "scores": {"verify": "ЧВ"}}
-                }
-            }
-        ]
-    
-    logger.info(f"📋 Получено {len(v_questions)} верификационных вопросов")
-    
-    await state.update_data(
-        hypothesis=hypothesis,
-        verification_round=1,
-        verification_index=0,
-        verification_answers=[],
-        verification_questions=v_questions
-    )
-    
-    # Сообщаем о переходе к верификации
-    mystic = get_mystic_symbol()
-    await bot.send_message(
-        user_id,
-        f"{mystic} *Я почти вижу твою суть...*\n\n"
-        f"Осталось уточнить несколько деталей."
-    )
-    await asyncio.sleep(2)
-    
-    # Начинаем верификацию
-    await ask_verification_question(user_id, state)
-
 async def show_fortune(user_id, state: FSMContext, hypothesis):
-    """Показывает финальный результат"""
+    """Показывает финальный результат для классического режима"""
     data = await state.get_data()
     answers = data.get('answers', {})
     
@@ -2012,6 +2113,81 @@ async def show_fortune(user_id, state: FSMContext, hypothesis):
     
     await state.clear()
 
+async def show_mbti_result(user_id, state: FSMContext):
+    """Показывает MBTI результат"""
+    data = await state.get_data()
+    answers = data.get('answers', {})
+    
+    gender = answers.get('gender', 'М')
+    age = answers.get('age', 30)
+    user = await bot.get_chat(user_id)
+    user_name = user.first_name or "путник"
+    
+    # Удаляем последний вопрос
+    last_id = data.get('last_message_id')
+    if last_id:
+        try:
+            await bot.delete_message(user_id, last_id)
+        except:
+            pass
+    
+    logger.info(f"🔍 Расчёт MBTI для {user_name}")
+    
+    # Рассчитываем MBTI тип
+    mbti_result = calculate_mbti_type(answers)
+    
+    # Получаем интерпретацию
+    interpretation = get_mbti_interpretation(mbti_result, gender, age)
+    
+    # Формируем заголовок
+    season = get_life_season(age)
+    sep = get_separator()
+    mystic = get_mystic_symbol()
+    
+    header = (
+        f"{mystic} *Психологический портрет {user_name}* {mystic}\n\n"
+        f"{sep}\n"
+        f"🌿 {season} — {age} лет\n"
+        f"🧠 Тип: *{mbti_result['type']} — {mbti_result['type_name']}*\n"
+        f"{sep}\n\n"
+    )
+    
+    # Отправляем
+    await bot.send_chat_action(user_id, action="typing")
+    await asyncio.sleep(2)
+    
+    full_text = header + interpretation
+    
+    # Разбиваем на части если длинное сообщение
+    if len(full_text) > 4000:
+        mid = len(full_text) // 2
+        break_point = full_text.rfind('\n', 0, mid)
+        if break_point == -1:
+            break_point = mid
+        
+        part1 = full_text[:break_point]
+        part2 = full_text[break_point:]
+        
+        await bot.send_message(user_id, part1)
+        await asyncio.sleep(1)
+        await bot.send_message(user_id, part2)
+    else:
+        await bot.send_message(user_id, full_text)
+    
+    # Кнопка перезапуска
+    builder = InlineKeyboardBuilder()
+    builder.button(text="🔄 Ещё раз", callback_data="restart")
+    builder.adjust(1)
+    
+    await bot.send_message(
+        user_id,
+        f"{mystic} *Что дальше?* {mystic}\n\n"
+        f"Хочешь заглянуть в судьбу снова?",
+        reply_markup=builder.as_markup()
+    )
+    
+    await state.clear()
+
 # ==================== ЗАПУСК ====================
 
 async def main():
@@ -2024,7 +2200,7 @@ async def main():
         logger.warning(f"⚠️ Не удалось сбросить вебхук: {e}")
     
     print("\n" + "="*50)
-    print("🔮 ТАЙНЫЙ ШЁПОТ v3.1")
+    print("🔮 ТАЙНЫЙ ШЁПОТ v4.0 с MBTI")
     print("="*50)
     print("🚀 Бот запущен и готов к работе...\n")
     print("📝 Логирование включено (уровень DEBUG)")
