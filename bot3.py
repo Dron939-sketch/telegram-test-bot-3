@@ -1543,12 +1543,12 @@ async def process_mode(callback: types.CallbackQuery, state: FSMContext):
             sexual_last_answered=-1,
             sexual_processing=False,
             sexual_scores={
-                "temperament": {"LEADER": 0, "EMOTIONAL": 0, "PARTNER": 0, "EXPLORER": 0},
+                "temperament": {"PREDATOR": 0, "ARTIST": 0, "OBSERVER": 0, "PLAYER": 0},
                 "fetishes": {"SMELL": 0, "MATERIALS": 0, "BODY_PARTS": 0, "SITUATIONS": 0},
                 "formats": {
-                    "MFM": 0, "FMF": 0, "SWING": 0, "BDSM_DOM": 0, "BDSM_SUB": 0,
-                    "BDSM_LIGHT": 0, "ROLES": 0, "RISK": 0, "TOYS": 0, "VIDEO": 0,
-                    "VIRTUAL": 0, "MONO": 0, "TRADITIONAL": 0, "ADAPTIVE": 0, "VOYEURISM": 0
+                    "MHM": 0, "HWH": 0, "SWING": 0, "BDSM_DOM": 0, "BDSM_SUB": 0,
+                    "BDSM_LIGHT": 0, "ROLE_PLAY": 0, "RISK": 0, "TOYS": 0, "VIDEO": 0,
+                    "VIRTUAL": 0, "MONO": 0, "TRADITION": 0, "ADAPT": 0
                 }
             }
         )
@@ -1577,8 +1577,17 @@ async def process_mode(callback: types.CallbackQuery, state: FSMContext):
         )
         await asyncio.sleep(2)
         
-        # 👇 ВЫЗЫВАЕМ ФУНКЦИЮ-ОБЁРТКУ (ВАЖНО!)
-        await sexual_test_start_wrapper(callback, state)
+        # 👇 ИСПРАВЛЕНО: прямой вызов без обёртки
+        logger.info("🎯 Запуск сексуального теста")
+        
+        # Удаляем сообщение "Начинаем..."
+        try:
+            await callback.message.delete()
+        except:
+            pass
+        
+        # Запрашиваем пол и возраст
+        await ask_gender_question(callback.from_user.id, state)
         
     else:
         await callback.message.edit_text(
@@ -1608,6 +1617,31 @@ async def ask_gender_question(user_id, state: FSMContext):
         user_id,
         f"📋 <b>Вопрос 1/2</b>\n\n"
         f"{GENDER_QUESTION['text']}",
+        reply_markup=builder.as_markup()
+    )
+    
+    await state.update_data(last_message_id=sent.message_id)
+
+async def ask_age_question(user_id, state: FSMContext):
+    """Вопрос о возрасте"""
+    data = await state.get_data()
+    
+    last_id = data.get('last_message_id')
+    if last_id:
+        try:
+            await bot.delete_message(user_id, last_id)
+        except:
+            pass
+    
+    builder = InlineKeyboardBuilder()
+    for key, option in AGE_QUESTION["options"].items():
+        builder.button(text=option["text"], callback_data=f"age_{key}")
+    builder.adjust(2)
+    
+    sent = await bot.send_message(
+        user_id,
+        f"📋 <b>Вопрос 2/2</b>\n\n"
+        f"{AGE_QUESTION['text']}",
         reply_markup=builder.as_markup()
     )
     
@@ -1694,13 +1728,13 @@ async def process_age(callback: types.CallbackQuery, state: FSMContext):
         await ask_question(callback.from_user.id, 2, state)
         
     elif test_mode == "sexual":
-        # Сексуальный тест
+        # 👇 ИСПРАВЛЕНО: запускаем первый вопрос сексуального теста
+        logger.info("🎯 Запуск первого вопроса сексуального теста")
         await sexual_ask_question(callback, state)
         
     else:
         # Базовый тест
         await ask_question(callback.from_user.id, 2, state)
-
 async def ask_question(user_id, index, state: FSMContext):
     """Задаёт вопрос для базового или MBTI теста"""
     data = await state.get_data()
@@ -2218,43 +2252,47 @@ async def cmd_help(message: types.Message):
 
 # ==================== ПОДКЛЮЧЕНИЕ ОБРАБОТЧИКОВ СЕКСУАЛЬНОГО ТЕСТА ====================
 
-@dp.callback_query(lambda c: c.data == "sexual_test_start")
-async def sexual_test_start_callback(callback: types.CallbackQuery, state: FSMContext):
-    """Запуск сексуального теста"""
-    logger.info("🎯 Вызван sexual_test_start_callback")
-    try:
-        from sexual_handlers import sexual_test_start
-        await sexual_test_start(callback, state)
-    except Exception as e:
-        logger.error(f"❌ Ошибка: {e}")
-        await callback.message.edit_text("❌ Ошибка запуска теста")
+# ==================== ПОДКЛЮЧЕНИЕ ОБРАБОТЧИКОВ СЕКСУАЛЬНОГО ТЕСТА ====================
 
-@dp.callback_query(lambda c: c.data and c.data.startswith(('sexual_ask', 'sexual_ans', 'sexual_finish', 'sexual_premium')))
-async def sexual_handler_wrapper(callback: types.CallbackQuery, state: FSMContext):
+@dp.callback_query(lambda c: c.data and c.data.startswith('sexual_'))
+async def sexual_handler(callback: types.CallbackQuery, state: FSMContext):
     """Обработчик всех callback'ов сексуального теста"""
+    
+    # Проверяем, что это действительно сексуальный тест
     data = await state.get_data()
     test_mode = data.get('test_mode')
     
-    if test_mode != "sexual":
+    if test_mode != 'sexual':
         return
     
     logger.info(f"🎯 Сексуальный тест: {callback.data}")
     
     try:
         if callback.data.startswith('sexual_ask'):
-            from sexual_handlers import sexual_ask_question
+            # Запрос вопроса (sexual_ask_0)
             await sexual_ask_question(callback, state)
+            
         elif callback.data.startswith('sexual_ans'):
-            from sexual_handlers import sexual_handle_answer
+            # Ответ на вопрос (sexual_ans_0_a)
             await sexual_handle_answer(callback, state)
+            
         elif callback.data == 'sexual_finish':
-            from sexual_handlers import sexual_finish
+            # Завершение теста
             await sexual_finish(callback, state)
+            
         elif callback.data == 'sexual_premium':
-            from sexual_handlers import sexual_premium
+            # Премиум версия
             await sexual_premium(callback, state)
+            
+        elif callback.data == 'sexual_back':
+            # Назад к результатам
+            await sexual_finish(callback, state)
+            
+        else:
+            logger.warning(f"Неизвестный callback: {callback.data}")
+            
     except Exception as e:
-        logger.error(f"❌ Ошибка в sexual_handler_wrapper: {e}")
+        logger.error(f"❌ Ошибка в sexual_handler: {e}", exc_info=True)
         await callback.answer("⚠️ Произошла ошибка", show_alert=True)
 # ==================== ЗАПУСК ====================
 
