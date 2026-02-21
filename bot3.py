@@ -1563,8 +1563,13 @@ async def process_mode(callback: types.CallbackQuery, state: FSMContext):
         )
     
     await asyncio.sleep(2)
-    await ask_gender_question(callback.from_user.id, state)
-
+    
+    # После показа сообщения "Начинаем..." вызываем соответствующий хендлер
+    if mode == "sexual":
+        # Создаём новый callback с данными для sexual_test_start
+        await sexual_test_start(callback, state)
+    else:
+        await ask_gender_question(callback.from_user.id, state)
 async def ask_gender_question(user_id, state: FSMContext):
     """Вопрос о поле"""
     data = await state.get_data()
