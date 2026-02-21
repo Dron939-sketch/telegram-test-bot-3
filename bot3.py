@@ -93,20 +93,6 @@ def get_progress_bar(current, total, length=10):
     filled = int((current / total) * length)
     return "█" * filled + "░" * (length - filled)
 
-async def sexual_test_start_wrapper(callback: types.CallbackQuery, state: FSMContext):
-    """Обёртка для sexual_test_start из aiogram"""
-    from aiogram.types import CallbackQuery
-    
-    # Создаём объект, имитирующий update.callback_query для совместимости
-    class MockUpdate:
-        def __init__(self, callback):
-            self.callback_query = callback
-    
-    mock_update = MockUpdate(callback)
-    
-    # Импортируем функцию
-    from sexual_handlers import sexual_test_start
-    await sexual_test_start(mock_update, state)
 
 # ==================== ВОПРОС 0: ПОЛ ====================
 GENDER_QUESTION = {
@@ -1724,24 +1710,25 @@ async def ask_question(user_id, index, state: FSMContext):
         mbti_questions = data.get('mbti_questions', [])
         total = data.get('mbti_total', 81)
         
-        mbti_idx = index - 2
+        # ИСПРАВЛЕНИЕ: правильный расчёт индекса
+        answered_questions = len([k for k in answers.keys() if k.startswith('mbti_')])
+        current_question = answered_questions
         
-        if mbti_idx < 0 or mbti_idx >= len(mbti_questions):
-            if mbti_idx >= len(mbti_questions):
-                await show_result(user_id, state)
+        if current_question >= len(mbti_questions):
+            await show_result(user_id, state)
             return
         
-        q = mbti_questions[mbti_idx]
-        progress = get_progress_bar(mbti_idx + 1, total)
+        q = mbti_questions[current_question]
+        progress = get_progress_bar(current_question + 1, total)
         
         builder = InlineKeyboardBuilder()
         for key, scale in MBTI_SCALE.items():
-            builder.button(text=scale["text"], callback_data=f"mbti_{index}_{key}")
+            builder.button(text=scale["text"], callback_data=f"mbti_{current_question}_{key}")
         builder.adjust(1)
         
         sent = await bot.send_message(
             user_id,
-            f"📊 <b>Вопрос {mbti_idx+1}/{total}</b>\n"
+            f"📊 <b>Вопрос {current_question+1}/{total}</b>\n"
             f"<code>{progress}</code>\n\n"
             f"{q['text']}",
             reply_markup=builder.as_markup()
@@ -1813,58 +1800,22 @@ async def ask_question(user_id, index, state: FSMContext):
         
         await state.update_data(last_message_id=sent.message_id)
 
-@dp.callback_query(lambda c: c.data.startswith('ans_'))
-async def process_answer(callback: types.CallbackQuery, state: FSMContext):
-    """Обработка ответов базового теста"""
+@dp.callback_query(lambda c: c.data.startswith('mbti_'))
+async def process_mbti_answer(callback: types.CallbackQuery, state: FSMContext):
+    """Обработка MBTI ответов"""
     await callback.answer()
     
     parts = callback.data.split('_')
-    idx = int(parts[1])
-    key = parts[2]
+    # ИСПРАВЛЕНИЕ: правильное извлечение данных
+    q_index = int(parts[1])
+    value = int(parts[2])
     
-    logger.info(f"📝 Получен ответ на вопрос {idx+1}")
+    logger.info(f"📝 Получен MBTI ответ на вопрос {q_index+1}")
     
     data = await state.get_data()
-    if data.get('test_mode') != "original":
-        return
-    
     answers = data.get('answers', {})
-    gender = answers.get('gender', 'М')
-    age_group = answers.get('age_group', 'ADULT')
     
-    if len(parts) > 5:
-        prefix = parts[3]
-        score_key = parts[4]
-        score_value = parts[5]
-    else:
-        if idx < 10:
-            questions = get_narrative_questions(gender, age_group)
-            q_idx = idx - 2
-            q = questions[q_idx]
-            score_key = list(q["options"][key]["scores"].keys())[0]
-            score_value = q["options"][key]["scores"][score_key]
-            prefix = "narrative"
-        elif idx < 20:
-            q_idx = idx - 10
-            q = COMMON_RESOURCES_QUESTIONS[q_idx]
-            score_key = list(q["options"][key]["scores"].keys())[0]
-            score_value = q["options"][key]["scores"][score_key]
-            prefix = "res"
-        else:
-            questions = get_ancient_program_questions(gender)
-            q_idx = idx - 20
-            q = questions[q_idx]
-            score_key = list(q["options"][key]["scores"].keys())[0]
-            score_value = q["options"][key]["scores"][score_key]
-            prefix = "ancient"
-    
-    if prefix == "narrative":
-        answers[f'narrative_{idx-2}'] = score_value
-    elif prefix == "res":
-        answers[score_key] = int(score_value) if str(score_value).isdigit() else score_value
-    elif prefix == "ancient":
-        answers[f'ancient_{idx-20}'] = score_value
-    
+    answers[f'mbti_{q_index}'] = value
     await state.update_data(answers=answers)
     
     try:
@@ -1872,12 +1823,34 @@ async def process_answer(callback: types.CallbackQuery, state: FSMContext):
     except:
         pass
     
-    if idx + 1 >= 27:
-        logger.info(f"✅ Все вопросы отвечены")
-        await start_verification(callback.from_user.id, state)
+    mbti_total = data.get('mbti_total', 81)
+    
+    # ИСПРАВЛЕНИЕ: правильная проверка завершения
+    answered = len([k for k in answers.keys() if k.startswith('mbti_')])
+    
+    if answered >= mbti_total:
+        logger.info(f"✅ Все MBTI вопросы отвечены")
+        await show_result(callback.from_user.id, state)
     else:
-        await ask_question(callback.from_user.id, idx + 1, state)
+        # Передаём следующий индекс
+        await ask_question(callback.from_user.id, answered + 2, state)
 
+@dp.message(Command("debug"))
+async def cmd_debug(message: types.Message, state: FSMContext):
+    """Отладка - показать состояние"""
+    data = await state.get_data()
+    answers = data.get('answers', {})
+    mbti_answers = [k for k in answers.keys() if k.startswith('mbti_')]
+    
+    debug_text = (
+        f"🔍 <b>Отладка</b>\n\n"
+        f"Режим: {data.get('test_mode', 'не задан')}\n"
+        f"Отвечено MBTI: {len(mbti_answers)}/{data.get('mbti_total', 81)}\n"
+        f"Всего ответов: {len(answers)}\n\n"
+        f"Последний ответ: {mbti_answers[-1] if mbti_answers else 'нет'}"
+    )
+    
+    await message.answer(debug_text)
 @dp.callback_query(lambda c: c.data.startswith('mbti_'))
 async def process_mbti_answer(callback: types.CallbackQuery, state: FSMContext):
     """Обработка MBTI ответов"""
@@ -2234,28 +2207,44 @@ async def cmd_help(message: types.Message):
 
 # ==================== ПОДКЛЮЧЕНИЕ ОБРАБОТЧИКОВ СЕКСУАЛЬНОГО ТЕСТА ====================
 
-# Регистрируем callback'и для сексуального теста
 @dp.callback_query(lambda c: c.data == "sexual_test_start")
-async def sexual_test_start_wrapper(callback: types.CallbackQuery, state: FSMContext):
-    await sexual_test_start(callback, state)
+async def sexual_test_start_callback(callback: types.CallbackQuery, state: FSMContext):
+    """Запуск сексуального теста"""
+    logger.info("🎯 Вызван sexual_test_start_callback")
+    try:
+        from sexual_handlers import sexual_test_start
+        await sexual_test_start(callback, state)
+    except Exception as e:
+        logger.error(f"❌ Ошибка: {e}")
+        await callback.message.edit_text("❌ Ошибка запуска теста")
 
-@dp.callback_query(lambda c: c.data.startswith("sexual_") and not c.data.startswith("sexual_test_start"))
+@dp.callback_query(lambda c: c.data and c.data.startswith(('sexual_ask', 'sexual_ans', 'sexual_finish', 'sexual_premium')))
 async def sexual_handler_wrapper(callback: types.CallbackQuery, state: FSMContext):
+    """Обработчик всех callback'ов сексуального теста"""
     data = await state.get_data()
     test_mode = data.get('test_mode')
     
     if test_mode != "sexual":
         return
     
-    if callback.data.startswith("sexual_ask"):
-        await sexual_ask_question(callback, state)
-    elif callback.data.startswith("sexual_ans"):
-        await sexual_handle_answer(callback, state)
-    elif callback.data == "sexual_finish":
-        await sexual_finish(callback, state)
-    elif callback.data == "sexual_premium":
-        await sexual_premium(callback, state)
-
+    logger.info(f"🎯 Сексуальный тест: {callback.data}")
+    
+    try:
+        if callback.data.startswith('sexual_ask'):
+            from sexual_handlers import sexual_ask_question
+            await sexual_ask_question(callback, state)
+        elif callback.data.startswith('sexual_ans'):
+            from sexual_handlers import sexual_handle_answer
+            await sexual_handle_answer(callback, state)
+        elif callback.data == 'sexual_finish':
+            from sexual_handlers import sexual_finish
+            await sexual_finish(callback, state)
+        elif callback.data == 'sexual_premium':
+            from sexual_handlers import sexual_premium
+            await sexual_premium(callback, state)
+    except Exception as e:
+        logger.error(f"❌ Ошибка в sexual_handler_wrapper: {e}")
+        await callback.answer("⚠️ Произошла ошибка", show_alert=True)
 # ==================== ЗАПУСК ====================
 
 async def main():
