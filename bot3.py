@@ -93,6 +93,21 @@ def get_progress_bar(current, total, length=10):
     filled = int((current / total) * length)
     return "█" * filled + "░" * (length - filled)
 
+async def sexual_test_start_wrapper(callback: types.CallbackQuery, state: FSMContext):
+    """Обёртка для sexual_test_start из aiogram"""
+    from aiogram.types import CallbackQuery
+    
+    # Создаём объект, имитирующий update.callback_query для совместимости
+    class MockUpdate:
+        def __init__(self, callback):
+            self.callback_query = callback
+    
+    mock_update = MockUpdate(callback)
+    
+    # Импортируем функцию
+    from sexual_handlers import sexual_test_start
+    await sexual_test_start(mock_update, state)
+
 # ==================== ВОПРОС 0: ПОЛ ====================
 GENDER_QUESTION = {
     "text": "Ваш пол:",
