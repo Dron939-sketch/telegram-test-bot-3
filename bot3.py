@@ -1547,7 +1547,12 @@ async def process_mode(callback: types.CallbackQuery, state: FSMContext):
             sexual_processing=False,
             sexual_scores={
                 "temperament": {"LEADER": 0, "EMOTIONAL": 0, "PARTNER": 0, "EXPLORER": 0},
-                "sensuality": {"SENSORY": 0, "ROMANTIC": 0, "HEDONIST": 0, "INTELLECTUAL": 0}
+                "fetishes": {"SMELL": 0, "MATERIALS": 0, "BODY_PARTS": 0, "SITUATIONS": 0},
+                "formats": {
+                    "MFM": 0, "FMF": 0, "SWING": 0, "BDSM_DOM": 0, "BDSM_SUB": 0,
+                    "BDSM_LIGHT": 0, "ROLES": 0, "RISK": 0, "TOYS": 0, "VIDEO": 0,
+                    "VIRTUAL": 0, "MONO": 0, "TRADITIONAL": 0, "ADAPTIVE": 0, "VOYEURISM": 0
+                }
             }
         )
     
@@ -1563,6 +1568,9 @@ async def process_mode(callback: types.CallbackQuery, state: FSMContext):
             f"5 — 👍 Полностью согласен\n\n"
             f"*Начинаем...*"
         )
+        await asyncio.sleep(2)
+        await ask_gender_question(callback.from_user.id, state)
+        
     elif mode == "sexual":
         await callback.message.edit_text(
             f"💞 <b>Тест: Психология близости</b>\n\n"
@@ -1570,20 +1578,18 @@ async def process_mode(callback: types.CallbackQuery, state: FSMContext):
             f"Отвечайте честно — это поможет лучше понять себя.\n\n"
             f"*Начинаем...*"
         )
+        await asyncio.sleep(2)
+        
+        # 👇 ВЫЗЫВАЕМ ФУНКЦИЮ-ОБЁРТКУ (ВАЖНО!)
+        await sexual_test_start_wrapper(callback, state)
+        
     else:
         await callback.message.edit_text(
             f"🔬 <b>Базовый тест</b>\n\n"
             f"Тест содержит 27 вопросов о ваших предпочтениях, ресурсах и поведении.\n\n"
             f"*Начинаем...*"
         )
-    
-    await asyncio.sleep(2)
-    
-    # После показа сообщения "Начинаем..." вызываем соответствующий хендлер
-    if mode == "sexual":
-        # Создаём новый callback с данными для sexual_test_start
-        await sexual_test_start(callback, state)
-    else:
+        await asyncio.sleep(2)
         await ask_gender_question(callback.from_user.id, state)
 async def ask_gender_question(user_id, state: FSMContext):
     """Вопрос о поле"""
