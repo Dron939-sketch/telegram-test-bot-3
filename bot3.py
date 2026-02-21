@@ -1472,7 +1472,19 @@ async def ask_age_question(user_id, state: FSMContext):
     """Вопрос о возрасте"""
     data = await state.get_data()
     test_mode = data.get('test_mode', 'original')
-    total_questions = 2 if test_mode == "mbti" else 27
+    
+    # Для MBTI после возраста будет 81 вопрос, для базового - 27
+    if test_mode == "mbti":
+        total_questions = 81
+        # Загружаем вопросы MBTI заранее
+        gender = data.get('answers', {}).get('gender', 'М')
+        mbti_questions = get_mbti_questions(gender)
+        await state.update_data(
+            mbti_questions=mbti_questions,
+            mbti_total=len(mbti_questions)
+        )
+    else:
+        total_questions = 27
     
     last_id = data.get('last_message_id')
     if last_id:
@@ -1488,13 +1500,174 @@ async def ask_age_question(user_id, state: FSMContext):
     
     sent = await bot.send_message(
         user_id,
-        f"📋 *Вопрос 2/{total_questions}*\n\n"
+        f"📋 *Вопрос 2/2*\n\n"
         f"*{AGE_QUESTION['text']}*",
         reply_markup=builder.as_markup()
     )
     
     await state.update_data(last_message_id=sent.message_id)
 
+@dp.callback_query(lambda c: c.data.startswith('age_'))
+async def process_age(callback: types.CallbackQuery, state: FSMContext):
+    """Обработка возраста"""
+    await callback.answer()
+    
+    age_key = callback.data.split('_')[1]
+    age_data = AGE_QUESTION["options"][age_key]["scores"]
+    
+    logger.info(f"📅 Возраст: {age_data['age']} лет")
+    
+    data = await state.get_data()
+    answers = data.get('answers', {})
+    answers['age'] = age_data['age']
+    answers['age_group'] = age_data['age_group']
+    
+    await state.update_data(answers=answers)
+    
+    try:
+        await bot.delete_message(callback.from_user.id, callback.message.message_id)
+    except:
+        pass
+    
+    test_mode = data.get('test_mode', 'original')
+    
+    if test_mode == "mbti":
+        # Обновляем вопросы MBTI с учётом пола (если нужно)
+        gender = answers.get('gender', 'М')
+        mbti_questions = get_mbti_questions(gender)
+        await state.update_data(
+            mbti_questions=mbti_questions,
+            mbti_total=len(mbti_questions)
+        )
+        # Начинаем с первого MBTI вопроса (индекс 2)
+        await ask_question(callback.from_user.id, 2, state)
+    else:
+        # Начинаем с первого нарративного вопроса (индекс 2)
+        await ask_question(callback.from_user.id, 2, state)
+
+async def ask_question(user_id, index, state: FSMContext):
+    """Задаёт вопрос в зависимости от режима"""
+    data = await state.get_data()
+    answers = data.get('answers', {})
+    gender = answers.get('gender', 'М')
+    age_group = answers.get('age_group', 'ADULT')
+    test_mode = data.get('test_mode', 'original')
+    
+    last_id = data.get('last_message_id')
+    if last_id:
+        try:
+            await bot.delete_message(user_id, last_id)
+        except:
+            pass
+    
+    if test_mode == "mbti":
+        # MBTI режим
+        mbti_questions = data.get('mbti_questions', [])
+        total = data.get('mbti_total', 81)
+        
+        # Индекс 0-1 это пол и возраст, затем MBTI вопросы с индекса 2
+        mbti_idx = index - 2
+        
+        # Проверяем, что индекс в допустимых пределах
+        if mbti_idx < 0:
+            logger.error(f"❌ Неверный индекс MBTI: {mbti_idx}")
+            return
+            
+        if mbti_idx >= len(mbti_questions):
+            logger.info(f"✅ Все MBTI вопросы отвечены")
+            await show_result(user_id, state)
+            return
+        
+        q = mbti_questions[mbti_idx]
+        progress = get_progress_bar(mbti_idx + 1, total)
+        
+        builder = InlineKeyboardBuilder()
+        for key, scale in MBTI_SCALE.items():
+            callback_data = f"mbti_{index}_{key}"
+            builder.button(text=scale["text"], callback_data=callback_data)
+        builder.adjust(1)
+        
+        sent = await bot.send_message(
+            user_id,
+            f"📊 *Вопрос {mbti_idx+1}/{total}*\n"
+            f"`{progress}`\n\n"
+            f"*{q['text']}*",
+            reply_markup=builder.as_markup()
+        )
+        
+        await state.update_data(last_message_id=sent.message_id)
+        
+    else:
+        # Оригинальный режим
+        total_questions = 27
+        
+        if index < 2:
+            logger.error(f"❌ Неожиданный вызов ask_question для индекса {index}")
+            return
+        elif index < 10:  # 8 нарративных (2-9)
+            narrative_q_idx = index - 2
+            questions = get_narrative_questions(gender, age_group)
+            
+            # Проверяем, что индекс в пределах массива
+            if narrative_q_idx >= len(questions):
+                # Переходим к ресурсным вопросам
+                await ask_question(user_id, 10, state)
+                return
+                
+            q = questions[narrative_q_idx]
+            block = "ОСНОВНОЙ"
+            q_num = index + 1
+            prefix = "narrative"
+        elif index < 20:  # 10 ресурсных (10-19)
+            res_q_idx = index - 10
+            
+            # Проверяем, что индекс в пределах массива
+            if res_q_idx >= len(COMMON_RESOURCES_QUESTIONS):
+                # Переходим к вопросам поведения
+                await ask_question(user_id, 20, state)
+                return
+                
+            q = COMMON_RESOURCES_QUESTIONS[res_q_idx]
+            block = "ДОПОЛНИТЕЛЬНО"
+            q_num = index + 1
+            prefix = "res"
+        else:  # 7 программ (20-26)
+            ancient_q_idx = index - 20
+            questions = get_ancient_program_questions(gender)
+            
+            # Проверяем, что индекс в пределах массива
+            if ancient_q_idx >= len(questions):
+                # Все вопросы отвечены
+                logger.info(f"✅ Все базовые вопросы отвечены")
+                await start_verification(user_id, state)
+                return
+                
+            q = questions[ancient_q_idx]
+            block = "ПОВЕДЕНИЕ"
+            q_num = index + 1
+            prefix = "ancient"
+        
+        progress = get_progress_bar(index + 1, total_questions)
+        
+        builder = InlineKeyboardBuilder()
+        for key, option in q["options"].items():
+            score_key = list(option["scores"].keys())[0]
+            score_value = option["scores"][score_key]
+            callback_data = f"ans_{index}_{key}_{prefix}_{score_key}_{score_value}"
+            if len(callback_data) > 64:
+                callback_data = f"ans_{index}_{key}"
+            builder.button(text=option["text"], callback_data=callback_data[:64])
+        builder.adjust(1)
+        
+        sent = await bot.send_message(
+            user_id,
+            f"🔬 *{block} • Вопрос {q_num}/{total_questions}*\n"
+            f"`{progress}`\n\n"
+            f"*{q['text']}*",
+            reply_markup=builder.as_markup()
+        )
+        
+        await state.update_data(last_message_id=sent.message_id)
 async def ask_question(user_id, index, state: FSMContext):
     """Задаёт вопрос в зависимости от режима"""
     data = await state.get_data()
