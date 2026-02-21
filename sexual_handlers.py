@@ -1,42 +1,54 @@
 """
-Обработчики для сексуального теста
+Обработчики для сексуального теста (aiogram version)
 """
 
 import logging
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import ContextTypes
-
-# 👇 ИСПРАВЛЕНО: Импортируем из sexual_questions, а не из sexual_profile
-from sexual_questions import SEXUAL_QUESTIONS
-from sexual_interpretations import format_sexual_profile
-from utils.helpers import calculate_progress, generate_unique_callback
+from aiogram import types
+from aiogram.fsm.context import FSMContext
+from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 logger = logging.getLogger(__name__)
 
-# Состояния для сексуального теста
-SEXUAL_TEST, SEXUAL_RESULTS = range(50, 52)
+# Импортируем вопросы
+try:
+    from sexual_questions import SEXUAL_QUESTIONS
+    logger.info(f"✅ Загружено {len(SEXUAL_QUESTIONS)} вопросов")
+except Exception as e:
+    logger.error(f"❌ Ошибка загрузки вопросов: {e}")
+    SEXUAL_QUESTIONS = []
 
-async def sexual_test_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+# Импортируем интерпретации
+try:
+    from sexual_interpretations import format_sexual_profile
+    logger.info(f"✅ Загружены интерпретации")
+except Exception as e:
+    logger.error(f"❌ Ошибка загрузки интерпретаций: {e}")
+    
+    def format_sexual_profile(a, b, c):
+        return "Сексуальный профиль временно недоступен"
+
+async def sexual_test_start(callback: types.CallbackQuery, state: FSMContext):
     """Начало сексуального теста"""
-    query = update.callback_query
-    user_id = update.effective_user.id
+    await callback.answer()
     
-    logger.info(f"🔞 sexual_test_start ВЫЗВАН для пользователя {user_id}")
-    
-    await query.answer()
+    user_id = callback.from_user.id
+    logger.info(f"🔞 sexual_test_start для пользователя {user_id}")
     
     # Инициализируем данные для теста
-    context.user_data["sexual_current"] = 0
-    context.user_data["sexual_scores"] = {
-        "temperament": {"PREDATOR": 0, "ARTIST": 0, "OBSERVER": 0, "PLAYER": 0},
-        "fetishes": {"SMELL": 0, "MATERIALS": 0, "BODY_PARTS": 0, "SITUATIONS": 0},
-        "formats": {
-            "MFM": 0, "FMF": 0, "SWING": 0, "BDSM_DOM": 0, "BDSM_SUB": 0,
-            "BDSM_LIGHT": 0, "ROLES": 0, "RISK": 0, "TOYS": 0, "VIDEO": 0,
-            "VIRTUAL": 0, "MONO": 0, "TRADITIONAL": 0, "ADAPTIVE": 0, "VOYEURISM": 0
+    await state.update_data(
+        sexual_current=0,
+        sexual_last_answered=-1,
+        sexual_processing=False,
+        sexual_scores={
+            "temperament": {"PREDATOR": 0, "ARTIST": 0, "OBSERVER": 0, "PLAYER": 0},
+            "fetishes": {"SMELL": 0, "MATERIALS": 0, "BODY_PARTS": 0, "SITUATIONS": 0},
+            "formats": {
+                "MHM": 0, "HWH": 0, "SWING": 0, "BDSM_DOM": 0, "BDSM_SUB": 0,
+                "BDSM_LIGHT": 0, "ROLE_PLAY": 0, "RISK": 0, "TOYS": 0, "VIDEO": 0,
+                "VIRTUAL": 0, "MONO": 0, "TRADITION": 0, "ADAPT": 0
+            }
         }
-    }
-    context.user_data["sexual_last_answered"] = -1
+    )
     
     intro_text = (
         f"🔞 <b>ТЕСТ: СЕКСУАЛЬНЫЙ ПРОФАЙЛ</b>\n\n"
@@ -51,27 +63,36 @@ async def sexual_test_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"<i>Отвечайте честно — это поможет вам лучше понять себя.</i>"
     )
     
-    keyboard = [[InlineKeyboardButton("▶️ Начать тест", callback_data="sexual_start")]]
-    reply_markup = InlineKeyboardMarkup(keyboard)
+    builder = InlineKeyboardBuilder()
+    builder.button(text="▶️ Начать тест", callback_data="sexual_ask_0")
+    builder.adjust(1)
     
-    await query.edit_message_text(intro_text, reply_markup=reply_markup, parse_mode="HTML")
-    return SEXUAL_TEST
+    # Удаляем предыдущее сообщение
+    try:
+        await callback.message.delete()
+    except:
+        pass
+    
+    await callback.message.answer(intro_text, reply_markup=builder.as_markup())
 
-async def sexual_ask_question(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def sexual_ask_question(callback: types.CallbackQuery, state: FSMContext):
     """Задаёт вопрос сексуального теста"""
-    query = update.callback_query
-    user_id = update.effective_user.id
+    await callback.answer()
     
-    current = context.user_data.get("sexual_current", 0)
+    data = await state.get_data()
+    current = data.get('sexual_current', 0)
     
-    logger.info(f"📝 sexual_ask_question для пользователя {user_id}: current={current}")
+    logger.info(f"📝 sexual_ask_question: current={current}")
     
     if current >= len(SEXUAL_QUESTIONS):
-        logger.info(f"🏁 Все вопросы заданы для пользователя {user_id}, завершаем тест")
-        return await sexual_finish(update, context)
+        logger.info(f"🏁 Все вопросы заданы, завершаем тест")
+        await sexual_finish(callback, state)
+        return
     
     question = SEXUAL_QUESTIONS[current]
-    progress = calculate_progress(current + 1, len(SEXUAL_QUESTIONS))
+    
+    # Прогресс-бар
+    progress = get_progress_bar(current + 1, len(SEXUAL_QUESTIONS))
     
     # Определяем блок для отображения
     blocks = {
@@ -79,150 +100,161 @@ async def sexual_ask_question(update: Update, context: ContextTypes.DEFAULT_TYPE
         "fetishes": "ФЕТИШИ",
         "formats": "ФОРМАТЫ"
     }
-    block_name = blocks.get(question["block"], "")
+    block_name = blocks.get(question.get("block", ""), "")
     
     question_text = (
         f"🔞 <b>СЕКСУАЛЬНЫЙ ПРОФАЙЛ: {block_name}</b>\n\n"
-        f"<b>{question['text']}</b>\n\n"
-        f"{progress}"
+        f"<b>Вопрос {current+1}/{len(SEXUAL_QUESTIONS)}</b>\n"
+        f"<code>{progress}</code>\n\n"
+        f"<b>{question['text']}</b>"
     )
     
-    keyboard = []
+    builder = InlineKeyboardBuilder()
     
     for option_id, option in question["options"].items():
-        unique_callback = generate_unique_callback("sexual", user_id, current, option_id)
-        keyboard.append([
-            InlineKeyboardButton(option["text"], callback_data=unique_callback)
-        ])
-    
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    
-    try:
-        if hasattr(query, 'message') and query.message:
-            await query.edit_message_text(
-                question_text, 
-                reply_markup=reply_markup, 
-                parse_mode="HTML"
-            )
-            logger.info(f"✅ Вопрос {current+1}/{len(SEXUAL_QUESTIONS)} отправлен пользователю {user_id}")
-    except Exception as e:
-        logger.error(f"Ошибка при редактировании: {e}")
-        await context.bot.send_message(
-            chat_id=query.message.chat_id,
-            text=question_text,
-            reply_markup=reply_markup,
-            parse_mode="HTML"
+        # callback_data: sexual_ans_0_a
+        builder.button(
+            text=option["text"], 
+            callback_data=f"sexual_ans_{current}_{option_id}"
         )
     
-    return SEXUAL_TEST
+    builder.adjust(1)
+    
+    # Удаляем предыдущее сообщение
+    try:
+        await callback.message.delete()
+    except:
+        pass
+    
+    await callback.message.answer(question_text, reply_markup=builder.as_markup())
 
-async def sexual_handle_answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def sexual_handle_answer(callback: types.CallbackQuery, state: FSMContext):
     """Обработка ответа сексуального теста"""
-    query = update.callback_query
-    user_id = update.effective_user.id
+    await callback.answer()
+    
+    data = await state.get_data()
+    
+    # Проверяем, не обрабатывается ли уже ответ
+    if data.get('sexual_processing', False):
+        logger.debug("Пропускаем повторное нажатие")
+        return
+    
+    await state.update_data(sexual_processing=True)
     
     try:
-        await query.answer()
-    except Exception as e:
-        logger.error(f"Ошибка при answer(): {e}")
-    
-    if context.user_data.get("sexual_processing", False):
-        logger.debug(f"Пользователь {user_id}: пропускаем повторное нажатие")
-        return SEXUAL_TEST
-    
-    context.user_data["sexual_processing"] = True
-    
-    try:
-        parts = query.data.split("_")
+        # Парсим callback_data: sexual_ans_0_a
+        parts = callback.data.split('_')
+        if len(parts) < 4 or parts[0] != "sexual" or parts[1] != "ans":
+            logger.error(f"Неверный формат callback: {callback.data}")
+            return
         
-        if len(parts) < 3 or parts[0] != "sexual":
-            logger.error(f"Неверный формат callback: {query.data}")
-            return SEXUAL_TEST
+        current = int(parts[2])
+        option_id = parts[3]
         
-        current = int(parts[1])
-        option_id = parts[2]
+        logger.info(f"📥 Получен ответ на вопрос {current}, option={option_id}")
         
-        logger.info(f"📥 User {user_id}: получен ответ на вопрос {current}, option={option_id}")
-        
-        last_answered = context.user_data.get("sexual_last_answered", -1)
+        # Проверяем, не отвечали ли уже на этот вопрос
+        last_answered = data.get('sexual_last_answered', -1)
         if current <= last_answered:
             logger.debug(f"Вопрос {current} уже отвечен, пропускаем")
-            return SEXUAL_TEST
+            return
         
         question = SEXUAL_QUESTIONS[current]
         selected_option = question["options"].get(option_id)
         
         if not selected_option:
             logger.error(f"Опция {option_id} не найдена в вопросе {current}")
-            return SEXUAL_TEST
+            return
+        
+        # Получаем текущие баллы
+        scores = data.get('sexual_scores', {
+            "temperament": {"PREDATOR": 0, "ARTIST": 0, "OBSERVER": 0, "PLAYER": 0},
+            "fetishes": {"SMELL": 0, "MATERIALS": 0, "BODY_PARTS": 0, "SITUATIONS": 0},
+            "formats": {
+                "MHM": 0, "HWH": 0, "SWING": 0, "BDSM_DOM": 0, "BDSM_SUB": 0,
+                "BDSM_LIGHT": 0, "ROLE_PLAY": 0, "RISK": 0, "TOYS": 0, "VIDEO": 0,
+                "VIRTUAL": 0, "MONO": 0, "TRADITION": 0, "ADAPT": 0
+            }
+        })
         
         # Добавляем баллы
-        block = question["block"]
-        scores = selected_option.get("scores", {})
+        block = question.get("block", "")
+        option_scores = selected_option.get("scores", {})
         
-        for key, value in scores.items():
-            if key in context.user_data["sexual_scores"][block]:
-                context.user_data["sexual_scores"][block][key] += value
+        for key, value in option_scores.items():
+            if block and key in scores.get(block, {}):
+                scores[block][key] += value
                 logger.info(f"   +{value} к {block}.{key}")
             else:
-                # Проверяем другие блоки (для форматов)
+                # Ищем в других блоках
                 for b in ["temperament", "fetishes", "formats"]:
-                    if key in context.user_data["sexual_scores"][b]:
-                        context.user_data["sexual_scores"][b][key] += value
+                    if key in scores.get(b, {}):
+                        scores[b][key] += value
                         logger.info(f"   +{value} к {b}.{key}")
                         break
         
-        context.user_data["sexual_last_answered"] = current
-        context.user_data["sexual_current"] = current + 1
+        # Обновляем состояние
+        await state.update_data(
+            sexual_scores=scores,
+            sexual_last_answered=current,
+            sexual_current=current + 1,
+            sexual_processing=False
+        )
         
-        return await sexual_ask_question(update, context)
+        # Задаём следующий вопрос
+        await sexual_ask_question(callback, state)
         
     except Exception as e:
-        logger.error(f"❌ Критическая ошибка: {e}", exc_info=True)
-        return await sexual_ask_question(update, context)
-    finally:
-        context.user_data["sexual_processing"] = False
+        logger.error(f"❌ Ошибка: {e}", exc_info=True)
+        await state.update_data(sexual_processing=False)
+        await sexual_ask_question(callback, state)
 
-async def sexual_finish(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def sexual_finish(callback: types.CallbackQuery, state: FSMContext):
     """Завершение сексуального теста - показ результатов"""
-    query = update.callback_query
-    user_id = update.effective_user.id
+    await callback.answer()
     
-    logger.info(f"🎯 sexual_finish вызван для пользователя {user_id}")
+    data = await state.get_data()
+    scores = data.get('sexual_scores', {})
     
-    scores = context.user_data.get("sexual_scores", {})
+    logger.info(f"🎯 sexual_finish: расчёт результатов")
     
     # Форматируем результат
-    result_text = format_sexual_profile(
-        scores["temperament"],
-        scores["fetishes"],
-        scores["formats"]
-    )
+    try:
+        result_text = format_sexual_profile(
+            scores.get("temperament", {}),
+            scores.get("fetishes", {}),
+            scores.get("formats", {})
+        )
+    except Exception as e:
+        logger.error(f"Ошибка форматирования: {e}")
+        result_text = "❌ Ошибка при формировании результатов. Пожалуйста, попробуйте позже."
     
     # Кнопки для дальнейших действий
-    keyboard = [
-        [InlineKeyboardButton("📥 Полный разбор (590₽)", callback_data="sexual_premium")],
-        [InlineKeyboardButton("◀️ В главное меню", callback_data="main_menu")]
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
+    builder = InlineKeyboardBuilder()
+    builder.button(text="📥 Полный разбор (590₽)", callback_data="sexual_premium")
+    builder.button(text="◀️ В главное меню", callback_data="restart")
+    builder.adjust(1)
     
-    # Отправляем результат (может быть длинным, разбиваем если нужно)
+    # Удаляем предыдущее сообщение
+    try:
+        await callback.message.delete()
+    except:
+        pass
+    
+    # Отправляем результат (разбиваем если длинный)
     if len(result_text) > 4000:
         parts = [result_text[i:i+4000] for i in range(0, len(result_text), 4000)]
         for i, part in enumerate(parts):
             if i == len(parts) - 1:
-                await query.message.reply_text(part, parse_mode="HTML", reply_markup=reply_markup)
+                await callback.message.answer(part, reply_markup=builder.as_markup())
             else:
-                await query.message.reply_text(part, parse_mode="HTML")
+                await callback.message.answer(part)
     else:
-        await query.edit_message_text(result_text, parse_mode="HTML", reply_markup=reply_markup)
-    
-    return SEXUAL_RESULTS
+        await callback.message.answer(result_text, reply_markup=builder.as_markup())
 
-async def sexual_premium(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def sexual_premium(callback: types.CallbackQuery, state: FSMContext):
     """Покупка премиум-версии"""
-    query = update.callback_query
-    await query.answer()
+    await callback.answer()
     
     premium_text = """
 <b>🔞 ПОЛНЫЙ РАЗБОР СЕКСУАЛЬНОГО ПРОФАЙЛА</b>
@@ -261,18 +293,24 @@ async def sexual_premium(update: Update, context: ContextTypes.DEFAULT_TYPE):
 💳 <i>Оплата через ЮKassa — безопасно и удобно</i>
     """
     
-    keyboard = [
-        [InlineKeyboardButton("💳 Оплатить 590₽", callback_data="sexual_payment")],
-        [InlineKeyboardButton("◀️ Назад", callback_data="sexual_back")]
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
+    builder = InlineKeyboardBuilder()
+    builder.button(text="💳 Оплатить 590₽", callback_data="sexual_payment")
+    builder.button(text="◀️ Назад", callback_data="sexual_back")
+    builder.adjust(1)
     
-    await query.edit_message_text(premium_text, parse_mode="HTML", reply_markup=reply_markup)
-    return SEXUAL_RESULTS
+    try:
+        await callback.message.edit_text(premium_text, reply_markup=builder.as_markup())
+    except:
+        await callback.message.delete()
+        await callback.message.answer(premium_text, reply_markup=builder.as_markup())
+
+def get_progress_bar(current, total, length=10):
+    """Возвращает прогресс-бар"""
+    filled = int((current / total) * length)
+    return "█" * filled + "░" * (length - filled)
 
 # Экспорт
 __all__ = [
-    'SEXUAL_TEST', 'SEXUAL_RESULTS',
     'sexual_test_start', 'sexual_ask_question',
     'sexual_handle_answer', 'sexual_finish', 'sexual_premium'
 ]
