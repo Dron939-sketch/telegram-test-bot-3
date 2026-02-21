@@ -188,8 +188,9 @@ except Exception as e:
 try:
     from sexual_questions import SEXUAL_QUESTIONS
     from sexual_interpretations import (
-        TEMPERAMENT_TYPES, SENSUALITY_TYPES, 
-        get_temperament_type, get_top_sensuality, format_sexual_profile
+        TEMPERAMENT_TYPES, FETISH_TYPES, FORMATS,
+        get_temperament_type, get_top_fetishes, 
+        get_format_readiness, format_sexual_profile
     )
     from sexual_handlers import (
         sexual_test_start, sexual_ask_question,
@@ -197,22 +198,32 @@ try:
     )
     logger.info(f"✅ Модуль сексуального теста загружен успешно")
     logger.info(f"📊 Загружено {len(SEXUAL_QUESTIONS)} сексуальных вопросов")
+    logger.info(f"📊 Типов темперамента: {len(TEMPERAMENT_TYPES)}")
+    logger.info(f"📊 Типов фетишей: {len(FETISH_TYPES)}")
 except Exception as e:
     logger.error(f"❌ Ошибка загрузки сексуального теста: {e}")
     SEXUAL_QUESTIONS = []
     TEMPERAMENT_TYPES = {}
-    SENSUALITY_TYPES = {}
+    FETISH_TYPES = {}
+    FORMATS = {}
     
-    def get_temperament_type(scores): return "LEADER"
-    def get_top_sensuality(scores): return []
-    def format_sexual_profile(a,b,c): return "Сексуальный профиль временно недоступен"
+    def get_temperament_type(scores): 
+        return {"name": "Не определен", "emoji": "❓", "description": "Временная заглушка"}
+    
+    def get_top_fetishes(scores, top_n=3): 
+        return []
+    
+    def get_format_readiness(scores): 
+        return {"ready": [], "interested": [], "not_interested": []}
+    
+    def format_sexual_profile(a,b,c): 
+        return "Сексуальный профиль временно недоступен"
     
     async def sexual_test_start(*args, **kwargs): pass
     async def sexual_ask_question(*args, **kwargs): pass
     async def sexual_handle_answer(*args, **kwargs): pass
     async def sexual_finish(*args, **kwargs): pass
     async def sexual_premium(*args, **kwargs): pass
-
 # ==================== БЛОК 1: НАРРАТИВ (8 вопросов) ====================
 def get_narrative_questions(gender, age_group):
     """Возвращает вопросы для определения нарратива с учетом пола и возраста"""
