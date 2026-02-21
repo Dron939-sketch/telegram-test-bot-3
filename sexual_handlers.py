@@ -6,7 +6,8 @@ import logging
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 
-from sexual_profile import SEXUAL_QUESTIONS
+# 👇 ИСПРАВЛЕНО: Импортируем из sexual_questions, а не из sexual_profile
+from sexual_questions import SEXUAL_QUESTIONS
 from sexual_interpretations import format_sexual_profile
 from utils.helpers import calculate_progress, generate_unique_callback
 
