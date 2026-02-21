@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 """
-🔮 ТАЙНЫЙ ШЁПОТ: Виртуальная гадалка v4.0
-С интегрированным научно-обоснованным MBTI тестом
-Полная версия с поддержкой 168 стратегий и MBTI
+🧠 ПСИХОЛОГИЧЕСКИЙ ПРОФАЙЛЕР: Научно-обоснованный тест личности
+Версия 4.0 (полная)
 """
 
 import os
@@ -19,28 +18,26 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.utils.keyboard import InlineKeyboardBuilder
-from interpretations import get_interpretation, NARRATIVE_NAMES
-from mbti_questions import get_mbti_questions, MBTI_SCALE, calculate_mbti_type, get_mbti_interpretation
 
 # Загружаем токен
 load_dotenv()
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 
 if not BOT_TOKEN:
-    raise ValueError("❌ Токен не найден! Загляни в переменные окружения...")
+    raise ValueError("❌ Токен не найден! Проверьте файл .env")
 
 # ==================== НАСТРОЙКА ЛОГИРОВАНИЯ ====================
 logging.basicConfig(
-    level=logging.DEBUG,
+    level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler('bot_debug.log', encoding='utf-8'),
+        logging.FileHandler('bot.log', encoding='utf-8'),
         logging.StreamHandler(sys.stdout)
     ]
 )
 logger = logging.getLogger(__name__)
 
-# ==================== ПРОВЕРКА ЗАГРУЗКИ ИНТЕРПРЕТАЦИЙ ====================
+# ==================== ИМПОРТ МОДУЛЕЙ ====================
 try:
     from interpretations import get_interpretation, NARRATIVE_NAMES, MALE_STRATEGIES, FEMALE_STRATEGIES
     logger.info(f"✅ Модуль интерпретаций загружен успешно")
@@ -65,6 +62,34 @@ try:
 except Exception as e:
     logger.error(f"❌ Ошибка загрузки интерпретаций: {e}")
     logger.error("Убедитесь, что файл interpretations.py находится в той же папке")
+    # Создаем заглушки
+    NARRATIVE_NAMES = {"СБ": "Силовой мир", "ТФ": "Мир труда", "УБ": "Мир знаний", "ЧВ": "Мир внимания"}
+    
+    def get_interpretation(gender, narrative, level, age, program, second_narrative, third_narrative):
+        return f"Интерпретация для {narrative} уровня {level}"
+
+try:
+    from mbti_questions import get_mbti_questions, MBTI_SCALE, calculate_mbti_type, get_mbti_interpretation
+    logger.info(f"✅ Модуль MBTI загружен успешно")
+except Exception as e:
+    logger.error(f"❌ Ошибка загрузки MBTI: {e}")
+    # Создаем заглушки
+    MBTI_SCALE = {
+        "1": {"text": "Совершенно не согласен", "value": 1},
+        "2": {"text": "Скорее не согласен", "value": 2},
+        "3": {"text": "Нейтрально", "value": 3},
+        "4": {"text": "Скорее согласен", "value": 4},
+        "5": {"text": "Полностью согласен", "value": 5}
+    }
+    
+    def get_mbti_questions(gender):
+        return []
+    
+    def calculate_mbti_type(answers):
+        return {"type": "ISTJ", "type_name": "Инспектор", "preferences": {"EI": 0, "SN": 0, "TF": 0, "JP": 0}, "validation": {"warnings": []}}
+    
+    def get_mbti_interpretation(mbti_result, gender, age):
+        return "MBTI интерпретация временно недоступна"
 
 # Инициализация бота
 bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.MARKDOWN))
@@ -96,44 +121,42 @@ class UserState(StatesGroup):
 # ==================== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ====================
 
 def get_life_season(age: int) -> str:
-    """Определяет время года жизни по возрасту"""
-    if age < 20: return "весна жизни 🌱"
-    elif age < 30: return "начало лета ☀️"
-    elif age < 40: return "разгар лета 🌻"
-    elif age < 50: return "золотая осень 🍂"
-    elif age < 60: return "бабье лето 🕸️"
-    else: return "зима мудрости ❄️"
+    """Определяет возрастную категорию"""
+    if age < 20: return "юность (до 20 лет)"
+    elif age < 30: return "молодость (20-30 лет)"
+    elif age < 40: return "расцвет (30-40 лет)"
+    elif age < 50: return "зрелость (40-50 лет)"
+    elif age < 60: return "опыт (50-60 лет)"
+    else: return "мудрость (старше 60 лет)"
 
 def get_separator() -> str:
-    """Возвращает красивый разделитель"""
+    """Возвращает разделитель"""
     separators = [
-        "✧═══════════════════════════✧",
-        "🌸─────────────────────────🌸",
-        "🌟═══════════════════════════🌟",
-        "✨ * ✦ * ✦ * ✦ * ✦ * ✦ * ✦ * ✦ * ✦ * ✦ * ✦ * ✦ * ✦ * ✧",
-        "☽═══════════════════════════☾",
+        "════════════════════════════",
+        "────────────────────────────",
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
     ]
     return random.choice(separators)
 
-def get_mystic_symbol() -> str:
-    """Возвращает мистический символ"""
-    symbols = ["🔮", "🕯️", "🌙", "⭐", "🌀", "💫", "✨", "🪷", "🌿", "🦉"]
+def get_symbol() -> str:
+    """Возвращает символ"""
+    symbols = ["🧠", "📊", "📋", "🔬", "📝", "🎯"]
     return random.choice(symbols)
 
 # ==================== ВОПРОС 0: ПОЛ ====================
 GENDER_QUESTION = {
-    "text": "Кем ты приходишь в этот мир?",
+    "text": "Ваш пол:",
     "options": {
-        "М": {"text": "👨 Мужчиной", "scores": {"gender": "М"}},
-        "Ж": {"text": "👩 Женщиной", "scores": {"gender": "Ж"}}
+        "М": {"text": "👨 Мужской", "scores": {"gender": "М"}},
+        "Ж": {"text": "👩 Женский", "scores": {"gender": "Ж"}}
     }
 }
 
 # ==================== ВОПРОС 1: ВОЗРАСТ ====================
 AGE_QUESTION = {
-    "text": "Сколько зим минуло с твоего рождения?",
+    "text": "Ваш возраст:",
     "options": {
-        "1": {"text": "Меньше 20", "scores": {"age": 18, "age_group": "YOUNG"}},
+        "1": {"text": "До 20 лет", "scores": {"age": 18, "age_group": "YOUNG"}},
         "2": {"text": "20-25 лет", "scores": {"age": 22, "age_group": "YOUNG_ADULT"}},
         "3": {"text": "25-30 лет", "scores": {"age": 27, "age_group": "YOUNG_ADULT"}},
         "4": {"text": "30-35 лет", "scores": {"age": 32, "age_group": "ADULT"}},
@@ -141,7 +164,7 @@ AGE_QUESTION = {
         "6": {"text": "40-45 лет", "scores": {"age": 42, "age_group": "MIDDLE"}},
         "7": {"text": "45-50 лет", "scores": {"age": 47, "age_group": "MIDDLE"}},
         "8": {"text": "50-60 лет", "scores": {"age": 55, "age_group": "MATURE"}},
-        "9": {"text": "Больше 60", "scores": {"age": 65, "age_group": "ELDER"}}
+        "9": {"text": "Старше 60 лет", "scores": {"age": 65, "age_group": "ELDER"}}
     }
 }
 
@@ -154,75 +177,75 @@ def get_narrative_questions(gender, age_group):
             # Молодые мужчины
             return [
                 {  # Вопрос 2. Свободное время
-                    "text": "Если выдается свободный вечер, ты скорее...",
+                    "text": "Как вы обычно проводите свободное время?",
                     "options": {
-                        "1": {"text": "В спортзал или поиграть в танчики", "scores": {"narrative": "СБ"}},
-                        "2": {"text": "Что-то починить, смастерить", "scores": {"narrative": "ТФ"}},
-                        "3": {"text": "Зависнуть в ютубе на научпопе", "scores": {"narrative": "УБ"}},
-                        "4": {"text": "Тусоваться с друзьями", "scores": {"narrative": "ЧВ"}}
+                        "1": {"text": "Спорт или компьютерные игры", "scores": {"narrative": "СБ"}},
+                        "2": {"text": "Что-то мастерю/ремонтирую", "scores": {"narrative": "ТФ"}},
+                        "3": {"text": "Смотрю образовательный контент", "scores": {"narrative": "УБ"}},
+                        "4": {"text": "Встречаюсь с друзьями", "scores": {"narrative": "ЧВ"}}
                     }
                 },
                 {  # Вопрос 3. Что ценишь в людях
-                    "text": "Какое качество в человеке для тебя самое важное?",
+                    "text": "Какое качество вы больше всего цените в людях?",
                     "options": {
                         "1": {"text": "Уверенность, характер", "scores": {"narrative": "СБ"}},
-                        "2": {"text": "Надёжность, слово держит", "scores": {"narrative": "ТФ"}},
-                        "3": {"text": "Ум, с ним есть о чём поговорить", "scores": {"narrative": "УБ"}},
-                        "4": {"text": "Лёгкость, чувство юмора", "scores": {"narrative": "ЧВ"}}
+                        "2": {"text": "Надёжность, ответственность", "scores": {"narrative": "ТФ"}},
+                        "3": {"text": "Ум, интеллект", "scores": {"narrative": "УБ"}},
+                        "4": {"text": "Чувство юмора, лёгкость", "scores": {"narrative": "ЧВ"}}
                     }
                 },
                 {  # Вопрос 4. Комплимент
-                    "text": "От какого комплимента ты растаешь?",
+                    "text": "Какой комплимент вам наиболее приятен?",
                     "options": {
-                        "1": {"text": "«Ты крутой, тебя все уважают»", "scores": {"narrative": "СБ"}},
+                        "1": {"text": "«Ты крутой, тебя уважают»", "scores": {"narrative": "СБ"}},
                         "2": {"text": "«На тебя всегда можно положиться»", "scores": {"narrative": "ТФ"}},
                         "3": {"text": "«Ты очень умный»", "scores": {"narrative": "УБ"}},
-                        "4": {"text": "«С тобой так весело»", "scores": {"narrative": "ЧВ"}}
+                        "4": {"text": "«С тобой очень весело»", "scores": {"narrative": "ЧВ"}}
                     }
                 },
                 {  # Вопрос 5. Новая компания
-                    "text": "Попадая в новую компанию, ты...",
+                    "text": "В незнакомой компании вы обычно...",
                     "options": {
-                        "1": {"text": "Присматриваюсь, кто тут главный", "scores": {"narrative": "СБ"}},
+                        "1": {"text": "Присматриваюсь, кто здесь главный", "scores": {"narrative": "СБ"}},
                         "2": {"text": "Ищу, с кем можно поговорить о деле", "scores": {"narrative": "ТФ"}},
-                        "3": {"text": "Слушаю, о чём говорят", "scores": {"narrative": "УБ"}},
-                        "4": {"text": "Со всеми знакомлюсь, шучу", "scores": {"narrative": "ЧВ"}}
+                        "3": {"text": "Слушаю, о чем говорят", "scores": {"narrative": "УБ"}},
+                        "4": {"text": "Легко знакомлюсь со всеми", "scores": {"narrative": "ЧВ"}}
                     }
                 },
                 {  # Вопрос 6. Деньги
-                    "text": "Если бы у тебя была лишняя тысяча, потратил бы на...",
+                    "text": "Если бы у вас появилась свободная тысяча рублей, вы бы потратили на...",
                     "options": {
                         "1": {"text": "Что-то статусное (кроссовки, часы)", "scores": {"narrative": "СБ"}},
-                        "2": {"text": "Инструмент или полезную вещь", "scores": {"narrative": "ТФ"}},
-                        "3": {"text": "Книгу или курс", "scores": {"narrative": "УБ"}},
+                        "2": {"text": "Полезный инструмент или вещь", "scores": {"narrative": "ТФ"}},
+                        "3": {"text": "Книгу или обучающий курс", "scores": {"narrative": "УБ"}},
                         "4": {"text": "Поход с друзьями", "scores": {"narrative": "ЧВ"}}
                     }
                 },
                 {  # Вопрос 7. Что бесит
-                    "text": "Что тебя больше всего бесит в людях?",
+                    "text": "Что вас больше всего раздражает в людях?",
                     "options": {
-                        "1": {"text": "Когда они не знают своего места", "scores": {"narrative": "СБ"}},
-                        "2": {"text": "Когда они халтурят", "scores": {"narrative": "ТФ"}},
-                        "3": {"text": "Когда они тупят", "scores": {"narrative": "УБ"}},
-                        "4": {"text": "Когда они скучные", "scores": {"narrative": "ЧВ"}}
+                        "1": {"text": "Панибратство, неуважение", "scores": {"narrative": "СБ"}},
+                        "2": {"text": "Безответственность, халтура", "scores": {"narrative": "ТФ"}},
+                        "3": {"text": "Глупость, недалёкость", "scores": {"narrative": "УБ"}},
+                        "4": {"text": "Скука, с ними неинтересно", "scores": {"narrative": "ЧВ"}}
                     }
                 },
                 {  # Вопрос 8. Подарок
-                    "text": "Какой подарок тебя порадует больше?",
+                    "text": "Какой подарок вас порадует больше всего?",
                     "options": {
-                        "1": {"text": "Дорогая вещь, статусная", "scores": {"narrative": "СБ"}},
-                        "2": {"text": "Что-то полезное для дела", "scores": {"narrative": "ТФ"}},
+                        "1": {"text": "Дорогая статусная вещь", "scores": {"narrative": "СБ"}},
+                        "2": {"text": "Что-то полезное для дома/работы", "scores": {"narrative": "ТФ"}},
                         "3": {"text": "Интеллектуальная игра, книга", "scores": {"narrative": "УБ"}},
-                        "4": {"text": "Билет на концерт, впечатления", "scores": {"narrative": "ЧВ"}}
+                        "4": {"text": "Впечатление (билет на концерт)", "scores": {"narrative": "ЧВ"}}
                     }
                 },
                 {  # Вопрос 9. Страх
-                    "text": "Чего ты боишься больше всего?",
+                    "text": "Чего вы боитесь больше всего?",
                     "options": {
                         "1": {"text": "Потерять уважение, стать никем", "scores": {"narrative": "СБ"}},
                         "2": {"text": "Остаться без денег, без работы", "scores": {"narrative": "ТФ"}},
                         "3": {"text": "Показаться глупым", "scores": {"narrative": "УБ"}},
-                        "4": {"text": "Стать незаметным, скучным", "scores": {"narrative": "ЧВ"}}
+                        "4": {"text": "Одиночества", "scores": {"narrative": "ЧВ"}}
                     }
                 }
             ]
@@ -230,52 +253,52 @@ def get_narrative_questions(gender, age_group):
             # Зрелые мужчины
             return [
                 {  # Вопрос 2. Свободное время
-                    "text": "Как ты предпочитаешь проводить свободное время?",
+                    "text": "Как вы предпочитаете проводить свободное время?",
                     "options": {
                         "1": {"text": "С друзьями, шашлыки, баня", "scores": {"narrative": "СБ"}},
                         "2": {"text": "Дома, с семьёй, по хозяйству", "scores": {"narrative": "ТФ"}},
                         "3": {"text": "За книгой, познавательное", "scores": {"narrative": "УБ"}},
-                        "4": {"text": "Выезды, путешествия", "scores": {"narrative": "ЧВ"}}
+                        "4": {"text": "Путешествия, выезды на природу", "scores": {"narrative": "ЧВ"}}
                     }
                 },
                 {  # Вопрос 3. Что ценишь в людях
-                    "text": "Что для тебя главное в человеке?",
+                    "text": "Что для вас главное в человеке?",
                     "options": {
-                        "1": {"text": "Характер, стержень", "scores": {"narrative": "СБ"}},
+                        "1": {"text": "Характер, внутренний стержень", "scores": {"narrative": "СБ"}},
                         "2": {"text": "Порядочность, надёжность", "scores": {"narrative": "ТФ"}},
-                        "3": {"text": "Мудрость, опыт", "scores": {"narrative": "УБ"}},
+                        "3": {"text": "Мудрость, жизненный опыт", "scores": {"narrative": "УБ"}},
                         "4": {"text": "Душевность, теплота", "scores": {"narrative": "ЧВ"}}
                     }
                 },
                 {  # Вопрос 4. Комплимент
-                    "text": "Какие слова для тебя самые дорогие?",
+                    "text": "Какие слова для вас самые дорогие?",
                     "options": {
                         "1": {"text": "«Ты добился всего сам»", "scores": {"narrative": "СБ"}},
                         "2": {"text": "«На тебя можно положиться»", "scores": {"narrative": "ТФ"}},
-                        "3": {"text": "«Ты мудрый, с тобой есть о чём поговорить»", "scores": {"narrative": "УБ"}},
+                        "3": {"text": "«С тобой интересно говорить»", "scores": {"narrative": "УБ"}},
                         "4": {"text": "«С тобой хорошо и спокойно»", "scores": {"narrative": "ЧВ"}}
                     }
                 },
                 {  # Вопрос 5. Новая компания
-                    "text": "В незнакомой компании ты...",
+                    "text": "В незнакомой компании вы обычно...",
                     "options": {
                         "1": {"text": "Присматриваюсь, кто здесь главный", "scores": {"narrative": "СБ"}},
                         "2": {"text": "Ищу, с кем можно поговорить по делу", "scores": {"narrative": "ТФ"}},
-                        "3": {"text": "Слушаю, что говорят, вникаю", "scores": {"narrative": "УБ"}},
-                        "4": {"text": "Общаюсь со всеми, мне легко", "scores": {"narrative": "ЧВ"}}
+                        "3": {"text": "Слушаю, вникаю в разговоры", "scores": {"narrative": "УБ"}},
+                        "4": {"text": "Легко общаюсь со всеми", "scores": {"narrative": "ЧВ"}}
                     }
                 },
                 {  # Вопрос 6. Деньги
-                    "text": "На что ты потратишь неожиданную премию?",
+                    "text": "На что вы потратите неожиданную премию?",
                     "options": {
-                        "1": {"text": "На что-то для статуса (часы, машина)", "scores": {"narrative": "СБ"}},
-                        "2": {"text": "Отложу, вложу", "scores": {"narrative": "ТФ"}},
+                        "1": {"text": "На что-то статусное (часы, машина)", "scores": {"narrative": "СБ"}},
+                        "2": {"text": "Отложу, вложу в дело", "scores": {"narrative": "ТФ"}},
                         "3": {"text": "На обучение, саморазвитие", "scores": {"narrative": "УБ"}},
                         "4": {"text": "На путешествие, впечатления", "scores": {"narrative": "ЧВ"}}
                     }
                 },
                 {  # Вопрос 7. Что бесит
-                    "text": "Что тебя раздражает в других?",
+                    "text": "Что вас раздражает в других?",
                     "options": {
                         "1": {"text": "Неуважение, панибратство", "scores": {"narrative": "СБ"}},
                         "2": {"text": "Безответственность", "scores": {"narrative": "ТФ"}},
@@ -284,7 +307,7 @@ def get_narrative_questions(gender, age_group):
                     }
                 },
                 {  # Вопрос 8. Подарок
-                    "text": "Какой подарок тебя обрадует?",
+                    "text": "Какой подарок вас обрадует?",
                     "options": {
                         "1": {"text": "Дорогой, статусный", "scores": {"narrative": "СБ"}},
                         "2": {"text": "Полезный, нужный в хозяйстве", "scores": {"narrative": "ТФ"}},
@@ -293,7 +316,7 @@ def get_narrative_questions(gender, age_group):
                     }
                 },
                 {  # Вопрос 9. Страх
-                    "text": "Чего ты опасаешься в жизни?",
+                    "text": "Чего вы опасаетесь в жизни?",
                     "options": {
                         "1": {"text": "Потерять уважение, статус", "scores": {"narrative": "СБ"}},
                         "2": {"text": "Остаться без средств", "scores": {"narrative": "ТФ"}},
@@ -307,7 +330,7 @@ def get_narrative_questions(gender, age_group):
             # Молодые женщины
             return [
                 {  # Вопрос 2. Свободное время
-                    "text": "Как ты любишь проводить выходной?",
+                    "text": "Как вы любите проводить выходной?",
                     "options": {
                         "1": {"text": "С подругами, по магазинам, в кафе", "scores": {"narrative": "ЧВ"}},
                         "2": {"text": "Дома, с семьёй, готовлю, убираю", "scores": {"narrative": "ТФ"}},
@@ -316,7 +339,7 @@ def get_narrative_questions(gender, age_group):
                     }
                 },
                 {  # Вопрос 3. Что ценишь в людях
-                    "text": "Что для тебя важно в человеке?",
+                    "text": "Что для вас важно в человеке?",
                     "options": {
                         "1": {"text": "Чувство юмора, лёгкость", "scores": {"narrative": "ЧВ"}},
                         "2": {"text": "Надёжность, забота", "scores": {"narrative": "ТФ"}},
@@ -325,7 +348,7 @@ def get_narrative_questions(gender, age_group):
                     }
                 },
                 {  # Вопрос 4. Комплимент
-                    "text": "От какого комплимента тебе приятнее?",
+                    "text": "От какого комплимента вам приятнее?",
                     "options": {
                         "1": {"text": "«Ты красивая, стильная»", "scores": {"narrative": "ЧВ"}},
                         "2": {"text": "«Ты заботливая, добрая»", "scores": {"narrative": "ТФ"}},
@@ -334,7 +357,7 @@ def get_narrative_questions(gender, age_group):
                     }
                 },
                 {  # Вопрос 5. Новая компания
-                    "text": "В новой компании ты...",
+                    "text": "В новой компании вы...",
                     "options": {
                         "1": {"text": "Со всеми знакомлюсь, общаюсь", "scores": {"narrative": "ЧВ"}},
                         "2": {"text": "Присматриваюсь, слушаю", "scores": {"narrative": "ТФ"}},
@@ -343,16 +366,16 @@ def get_narrative_questions(gender, age_group):
                     }
                 },
                 {  # Вопрос 6. Деньги
-                    "text": "На что потратишь неожиданную сумму?",
+                    "text": "На что потратите неожиданную сумму?",
                     "options": {
                         "1": {"text": "На одежду, косметику", "scores": {"narrative": "ЧВ"}},
-                        "2": {"text": "Отложу, на квартиру, на будущее", "scores": {"narrative": "ТФ"}},
+                        "2": {"text": "Отложу, на будущее", "scores": {"narrative": "ТФ"}},
                         "3": {"text": "На что-то статусное (сумка, часы)", "scores": {"narrative": "СБ"}},
                         "4": {"text": "На курсы, обучение", "scores": {"narrative": "УБ"}}
                     }
                 },
                 {  # Вопрос 7. Что бесит
-                    "text": "Что тебя раздражает в других?",
+                    "text": "Что вас раздражает в других?",
                     "options": {
                         "1": {"text": "Скучные, с ними неинтересно", "scores": {"narrative": "ЧВ"}},
                         "2": {"text": "Безответственные", "scores": {"narrative": "ТФ"}},
@@ -361,7 +384,7 @@ def get_narrative_questions(gender, age_group):
                     }
                 },
                 {  # Вопрос 8. Подарок
-                    "text": "Какой подарок тебя порадует?",
+                    "text": "Какой подарок вас порадует?",
                     "options": {
                         "1": {"text": "Красивая вещь, украшение", "scores": {"narrative": "ЧВ"}},
                         "2": {"text": "Что-то нужное, полезное", "scores": {"narrative": "ТФ"}},
@@ -370,7 +393,7 @@ def get_narrative_questions(gender, age_group):
                     }
                 },
                 {  # Вопрос 9. Страх
-                    "text": "Чего ты боишься больше всего?",
+                    "text": "Чего вы боитесь больше всего?",
                     "options": {
                         "1": {"text": "Одиночества", "scores": {"narrative": "ЧВ"}},
                         "2": {"text": "Бедности, нужды", "scores": {"narrative": "ТФ"}},
@@ -383,7 +406,7 @@ def get_narrative_questions(gender, age_group):
             # Зрелые женщины
             return [
                 {  # Вопрос 2. Свободное время
-                    "text": "Как ты любишь проводить время?",
+                    "text": "Как вы любите проводить время?",
                     "options": {
                         "1": {"text": "С семьёй, с детьми/внуками", "scores": {"narrative": "ЧВ"}},
                         "2": {"text": "По дому, на даче", "scores": {"narrative": "ТФ"}},
@@ -392,7 +415,7 @@ def get_narrative_questions(gender, age_group):
                     }
                 },
                 {  # Вопрос 3. Что ценишь в людях
-                    "text": "Что для тебя главное в человеке?",
+                    "text": "Что для вас главное в человеке?",
                     "options": {
                         "1": {"text": "Доброта, душевность", "scores": {"narrative": "ЧВ"}},
                         "2": {"text": "Надёжность, порядочность", "scores": {"narrative": "ТФ"}},
@@ -401,7 +424,7 @@ def get_narrative_questions(gender, age_group):
                     }
                 },
                 {  # Вопрос 4. Комплимент
-                    "text": "Какие слова для тебя дороги?",
+                    "text": "Какие слова для вас дороги?",
                     "options": {
                         "1": {"text": "«Ты замечательная мать/бабушка»", "scores": {"narrative": "ЧВ"}},
                         "2": {"text": "«На тебя можно положиться»", "scores": {"narrative": "ТФ"}},
@@ -410,16 +433,16 @@ def get_narrative_questions(gender, age_group):
                     }
                 },
                 {  # Вопрос 5. Новая компания
-                    "text": "В незнакомой компании ты...",
+                    "text": "В незнакомой компании вы...",
                     "options": {
-                        "1": {"text": "Общаюсь со всеми, мне легко", "scores": {"narrative": "ЧВ"}},
+                        "1": {"text": "Легко общаюсь со всеми", "scores": {"narrative": "ЧВ"}},
                         "2": {"text": "Присматриваюсь, не сразу открываюсь", "scores": {"narrative": "ТФ"}},
                         "3": {"text": "Оцениваю, кто здесь главный", "scores": {"narrative": "СБ"}},
                         "4": {"text": "Наблюдаю, слушаю", "scores": {"narrative": "УБ"}}
                     }
                 },
                 {  # Вопрос 6. Деньги
-                    "text": "На что потратишь неожиданную сумму?",
+                    "text": "На что потратите неожиданную сумму?",
                     "options": {
                         "1": {"text": "На детей, внуков, семью", "scores": {"narrative": "ЧВ"}},
                         "2": {"text": "Отложу, на старость", "scores": {"narrative": "ТФ"}},
@@ -428,7 +451,7 @@ def get_narrative_questions(gender, age_group):
                     }
                 },
                 {  # Вопрос 7. Что бесит
-                    "text": "Что тебя раздражает в людях?",
+                    "text": "Что вас раздражает в людях?",
                     "options": {
                         "1": {"text": "Черствость, равнодушие", "scores": {"narrative": "ЧВ"}},
                         "2": {"text": "Безответственность", "scores": {"narrative": "ТФ"}},
@@ -437,7 +460,7 @@ def get_narrative_questions(gender, age_group):
                     }
                 },
                 {  # Вопрос 8. Подарок
-                    "text": "Какой подарок тебя порадует?",
+                    "text": "Какой подарок вас порадует?",
                     "options": {
                         "1": {"text": "Внимание, забота, сюрприз", "scores": {"narrative": "ЧВ"}},
                         "2": {"text": "Что-то нужное, полезное", "scores": {"narrative": "ТФ"}},
@@ -446,7 +469,7 @@ def get_narrative_questions(gender, age_group):
                     }
                 },
                 {  # Вопрос 9. Страх
-                    "text": "Чего ты опасаешься?",
+                    "text": "Чего вы опасаетесь?",
                     "options": {
                         "1": {"text": "Одиночества", "scores": {"narrative": "ЧВ"}},
                         "2": {"text": "Бедности, немощи", "scores": {"narrative": "ТФ"}},
@@ -459,7 +482,7 @@ def get_narrative_questions(gender, age_group):
 # ==================== БЛОК 2: РЕСУРСЫ (10 вопросов) ====================
 COMMON_RESOURCES_QUESTIONS = [
     {  # Вопрос 10. Образование
-        "text": "Какое у тебя образование?",
+        "text": "Какое у вас образование?",
         "options": {
             "1": {"text": "Неполное среднее", "scores": {"education": 2, "edu_level": "LOW"}},
             "2": {"text": "Среднее (школа)", "scores": {"education": 4, "edu_level": "MEDIUM"}},
@@ -469,7 +492,7 @@ COMMON_RESOURCES_QUESTIONS = [
         }
     },
     {  # Вопрос 11. Работа
-        "text": "Кем ты работаешь?",
+        "text": "Кем вы работаете?",
         "options": {
             "1": {"text": "Не работаю", "scores": {"job": "DEPENDENT", "income": 1}},
             "2": {"text": "Рабочий, персонал", "scores": {"job": "WORKER", "income": 3}},
@@ -482,7 +505,7 @@ COMMON_RESOURCES_QUESTIONS = [
         }
     },
     {  # Вопрос 12. Доход
-        "text": "Как у тебя с деньгами?",
+        "text": "Как вы оцениваете своё материальное положение?",
         "options": {
             "1": {"text": "Едва хватает на еду", "scores": {"money": 1}},
             "2": {"text": "Хватает на жизнь", "scores": {"money": 3}},
@@ -492,7 +515,7 @@ COMMON_RESOURCES_QUESTIONS = [
         }
     },
     {  # Вопрос 13. Жильё
-        "text": "Где ты живёшь?",
+        "text": "Где вы живёте?",
         "options": {
             "1": {"text": "Снимаю угол/комнату", "scores": {"housing": 1}},
             "2": {"text": "С родителями/родственниками", "scores": {"housing": 2}},
@@ -502,7 +525,7 @@ COMMON_RESOURCES_QUESTIONS = [
         }
     },
     {  # Вопрос 14. Рост
-        "text": "Какой у тебя рост?",
+        "text": "Какой у вас рост?",
         "options": {
             "1": {"text": "Ниже 160 см", "scores": {"height": 2}},
             "2": {"text": "160-170 см", "scores": {"height": 4}},
@@ -512,7 +535,7 @@ COMMON_RESOURCES_QUESTIONS = [
         }
     },
     {  # Вопрос 15. Внешность
-        "text": "Как ты оцениваешь свою внешность?",
+        "text": "Как вы оцениваете свою внешность?",
         "options": {
             "1": {"text": "Меня не замечают", "scores": {"looks": 2}},
             "2": {"text": "Обычная внешность", "scores": {"looks": 4}},
@@ -522,7 +545,7 @@ COMMON_RESOURCES_QUESTIONS = [
         }
     },
     {  # Вопрос 16. Здоровье
-        "text": "Как часто ты болеешь?",
+        "text": "Как часто вы болеете?",
         "options": {
             "1": {"text": "Постоянно", "scores": {"health": 2}},
             "2": {"text": "Несколько раз в год", "scores": {"health": 4}},
@@ -532,7 +555,7 @@ COMMON_RESOURCES_QUESTIONS = [
         }
     },
     {  # Вопрос 17. Семейное положение
-        "text": "Как у тебя с семьёй?",
+        "text": "Какое у вас семейное положение?",
         "options": {
             "1": {"text": "Никогда не был(а) в браке", "scores": {"marriage": 0, "marriages": 0}},
             "2": {"text": "В браке / в отношениях", "scores": {"marriage": 1, "marriages": 1}},
@@ -541,7 +564,7 @@ COMMON_RESOURCES_QUESTIONS = [
         }
     },
     {  # Вопрос 18. Дети
-        "text": "Есть ли у тебя дети?",
+        "text": "Есть ли у вас дети?",
         "options": {
             "1": {"text": "Нет детей", "scores": {"children": 0, "kids": 0}},
             "2": {"text": "Один ребёнок", "scores": {"children": 1, "kids": 1}},
@@ -550,7 +573,7 @@ COMMON_RESOURCES_QUESTIONS = [
         }
     },
     {  # Вопрос 19. Друзья
-        "text": "Сколько у тебя близких друзей?",
+        "text": "Сколько у вас близких друзей?",
         "options": {
             "1": {"text": "Никого, я один(а)", "scores": {"friends": 1, "social": 1}},
             "2": {"text": "1-2 друга", "scores": {"friends": 3, "social": 3}},
@@ -563,12 +586,12 @@ COMMON_RESOURCES_QUESTIONS = [
 
 # ==================== БЛОК 3: ДРЕВНИЕ ПРОГРАММЫ (7 вопросов) ====================
 def get_ancient_program_questions(gender):
-    """Возвращает вопросы для определения древней программы (F1-F6)"""
+    """Возвращает вопросы для определения поведенческих стратегий (F1-F6)"""
     
     # Общие для всех вопросы
     common = [
         {  # Вопрос 20. Спорт
-            "text": "Каким спортом ты занимаешься?",
+            "text": "Каким спортом вы занимаетесь?",
             "options": {
                 "1": {"text": "Никаким, не люблю", "scores": {"ancient": "F2"}},
                 "2": {"text": "Бег, плавание", "scores": {"ancient": "F2"}},
@@ -578,7 +601,7 @@ def get_ancient_program_questions(gender):
             }
         },
         {  # Вопрос 21. Конфликты
-            "text": "Если кто-то лезет без очереди, ты...",
+            "text": "Если кто-то лезет без очереди, вы...",
             "options": {
                 "1": {"text": "Молчу, не хочу связываться", "scores": {"ancient": "F2"}},
                 "2": {"text": "Смотрю в телефон, не замечаю", "scores": {"ancient": "F4"}},
@@ -588,7 +611,7 @@ def get_ancient_program_questions(gender):
             }
         },
         {  # Вопрос 22. Соцсети
-            "text": "Как часто ты выкладываешь свои фото?",
+            "text": "Как часто вы выкладываете свои фото?",
             "options": {
                 "1": {"text": "Никогда, не люблю", "scores": {"ancient": "F2"}},
                 "2": {"text": "Только в сторис, на день", "scores": {"ancient": "F3"}},
@@ -598,7 +621,7 @@ def get_ancient_program_questions(gender):
             }
         },
         {  # Вопрос 23. Отношение к телу
-            "text": "Как ты относишься к своему телу?",
+            "text": "Как вы относитесь к своему телу?",
             "options": {
                 "1": {"text": "Стесняюсь, не нравится", "scores": {"ancient": "F2"}},
                 "2": {"text": "Нормально, не задумываюсь", "scores": {"ancient": "F3"}},
@@ -608,7 +631,7 @@ def get_ancient_program_questions(gender):
             }
         },
         {  # Вопрос 24. Сны
-            "text": "Какие сны тебе чаще снятся?",
+            "text": "Какие сны вам чаще снятся?",
             "options": {
                 "1": {"text": "Драки, погони, опасность", "scores": {"ancient": "F1"}},
                 "2": {"text": "Что убегаю, прячусь", "scores": {"ancient": "F2"}},
@@ -623,7 +646,7 @@ def get_ancient_program_questions(gender):
     if gender == "М":
         male_specific = [
             {  # Вопрос 25. Баня
-                "text": "Как часто ты ходишь в баню?",
+                "text": "Как часто вы ходите в баню?",
                 "options": {
                     "1": {"text": "Никогда, не люблю", "scores": {"ancient": "F2"}},
                     "2": {"text": "Раз в год, с работы", "scores": {"ancient": "F5"}},
@@ -633,7 +656,7 @@ def get_ancient_program_questions(gender):
                 }
             },
             {  # Вопрос 26. Борода
-                "text": "Как у тебя с бородой?",
+                "text": "Как у вас с бородой?",
                 "options": {
                     "1": {"text": "Не растёт, гладко брею", "scores": {"ancient": "F6"}},
                     "2": {"text": "Щетина, немного", "scores": {"ancient": "F3"}},
@@ -643,7 +666,7 @@ def get_ancient_program_questions(gender):
                 }
             },
             {  # Вопрос 27. Машина
-                "text": "Какая у тебя машина?",
+                "text": "Какая у вас машина?",
                 "options": {
                     "1": {"text": "Нет, не нужна", "scores": {"ancient": "F2"}},
                     "2": {"text": "Эконом, чтобы ездила", "scores": {"ancient": "F3"}},
@@ -658,7 +681,7 @@ def get_ancient_program_questions(gender):
         # Женщины
         female_specific = [
             {  # Вопрос 25. Одежда
-                "text": "Как ты одеваешься летом?",
+                "text": "Как вы одеваетесь летом?",
                 "options": {
                     "1": {"text": "Закрыто, не люблю открытое", "scores": {"ancient": "F2"}},
                     "2": {"text": "Как удобно, не задумываюсь", "scores": {"ancient": "F3"}},
@@ -668,7 +691,7 @@ def get_ancient_program_questions(gender):
                 }
             },
             {  # Вопрос 26. Отношения
-                "text": "В отношениях с мужчиной ты чаще...",
+                "text": "В отношениях с мужчиной вы чаще...",
                 "options": {
                     "1": {"text": "Уступаю, чтобы не ссориться", "scores": {"ancient": "F5"}},
                     "2": {"text": "Молчу, терплю", "scores": {"ancient": "F3"}},
@@ -678,7 +701,7 @@ def get_ancient_program_questions(gender):
                 }
             },
             {  # Вопрос 27. Интим
-                "text": "В интимной близости тебе важнее...",
+                "text": "В интимной близости вам важнее...",
                 "options": {
                     "1": {"text": "Чтобы партнёр был доволен", "scores": {"ancient": "F5"}},
                     "2": {"text": "Чтобы я была довольна", "scores": {"ancient": "F1"}},
@@ -702,12 +725,12 @@ def get_verification_questions(hypothesis):
     
     logger.info(f"🔍 Получаем верификационные вопросы для {narrative}+{program}")
     
-    # РАСШИРЕННАЯ база верификационных вопросов для всех комбинаций
+    # База верификационных вопросов
     verification_db = {
-        # ===== СБ + F1 (Силовой мир + Бей) =====
+        # ===== СБ + F1 =====
         ("СБ", "F1"): [
             {
-                "text": "Вспомни случай из детства, когда тебя сильно обидели. Что ты сделал?",
+                "text": "Вспомните случай из детства, когда вас сильно обидели. Что вы сделали?",
                 "options": {
                     "1": {"text": "Дал сдачи, даже если был слабее", "scores": {"verify": "СБ+F1"}},
                     "2": {"text": "Убежал и спрятался", "scores": {"verify": "ЧВ+F2"}},
@@ -716,7 +739,7 @@ def get_verification_questions(hypothesis):
                 }
             },
             {
-                "text": "Кого ты больше уважаешь?",
+                "text": "Кого вы больше уважаете?",
                 "options": {
                     "1": {"text": "Того, кто может постоять за себя", "scores": {"verify": "СБ+F1"}},
                     "2": {"text": "Того, кто избегает конфликтов", "scores": {"verify": "ЧВ+F2"}},
@@ -725,7 +748,7 @@ def get_verification_questions(hypothesis):
                 }
             },
             {
-                "text": "Если бы ты был животным, каким?",
+                "text": "Если бы вы были животным, каким?",
                 "options": {
                     "1": {"text": "Лев, волк", "scores": {"verify": "СБ+F1"}},
                     "2": {"text": "Заяц, лань", "scores": {"verify": "ЧВ+F2"}},
@@ -735,10 +758,10 @@ def get_verification_questions(hypothesis):
             }
         ],
         
-        # ===== СБ + F2 (Силовой мир + Беги) =====
+        # ===== СБ + F2 =====
         ("СБ", "F2"): [
             {
-                "text": "Когда назревает конфликт, ты...",
+                "text": "Когда назревает конфликт, вы...",
                 "options": {
                     "1": {"text": "Иду на обострение", "scores": {"verify": "СБ+F1"}},
                     "2": {"text": "Стараюсь уйти, избежать", "scores": {"verify": "СБ+F2"}},
@@ -747,7 +770,7 @@ def get_verification_questions(hypothesis):
                 }
             },
             {
-                "text": "Что для тебя страшнее?",
+                "text": "Что для вас страшнее?",
                 "options": {
                     "1": {"text": "Потерять уважение", "scores": {"verify": "СБ+F1"}},
                     "2": {"text": "Оказаться в опасности", "scores": {"verify": "СБ+F2"}},
@@ -757,10 +780,10 @@ def get_verification_questions(hypothesis):
             }
         ],
         
-        # ===== СБ + F3 (Силовой мир + Замри) =====
+        # ===== СБ + F3 =====
         ("СБ", "F3"): [
             {
-                "text": "В стрессовой ситуации ты...",
+                "text": "В стрессовой ситуации вы...",
                 "options": {
                     "1": {"text": "Нападаю первым", "scores": {"verify": "СБ+F1"}},
                     "2": {"text": "Ухожу в себя", "scores": {"verify": "СБ+F3"}},
@@ -770,10 +793,10 @@ def get_verification_questions(hypothesis):
             }
         ],
         
-        # ===== СБ + F4 (Силовой мир + Притворись мёртвым) =====
+        # ===== СБ + F4 =====
         ("СБ", "F4"): [
             {
-                "text": "Когда на тебя давят, ты...",
+                "text": "Когда на вас давят, вы...",
                 "options": {
                     "1": {"text": "Давлю в ответ", "scores": {"verify": "СБ+F1"}},
                     "2": {"text": "Делаю вид, что не замечаю", "scores": {"verify": "СБ+F4"}},
@@ -783,10 +806,10 @@ def get_verification_questions(hypothesis):
             }
         ],
         
-        # ===== СБ + F5 (Силовой мир + Заискивай) =====
+        # ===== СБ + F5 =====
         ("СБ", "F5"): [
             {
-                "text": "Как ты ведёшь себя с начальником?",
+                "text": "Как вы ведёте себя с начальником?",
                 "options": {
                     "1": {"text": "Стараюсь угодить, соглашаюсь", "scores": {"verify": "СБ+F5"}},
                     "2": {"text": "Могу поспорить, если не прав", "scores": {"verify": "УБ+F1"}},
@@ -795,7 +818,7 @@ def get_verification_questions(hypothesis):
                 }
             },
             {
-                "text": "Что ты чувствуешь, когда тебя критикуют?",
+                "text": "Что вы чувствуете, когда вас критикуют?",
                 "options": {
                     "1": {"text": "Обиду и желание оправдаться", "scores": {"verify": "СБ+F5"}},
                     "2": {"text": "Злость, хочется ответить", "scores": {"verify": "УБ+F1"}},
@@ -805,7 +828,7 @@ def get_verification_questions(hypothesis):
             }
         ],
         
-        # ===== СБ + F6 (Силовой мир + Сдайся) =====
+        # ===== СБ + F6 =====
         ("СБ", "F6"): [
             {
                 "text": "Когда не получается добиться цели...",
@@ -818,10 +841,10 @@ def get_verification_questions(hypothesis):
             }
         ],
         
-        # ===== ТФ + F1 (Мир труда + Бей) =====
+        # ===== ТФ + F1 =====
         ("ТФ", "F1"): [
             {
-                "text": "Как ты добиваешься целей?",
+                "text": "Как вы добиваетесь целей?",
                 "options": {
                     "1": {"text": "Напролом, любой ценой", "scores": {"verify": "СБ+F1"}},
                     "2": {"text": "Планомерно, шаг за шагом", "scores": {"verify": "ТФ+F1"}},
@@ -830,7 +853,7 @@ def get_verification_questions(hypothesis):
                 }
             },
             {
-                "text": "Что для тебя главное в работе?",
+                "text": "Что для вас главное в работе?",
                 "options": {
                     "1": {"text": "Результат любой ценой", "scores": {"verify": "ТФ+F1"}},
                     "2": {"text": "Стабильность", "scores": {"verify": "ТФ+F3"}},
@@ -840,7 +863,7 @@ def get_verification_questions(hypothesis):
             }
         ],
         
-        # ===== ТФ + F2 (Мир труда + Беги) =====
+        # ===== ТФ + F2 =====
         ("ТФ", "F2"): [
             {
                 "text": "Если на работе аврал...",
@@ -853,10 +876,10 @@ def get_verification_questions(hypothesis):
             }
         ],
         
-        # ===== ТФ + F3 (Мир труда + Замри) =====
+        # ===== ТФ + F3 =====
         ("ТФ", "F3"): [
             {
-                "text": "Когда на работе аврал, ты...",
+                "text": "Когда на работе аврал, вы...",
                 "options": {
                     "1": {"text": "Теряюсь, не знаю за что хвататься", "scores": {"verify": "ТФ+F3"}},
                     "2": {"text": "Мобилизуюсь и работаю быстрее", "scores": {"verify": "ТФ+F1"}},
@@ -865,7 +888,7 @@ def get_verification_questions(hypothesis):
                 }
             },
             {
-                "text": "Как ты принимаешь важные решения?",
+                "text": "Как вы принимаете важные решения?",
                 "options": {
                     "1": {"text": "Долго сомневаюсь, не решаюсь", "scores": {"verify": "ТФ+F3"}},
                     "2": {"text": "Быстро, интуитивно", "scores": {"verify": "СБ+F1"}},
@@ -875,7 +898,7 @@ def get_verification_questions(hypothesis):
             }
         ],
         
-        # ===== ТФ + F4 (Мир труда + Притворись мёртвым) =====
+        # ===== ТФ + F4 =====
         ("ТФ", "F4"): [
             {
                 "text": "Когда начальник требует невозможного...",
@@ -888,10 +911,10 @@ def get_verification_questions(hypothesis):
             }
         ],
         
-        # ===== ТФ + F5 (Мир труда + Заискивай) =====
+        # ===== ТФ + F5 =====
         ("ТФ", "F5"): [
             {
-                "text": "Как ты строишь отношения с начальством?",
+                "text": "Как вы строите отношения с начальством?",
                 "options": {
                     "1": {"text": "Стараюсь угодить", "scores": {"verify": "ТФ+F5"}},
                     "2": {"text": "Держу дистанцию", "scores": {"verify": "УБ+F3"}},
@@ -901,7 +924,7 @@ def get_verification_questions(hypothesis):
             }
         ],
         
-        # ===== ТФ + F6 (Мир труда + Сдайся) =====
+        # ===== ТФ + F6 =====
         ("ТФ", "F6"): [
             {
                 "text": "Если не дают повышение...",
@@ -914,10 +937,10 @@ def get_verification_questions(hypothesis):
             }
         ],
         
-        # ===== ЧВ + F1 (Мир внимания + Бей) =====
+        # ===== ЧВ + F1 =====
         ("ЧВ", "F1"): [
             {
-                "text": "Как ты добиваешься внимания?",
+                "text": "Как вы добиваетесь внимания?",
                 "options": {
                     "1": {"text": "Громко заявляю о себе", "scores": {"verify": "ЧВ+F1"}},
                     "2": {"text": "Помогаю другим", "scores": {"verify": "ЧВ+F5"}},
@@ -927,10 +950,10 @@ def get_verification_questions(hypothesis):
             }
         ],
         
-        # ===== ЧВ + F2 (Мир внимания + Беги) =====
+        # ===== ЧВ + F2 =====
         ("ЧВ", "F2"): [
             {
-                "text": "Как ты ведёшь себя на вечеринках?",
+                "text": "Как вы ведёте себя на вечеринках?",
                 "options": {
                     "1": {"text": "Стараюсь быть в центре", "scores": {"verify": "ЧВ+F1"}},
                     "2": {"text": "Держусь в стороне, наблюдаю", "scores": {"verify": "ЧВ+F2"}},
@@ -939,7 +962,7 @@ def get_verification_questions(hypothesis):
                 }
             },
             {
-                "text": "Что для тебя страшнее?",
+                "text": "Что для вас страшнее?",
                 "options": {
                     "1": {"text": "Оказаться в центре внимания", "scores": {"verify": "ЧВ+F2"}},
                     "2": {"text": "Быть отвергнутым", "scores": {"verify": "ЧВ+F5"}},
@@ -949,10 +972,10 @@ def get_verification_questions(hypothesis):
             }
         ],
         
-        # ===== ЧВ + F3 (Мир внимания + Замри) =====
+        # ===== ЧВ + F3 =====
         ("ЧВ", "F3"): [
             {
-                "text": "В новой компании ты...",
+                "text": "В новой компании вы...",
                 "options": {
                     "1": {"text": "Сразу знакомлюсь со всеми", "scores": {"verify": "ЧВ+F1"}},
                     "2": {"text": "Стесняюсь, молчу", "scores": {"verify": "ЧВ+F3"}},
@@ -962,10 +985,10 @@ def get_verification_questions(hypothesis):
             }
         ],
         
-        # ===== ЧВ + F4 (Мир внимания + Притворись мёртвым) =====
+        # ===== ЧВ + F4 =====
         ("ЧВ", "F4"): [
             {
-                "text": "Когда тебя игнорируют...",
+                "text": "Когда вас игнорируют...",
                 "options": {
                     "1": {"text": "Добиваюсь внимания", "scores": {"verify": "ЧВ+F1"}},
                     "2": {"text": "Ухожу в себя", "scores": {"verify": "ЧВ+F4"}},
@@ -975,10 +998,10 @@ def get_verification_questions(hypothesis):
             }
         ],
         
-        # ===== ЧВ + F5 (Мир внимания + Заискивай) =====
+        # ===== ЧВ + F5 =====
         ("ЧВ", "F5"): [
             {
-                "text": "Как ты заводишь друзей?",
+                "text": "Как вы заводите друзей?",
                 "options": {
                     "1": {"text": "Стараюсь быть полезным", "scores": {"verify": "ЧВ+F5"}},
                     "2": {"text": "Жду, когда позовут", "scores": {"verify": "ЧВ+F3"}},
@@ -988,23 +1011,23 @@ def get_verification_questions(hypothesis):
             }
         ],
         
-        # ===== ЧВ + F6 (Мир внимания + Сдайся) =====
+        # ===== ЧВ + F6 =====
         ("ЧВ", "F6"): [
             {
-                "text": "Если тебя не принимают в компанию...",
+                "text": "Если вас не принимают в компанию...",
                 "options": {
                     "1": {"text": "Навязываюсь", "scores": {"verify": "ЧВ+F5"}},
-                    "2": {"text": "Ухожу и страдаю", "scores": {"verify": "ЧВ+F6"}},
+                    "2": {"text": "Ухожу и переживаю", "scores": {"verify": "ЧВ+F6"}},
                     "3": {"text": "Нахожу других", "scores": {"verify": "ЧВ+F2"}},
                     "4": {"text": "Мне всё равно", "scores": {"verify": "УБ+F4"}}
                 }
             }
         ],
         
-        # ===== УБ + F1 (Мир знаний + Бей) =====
+        # ===== УБ + F1 =====
         ("УБ", "F1"): [
             {
-                "text": "В споре ты...",
+                "text": "В споре вы...",
                 "options": {
                     "1": {"text": "Настаиваю на своём", "scores": {"verify": "УБ+F1"}},
                     "2": {"text": "Привожу аргументы", "scores": {"verify": "УБ+F3"}},
@@ -1014,10 +1037,10 @@ def get_verification_questions(hypothesis):
             }
         ],
         
-        # ===== УБ + F2 (Мир знаний + Беги) =====
+        # ===== УБ + F2 =====
         ("УБ", "F2"): [
             {
-                "text": "Если тебя критикуют...",
+                "text": "Если вас критикуют...",
                 "options": {
                     "1": {"text": "Спорю и доказываю", "scores": {"verify": "УБ+F1"}},
                     "2": {"text": "Ухожу от разговора", "scores": {"verify": "УБ+F2"}},
@@ -1027,7 +1050,7 @@ def get_verification_questions(hypothesis):
             }
         ],
         
-        # ===== УБ + F3 (Мир знаний + Замри) =====
+        # ===== УБ + F3 =====
         ("УБ", "F3"): [
             {
                 "text": "Когда нужно быстро решить проблему...",
@@ -1040,10 +1063,10 @@ def get_verification_questions(hypothesis):
             }
         ],
         
-        # ===== УБ + F4 (Мир знаний + Притворись мёртвым) =====
+        # ===== УБ + F4 =====
         ("УБ", "F4"): [
             {
-                "text": "В стрессовой ситуации ты...",
+                "text": "В стрессовой ситуации вы...",
                 "options": {
                     "1": {"text": "Отключаюсь, как будто это не со мной", "scores": {"verify": "УБ+F4"}},
                     "2": {"text": "Начинаю суетиться", "scores": {"verify": "ЧВ+F2"}},
@@ -1052,7 +1075,7 @@ def get_verification_questions(hypothesis):
                 }
             },
             {
-                "text": "Что говорят о тебе близкие?",
+                "text": "Что говорят о вас близкие?",
                 "options": {
                     "1": {"text": "Что я витаю в облаках", "scores": {"verify": "УБ+F4"}},
                     "2": {"text": "Что я слишком эмоциональный", "scores": {"verify": "ЧВ+F2"}},
@@ -1062,10 +1085,10 @@ def get_verification_questions(hypothesis):
             }
         ],
         
-        # ===== УБ + F5 (Мир знаний + Заискивай) =====
+        # ===== УБ + F5 =====
         ("УБ", "F5"): [
             {
-                "text": "Как ты убеждаешь людей?",
+                "text": "Как вы убеждаете людей?",
                 "options": {
                     "1": {"text": "Давлю авторитетом", "scores": {"verify": "СБ+F1"}},
                     "2": {"text": "Привожу факты", "scores": {"verify": "УБ+F3"}},
@@ -1075,10 +1098,10 @@ def get_verification_questions(hypothesis):
             }
         ],
         
-        # ===== УБ + F6 (Мир знаний + Сдайся) =====
+        # ===== УБ + F6 =====
         ("УБ", "F6"): [
             {
-                "text": "Если не можешь решить задачу...",
+                "text": "Если не можете решить задачу...",
                 "options": {
                     "1": {"text": "Бьюсь до конца", "scores": {"verify": "СБ+F1"}},
                     "2": {"text": "Бросаю", "scores": {"verify": "УБ+F6"}},
@@ -1100,7 +1123,7 @@ def get_verification_questions(hypothesis):
     logger.info(f"⚠️ Спецвопросы для {key} не найдены, использую универсальные")
     return [
         {
-            "text": "Как ты обычно реагируешь на неожиданности?",
+            "text": "Как вы обычно реагируете на неожиданности?",
             "options": {
                 "1": {"text": "Сразу действую", "scores": {"verify": "F1"}},
                 "2": {"text": "Стараюсь уйти от ситуации", "scores": {"verify": "F2"}},
@@ -1109,7 +1132,7 @@ def get_verification_questions(hypothesis):
             }
         },
         {
-            "text": "Что важнее в жизни?",
+            "text": "Что для вас важнее в жизни?",
             "options": {
                 "1": {"text": "Быть уважаемым", "scores": {"verify": "СБ"}},
                 "2": {"text": "Быть обеспеченным", "scores": {"verify": "ТФ"}},
@@ -1122,10 +1145,9 @@ def get_verification_questions(hypothesis):
 # ==================== ФУНКЦИИ ОПРЕДЕЛЕНИЯ ====================
 
 def get_narrative_from_answers(answers):
-    """Определяет нарратив на основе ответов на первые 8 вопросов"""
+    """Определяет нарратив на основе ответов"""
     scores = {"СБ": 0, "ТФ": 0, "УБ": 0, "ЧВ": 0}
     
-    # ОТЛАДКА: посмотрим, какие ключи есть в answers
     logger.info(f"📋 Все ключи answers: {list(answers.keys())}")
     
     # Собираем все narrative из ответов
@@ -1136,7 +1158,6 @@ def get_narrative_from_answers(answers):
         key = f'narrative_{i}'
         if key in answers:
             narr = answers[key]
-            # Проверяем, что нарратив не None и не пустой
             if narr and narr in scores:
                 scores[narr] += 1
                 logger.info(f"✅ {key} = {narr}")
@@ -1149,31 +1170,27 @@ def get_narrative_from_answers(answers):
     if sum(scores.values()) == 0:
         gender = answers.get('gender', 'М')
         logger.warning(f"⚠️ Нет нарративных ответов, использую дефолт для пола {gender}")
-        # Для мужчин чаще СБ, для женщин чаще ЧВ
         return ("СБ" if gender == "М" else "ЧВ"), None, None
     
     # Сортируем
     sorted_narr = sorted(scores.items(), key=lambda x: x[1], reverse=True)
     
     main = sorted_narr[0][0]
-    # Исправление: проверяем на None и используем правильные условия
     second = None
     third = None
     
-    if len(sorted_narr) > 1:
-        if sorted_narr[1][1] > 0:  # Если второй нарратив имеет хоть какие-то очки
-            second = sorted_narr[1][0]
+    if len(sorted_narr) > 1 and sorted_narr[1][1] > 0:
+        second = sorted_narr[1][0]
     
-    if len(sorted_narr) > 2:
-        if sorted_narr[2][1] > 0:  # Если третий нарратив имеет хоть какие-то очки
-            third = sorted_narr[2][0]
+    if len(sorted_narr) > 2 and sorted_narr[2][1] > 0:
+        third = sorted_narr[2][0]
     
     logger.info(f"📊 Нарративы: main={main}, second={second}, third={third}, scores={dict(scores)}")
     
     return main, second, third
 
 def get_ancient_program(answers):
-    """Определяет доминирующую древнюю программу (F1-F6)"""
+    """Определяет доминирующую поведенческую стратегию (F1-F6)"""
     scores = {"F1": 0, "F2": 0, "F3": 0, "F4": 0, "F5": 0, "F6": 0}
     
     # Собираем все ancient из ответов
@@ -1188,11 +1205,11 @@ def get_ancient_program(answers):
         else:
             logger.warning(f"⚠️ Неизвестная программа: {program}")
     
-    logger.info(f"📊 Древние программы: {dict(scores)}")
+    logger.info(f"📊 Поведенческие стратегии: {dict(scores)}")
     
     # Если нет данных - дефолт
     if sum(scores.values()) == 0:
-        logger.warning("⚠️ Нет данных о древних программах, использую F3")
+        logger.warning("⚠️ Нет данных о стратегиях, использую F3")
         return "F3"
     
     return max(scores.items(), key=lambda x: x[1])[0]
@@ -1204,7 +1221,7 @@ def get_level(data, narrative):
     # Бонусы
     if data.get('money', 0) > 7:
         base += 1
-        logger.info(f"💰 Бонус за деньги: {data.get('money')} -> +1")
+        logger.info(f"💰 Бонус за доход: {data.get('money')} -> +1")
     if data.get('housing', 0) > 7:
         base += 1
         logger.info(f"🏠 Бонус за жильё: {data.get('housing')} -> +1")
@@ -1216,12 +1233,12 @@ def get_level(data, narrative):
         logger.info(f"👀 Бонус за внешность: {data.get('looks')} -> +1")
     if data.get('friends', 0) > 7:
         base += 1
-        logger.info(f"👥 Бонус за друзей: {data.get('friends')} -> +1")
+        logger.info(f"👥 Бонус за социальные связи: {data.get('friends')} -> +1")
     
     # Штрафы
     if data.get('money', 5) < 3:
         base -= 1
-        logger.info(f"⚠️ Штраф за низкие деньги: {data.get('money')} -> -1")
+        logger.info(f"⚠️ Штраф за низкий доход: {data.get('money')} -> -1")
     if data.get('health', 5) < 3:
         base -= 1
         logger.info(f"⚠️ Штраф за здоровье: {data.get('health')} -> -1")
@@ -1267,19 +1284,16 @@ def verify_hypothesis(verification_answers, hypothesis):
             parts = answer.split("+")
             if len(parts) == 2:
                 narr, prog = parts
-                # Проверяем совпадение с гипотезой
                 if narr == hypothesis["narrative"] and prog == hypothesis["program"]:
                     confirm_count += 1
                     logger.info(f"✅ Ответ {answer} подтверждает гипотезу")
                 else:
-                    # Учитываем альтернативы
                     if narr in alternative_scores:
                         alternative_scores[narr] += 1
                     if prog in alternative_scores:
                         alternative_scores[prog] += 1
                     logger.info(f"🔄 Ответ {answer} указывает на {narr}+{prog}")
         else:
-            # Простой формат
             if answer == hypothesis["narrative"] or answer == hypothesis["program"]:
                 confirm_count += 1
                 logger.info(f"✅ Ответ {answer} подтверждает гипотезу")
@@ -1316,20 +1330,19 @@ def verify_hypothesis(verification_answers, hypothesis):
 
 @dp.message(Command("start"))
 async def cmd_start(message: types.Message, state: FSMContext):
-    """Начало гадания"""
+    """Начало тестирования"""
     
     # Проверяем, есть ли сохранённые данные
     data = await state.get_data()
     if data and data.get('answers'):
-        user_name = message.from_user.first_name or "путник"
-        mystic = get_mystic_symbol()
+        user_name = message.from_user.first_name or "пользователь"
         
         welcome_back = (
-            f"{mystic} *Ты вернулся, {user_name}...* {mystic}\n\n"
+            f"🧠 *Продолжим?*\n\n"
             f"{get_separator()}\n\n"
-            f"Я помню твою душу. Хочешь продолжить наше путешествие?\n\n"
-            f"• 🔄 *Заново* — откроешь новые грани\n"
-            f"• 👀 *Результаты* — заглянешь в уже открытое"
+            f"Вы уже начинали тест, {user_name}.\n\n"
+            f"• 🔄 *Начать заново*\n"
+            f"• 👀 *Мои результаты*"
         )
         
         builder = InlineKeyboardBuilder()
@@ -1341,51 +1354,57 @@ async def cmd_start(message: types.Message, state: FSMContext):
         return
     
     # Новый пользователь - выбор режима
-    user_name = message.from_user.first_name or "путник"
-    mystic = get_mystic_symbol()
+    user_name = message.from_user.first_name or "пользователь"
     
     intro = (
-        f"{mystic} *Тайный шёпот* {mystic}\n\n"
-        f"Здравствуй, {user_name}...\n\n"
+        f"🧠 *Психологический профайлер*\n\n"
+        f"Здравствуйте, {user_name}!\n\n"
         f"{get_separator()}\n\n"
-        f"Я вижу твою душу сквозь время. Выбери, что хочешь узнать:\n\n"
-        f"🔮 *Классическое гадание* — 27 вопросов о твоей судьбе\n"
-        f"🧠 *MBTI тест* — 81 вопрос о твоём психологическом типе\n\n"
+        f"Выберите тип тестирования:\n\n"
+        f"🔬 *Базовый тест* — 27 вопросов о вашем характере\n"
+        f"📊 *MBTI тест* — 81 научно-обоснованный вопрос\n\n"
         f"{get_separator()}"
     )
     
     builder = InlineKeyboardBuilder()
-    builder.button(text="🔮 Классическое гадание", callback_data="mode_original")
-    builder.button(text="🧠 MBTI тест (81 вопрос)", callback_data="mode_mbti")
-    builder.button(text="❓ Что это?", callback_data="why_details")
+    builder.button(text="🔬 Базовый тест (27 вопросов)", callback_data="mode_original")
+    builder.button(text="📊 MBTI тест (81 вопрос)", callback_data="mode_mbti")
+    builder.button(text="ℹ️ Подробнее", callback_data="info")
     builder.adjust(1)
     
     await message.answer(intro, reply_markup=builder.as_markup())
 
-@dp.callback_query(lambda c: c.data == "why_details")
-async def why_details(callback: types.CallbackQuery):
-    """Объяснение"""
+@dp.callback_query(lambda c: c.data == "info")
+async def show_info(callback: types.CallbackQuery):
+    """Информация о тесте"""
     await callback.answer()
     
-    explanation = (
-        f"🔮 *Немного правды* 🔮\n\n"
+    info_text = (
+        f"🧠 *О методиках*\n\n"
         f"{get_separator()}\n\n"
-        f"Я не колдую — я *читаю тебя*.\n\n"
-        f"Каждый твой ответ — ключ к твоей природе.\n"
-        f"• 🧠 Как ты мыслишь\n"
-        f"• 💓 Чего ты хочешь\n"
-        f"• 🚀 Куда тебе двигаться\n\n"
-        f"MBTI тест основан на научных психометрических методах и включает 81 вопрос.\n\n"
-        f"{get_separator()}\n\n"
-        f"*Готов?*"
+        f"*🔬 Базовый тест:*\n"
+        f"Основан на типологии личности, включает 27 вопросов о ваших предпочтениях, ресурсах и поведенческих стратегиях.\n\n"
+        f"*📊 MBTI тест:*\n"
+        f"MBTI (Myers-Briggs Type Indicator) — научно-обоснованный психологический инструмент, основанный на теории Карла Юнга.\n\n"
+        f"Оценивает 4 дихотомии:\n"
+        f"• *E/I*: Экстраверсия — Интроверсия\n"
+        f"• *S/N*: Сенсорика — Интуиция\n"
+        f"• *T/F*: Мышление — Чувство\n"
+        f"• *J/P*: Суждение — Восприятие\n\n"
+        f"*Шкала ответов:*\n"
+        f"1 — Совершенно не согласен\n"
+        f"2 — Скорее не согласен\n"
+        f"3 — Нейтрально\n"
+        f"4 — Скорее согласен\n"
+        f"5 — Полностью согласен"
     )
     
     builder = InlineKeyboardBuilder()
-    builder.button(text="🔮 Начать", callback_data="mode_original")
-    builder.button(text="🧠 MBTI", callback_data="mode_mbti")
+    builder.button(text="🔬 Базовый тест", callback_data="mode_original")
+    builder.button(text="📊 MBTI", callback_data="mode_mbti")
     builder.adjust(1)
     
-    await callback.message.edit_text(explanation, reply_markup=builder.as_markup())
+    await callback.message.edit_text(info_text, reply_markup=builder.as_markup())
 
 @dp.callback_query(lambda c: c.data.startswith('mode_'))
 async def process_mode(callback: types.CallbackQuery, state: FSMContext):
@@ -1402,6 +1421,7 @@ async def process_mode(callback: types.CallbackQuery, state: FSMContext):
         last_message_id=None,
         test_mode=mode
     )
+    await state.set_state(UserState.question_index)
     
     if mode == "mbti":
         # Загружаем вопросы MBTI
@@ -1410,15 +1430,11 @@ async def process_mode(callback: types.CallbackQuery, state: FSMContext):
             mbti_questions=mbti_questions,
             mbti_total=len(mbti_questions)
         )
-        await state.set_state(UserState.question_index)
         
-        # Вступление для MBTI
-        mystic = get_mystic_symbol()
         await callback.message.edit_text(
-            f"{mystic} *Сосредоточься...*\n\n"
-            f"Я задам 81 вопрос о твоём характере.\n"
-            f"Отвечай честно, выбирая по шкале от 1 до 5.\n\n"
-            f"*Первый вопрос...*"
+            f"📊 *MBTI тест*\n\n"
+            f"Тест содержит 81 вопрос. Отвечайте честно, выбирая вариант от 1 до 5.\n\n"
+            f"*Начинаем...*"
         )
         await asyncio.sleep(2)
         
@@ -1426,12 +1442,10 @@ async def process_mode(callback: types.CallbackQuery, state: FSMContext):
         await ask_gender_question(callback.from_user.id, state)
     else:
         # Оригинальный режим
-        await state.set_state(UserState.question_index)
-        mystic = get_mystic_symbol()
         await callback.message.edit_text(
-            f"{mystic} *Сосредоточься...*\n\n"
-            f"Я задам несколько вопросов. Отвечай честно.\n\n"
-            f"*Первый вопрос...*"
+            f"🔬 *Базовый тест*\n\n"
+            f"Тест содержит 27 вопросов. Выбирайте наиболее подходящий вариант.\n\n"
+            f"*Начинаем...*"
         )
         await asyncio.sleep(2)
         await ask_gender_question(callback.from_user.id, state)
@@ -1454,12 +1468,12 @@ async def ask_gender_question(user_id, state: FSMContext):
     
     sent = await bot.send_message(
         user_id,
-        f"{get_mystic_symbol()} *Вопрос 1/2*\n\n"
+        f"📋 *Вопрос 1/2*\n\n"
         f"*{GENDER_QUESTION['text']}*",
         reply_markup=builder.as_markup()
     )
     
-    await state.update_data(last_message_id=sent.message_id, question_index=0)
+    await state.update_data(last_message_id=sent.message_id)
 
 async def ask_age_question(user_id, state: FSMContext):
     """Вопрос о возрасте"""
@@ -1481,15 +1495,15 @@ async def ask_age_question(user_id, state: FSMContext):
     
     sent = await bot.send_message(
         user_id,
-        f"{get_mystic_symbol()} *Вопрос 2/{total_questions}*\n\n"
+        f"📋 *Вопрос 2/{total_questions}*\n\n"
         f"*{AGE_QUESTION['text']}*",
         reply_markup=builder.as_markup()
     )
     
-    await state.update_data(last_message_id=sent.message_id, question_index=1)
+    await state.update_data(last_message_id=sent.message_id)
 
 async def ask_question(user_id, index, state: FSMContext):
-    """Задаёт обычный вопрос"""
+    """Задаёт вопрос в зависимости от режима"""
     data = await state.get_data()
     answers = data.get('answers', {})
     gender = answers.get('gender', 'М')
@@ -1508,22 +1522,19 @@ async def ask_question(user_id, index, state: FSMContext):
         mbti_questions = data.get('mbti_questions', [])
         total = data.get('mbti_total', 81)
         
-        # Индекс 0-1 это пол и возраст, затем MBTI вопросы с индекса 2
         if index < 2:
-            # Вопросы 0-1 уже обработаны отдельно
             logger.error(f"❌ Неожиданный вызов ask_question для индекса {index}")
             return
         
         mbti_idx = index - 2
         if mbti_idx >= len(mbti_questions):
             logger.error(f"❌ Индекс MBTI {mbti_idx} вне диапазона")
-            await show_mbti_result(user_id, state)  # Переходим к результату
+            await show_result(user_id, state)
             return
         
         q = mbti_questions[mbti_idx]
         progress = "█" * int((mbti_idx + 1) / total * 10) + "░" * (10 - int((mbti_idx + 1) / total * 10))
         
-        # Для MBTI используем шкалу 1-5
         builder = InlineKeyboardBuilder()
         for key, scale in MBTI_SCALE.items():
             callback_data = f"mbti_{index}_{key}"
@@ -1532,10 +1543,10 @@ async def ask_question(user_id, index, state: FSMContext):
         
         sent = await bot.send_message(
             user_id,
-            f"{get_mystic_symbol()} *MBTI • Вопрос {mbti_idx+1}/{total}*\n"
+            f"📊 *Вопрос {mbti_idx+1}/{total}*\n"
             f"`{progress}`\n\n"
             f"*{q['text']}*\n\n"
-            f"Оцени по шкале от 1 до 5:",
+            f"Оцените по шкале от 1 до 5:",
             reply_markup=builder.as_markup()
         )
         
@@ -1545,29 +1556,27 @@ async def ask_question(user_id, index, state: FSMContext):
         # Оригинальный режим
         total_questions = 27
         
-        # Определяем блок
         if index < 2:
-            # Вопросы 0-1 уже обработаны отдельно
             logger.error(f"❌ Неожиданный вызов ask_question для индекса {index}")
             return
         elif index < 10:  # 8 нарративных (2-9)
             narrative_q_idx = index - 2
             questions = get_narrative_questions(gender, age_group)
             q = questions[narrative_q_idx]
-            block = "ПЕРВЫЙ КРУГ"
+            block = "ОСНОВНОЙ БЛОК"
             q_num = index + 1
             prefix = "narrative"
         elif index < 20:  # 10 ресурсных (10-19)
             res_q_idx = index - 10
             q = COMMON_RESOURCES_QUESTIONS[res_q_idx]
-            block = "ВТОРОЙ КРУГ"
+            block = "ДОПОЛНИТЕЛЬНО"
             q_num = index + 1
             prefix = "res"
-        else:  # 7 древних программ (20-26)
+        else:  # 7 программ (20-26)
             ancient_q_idx = index - 20
             questions = get_ancient_program_questions(gender)
             q = questions[ancient_q_idx]
-            block = "ТРЕТИЙ КРУГ"
+            block = "ПОВЕДЕНИЕ"
             q_num = index + 1
             prefix = "ancient"
         
@@ -1575,20 +1584,17 @@ async def ask_question(user_id, index, state: FSMContext):
         
         builder = InlineKeyboardBuilder()
         for key, option in q["options"].items():
-            # Для каждого вопроса сохраняем с правильным префиксом
             score_key = list(option["scores"].keys())[0]
             score_value = option["scores"][score_key]
             callback_data = f"ans_{index}_{key}_{prefix}_{score_key}_{score_value}"
-            # Обрезаем если слишком длинный (макс 64 символа)
             if len(callback_data) > 64:
-                # Используем сокращенный формат
                 callback_data = f"ans_{index}_{key}"
             builder.button(text=option["text"], callback_data=callback_data)
         builder.adjust(1)
         
         sent = await bot.send_message(
             user_id,
-            f"{get_mystic_symbol()} *{block} • Вопрос {q_num}/{total_questions}*\n"
+            f"🔬 *{block} • Вопрос {q_num}/{total_questions}*\n"
             f"`{progress}`\n\n"
             f"*{q['text']}*",
             reply_markup=builder.as_markup()
@@ -1602,7 +1608,7 @@ async def process_gender(callback: types.CallbackQuery, state: FSMContext):
     await callback.answer()
     
     gender = callback.data.split('_')[1]
-    logger.info(f"👤 Выбран пол: {gender}")
+    logger.info(f"👤 Пол: {gender}")
     
     data = await state.get_data()
     answers = data.get('answers', {})
@@ -1610,13 +1616,11 @@ async def process_gender(callback: types.CallbackQuery, state: FSMContext):
     
     await state.update_data(answers=answers)
     
-    # Удаляем сообщение
     try:
         await bot.delete_message(callback.from_user.id, callback.message.message_id)
     except:
         pass
     
-    # Следующий вопрос - возраст
     await ask_age_question(callback.from_user.id, state)
 
 @dp.callback_query(lambda c: c.data.startswith('age_'))
@@ -1627,7 +1631,7 @@ async def process_age(callback: types.CallbackQuery, state: FSMContext):
     age_key = callback.data.split('_')[1]
     age_data = AGE_QUESTION["options"][age_key]["scores"]
     
-    logger.info(f"📅 Выбран возраст: {age_data['age']} лет")
+    logger.info(f"📅 Возраст: {age_data['age']} лет")
     
     data = await state.get_data()
     answers = data.get('answers', {})
@@ -1636,59 +1640,59 @@ async def process_age(callback: types.CallbackQuery, state: FSMContext):
     
     await state.update_data(answers=answers)
     
-    # Удаляем сообщение
     try:
         await bot.delete_message(callback.from_user.id, callback.message.message_id)
     except:
         pass
     
-    # Переходим к следующему вопросу (индекс 2)
+    test_mode = data.get('test_mode', 'original')
+    if test_mode == "mbti":
+        # Для MBTI обновляем вопросы с учётом пола
+        mbti_questions = get_mbti_questions(gender)
+        await state.update_data(mbti_questions=mbti_questions, mbti_total=len(mbti_questions))
+    
     await ask_question(callback.from_user.id, 2, state)
 
 @dp.callback_query(lambda c: c.data.startswith('ans_'))
 async def process_answer(callback: types.CallbackQuery, state: FSMContext):
-    """Обработка обычных ответов (оригинальный режим)"""
+    """Обработка ответов (оригинальный режим)"""
     await callback.answer()
     
     parts = callback.data.split('_')
     idx = int(parts[1])
     key = parts[2]
     
-    logger.info(f"📝 Получен ответ на вопрос с индексом {idx} (номер {idx+1}), вариант {key}")
+    logger.info(f"📝 Получен ответ на вопрос {idx+1}, вариант {key}")
     
     data = await state.get_data()
     test_mode = data.get('test_mode', 'original')
     
     if test_mode != "original":
-        # Если это не оригинальный режим, игнорируем
         return
     
     answers = data.get('answers', {})
     gender = answers.get('gender', 'М')
     age_group = answers.get('age_group', 'ADULT')
     
-    # Если есть дополнительные данные в callback
     if len(parts) > 5:
         prefix = parts[3]
         score_key = parts[4]
         score_value = parts[5]
-        logger.info(f"  → Из callback: prefix={prefix}, {score_key}={score_value}")
     else:
-        # Если нет, определяем из контекста
-        if idx < 10:  # нарративные
+        if idx < 10:
             questions = get_narrative_questions(gender, age_group)
             q_idx = idx - 2
             q = questions[q_idx]
             score_key = list(q["options"][key]["scores"].keys())[0]
             score_value = q["options"][key]["scores"][score_key]
             prefix = "narrative"
-        elif idx < 20:  # ресурсные
+        elif idx < 20:
             q_idx = idx - 10
             q = COMMON_RESOURCES_QUESTIONS[q_idx]
             score_key = list(q["options"][key]["scores"].keys())[0]
             score_value = q["options"][key]["scores"][score_key]
             prefix = "res"
-        else:  # древние программы
+        else:
             questions = get_ancient_program_questions(gender)
             q_idx = idx - 20
             q = questions[q_idx]
@@ -1696,9 +1700,7 @@ async def process_answer(callback: types.CallbackQuery, state: FSMContext):
             score_value = q["options"][key]["scores"][score_key]
             prefix = "ancient"
     
-    # Сохраняем ответ
     if prefix == "narrative":
-        # Для нарративных сохраняем с индексом от 0 до 7
         narr_idx = idx - 2
         answers[f'narrative_{narr_idx}'] = score_value
     elif prefix == "res":
@@ -1709,15 +1711,13 @@ async def process_answer(callback: types.CallbackQuery, state: FSMContext):
     
     await state.update_data(answers=answers)
     
-    # Удаляем сообщение
     try:
         await bot.delete_message(callback.from_user.id, callback.message.message_id)
     except:
         pass
     
-    # Проверяем, все ли вопросы заданы (индексы 0-26, всего 27 вопросов)
-    if idx + 1 >= 27:  # idx это индекс от 0 до 26, idx+1 это номер от 1 до 27
-        logger.info(f"✅ Все 27 вопросов отвечены (последний индекс {idx})")
+    if idx + 1 >= 27:
+        logger.info(f"✅ Все вопросы отвечены")
         await start_verification(callback.from_user.id, state)
     else:
         await ask_question(callback.from_user.id, idx + 1, state)
@@ -1731,27 +1731,24 @@ async def process_mbti_answer(callback: types.CallbackQuery, state: FSMContext):
     idx = int(parts[1])
     value = int(parts[2])
     
-    logger.info(f"📝 Получен MBTI ответ на вопрос с индексом {idx}, значение {value}")
+    logger.info(f"📝 Получен MBTI ответ на вопрос {idx-1}, значение {value}")
     
     data = await state.get_data()
     answers = data.get('answers', {})
     
-    # Сохраняем ответ (индекс вопроса MBTI = idx - 2, так как idx=2 это первый MBTI вопрос)
     mbti_idx = idx - 2
     answers[f'mbti_{mbti_idx}'] = value
     await state.update_data(answers=answers)
     
-    # Удаляем сообщение
     try:
         await bot.delete_message(callback.from_user.id, callback.message.message_id)
     except:
         pass
     
-    # Проверяем, все ли вопросы заданы
     mbti_total = data.get('mbti_total', 81)
-    if mbti_idx + 1 >= mbti_total:  # Все MBTI вопросы отвечены
-        logger.info(f"✅ Все MBTI вопросы отвечены (последний индекс {mbti_idx})")
-        await show_mbti_result(callback.from_user.id, state)
+    if mbti_idx + 1 >= mbti_total:
+        logger.info(f"✅ Все MBTI вопросы отвечены")
+        await show_result(callback.from_user.id, state)
     else:
         await ask_question(callback.from_user.id, idx + 1, state)
 
@@ -1772,13 +1769,11 @@ async def process_verification(callback: types.CallbackQuery, state: FSMContext)
     
     await state.update_data(verification_answers=verification_answers)
     
-    # Удаляем сообщение
     try:
         await bot.delete_message(callback.from_user.id, callback.message.message_id)
     except:
         pass
     
-    # Следующий верификационный вопрос или завершение
     await ask_verification_question(callback.from_user.id, state)
 
 @dp.callback_query(lambda c: c.data == "restart")
@@ -1791,22 +1786,19 @@ async def restart(callback: types.CallbackQuery, state: FSMContext):
 
 @dp.callback_query(lambda c: c.data == "show_results")
 async def show_results(callback: types.CallbackQuery, state: FSMContext):
-    """Показать результаты (если есть)"""
+    """Показать результаты"""
     await callback.answer()
     data = await state.get_data()
     test_mode = data.get('test_mode', 'original')
     
     if data.get('answers'):
         if test_mode == "mbti":
-            # Показываем MBTI результаты
-            await show_mbti_result(callback.from_user.id, state)
+            await show_result(callback.from_user.id, state)
         else:
-            # Оригинальные результаты
             hypothesis = data.get('hypothesis')
             if hypothesis:
                 await show_fortune(callback.from_user.id, state, hypothesis)
             else:
-                # Формируем гипотезу из ответов
                 answers = data.get('answers', {})
                 narrative, second, third = get_narrative_from_answers(answers)
                 program = get_ancient_program(answers)
@@ -1820,24 +1812,21 @@ async def show_results(callback: types.CallbackQuery, state: FSMContext):
                 }
                 await show_fortune(callback.from_user.id, state, hypothesis)
     else:
-        await callback.message.answer("❌ Нет сохранённых результатов. Начни сначала /start")
+        await callback.message.answer("❌ Нет сохранённых результатов. Начните тест заново /start")
 
 async def start_verification(user_id, state: FSMContext):
-    """Начинает верификацию после основных вопросов"""
+    """Начинает верификацию"""
     data = await state.get_data()
     answers = data.get('answers', {})
     
-    # ОТЛАДКА: посмотрим все ответы
     logger.info("📊 ВСЕ ОТВЕТЫ:")
     for key, value in answers.items():
         logger.info(f"  {key}: {value}")
     
-    # Формируем гипотезу
     narrative, second, third = get_narrative_from_answers(answers)
     program = get_ancient_program(answers)
     level = get_level(answers, narrative)
     
-    # Если нарратив не определился, используем дефолт
     if not narrative:
         logger.error("❌ Нарратив не определен! Использую СБ")
         narrative = "СБ"
@@ -1854,15 +1843,13 @@ async def start_verification(user_id, state: FSMContext):
     
     logger.info(f"🔍 ГИПОТЕЗА: {hypothesis}")
     
-    # Получаем верификационные вопросы
     v_questions = get_verification_questions(hypothesis)
     
-    # Проверяем, что вопросы не пустые
     if not v_questions:
         logger.error("❌ Нет верификационных вопросов! Использую заглушку")
         v_questions = [
             {
-                "text": "Как ты обычно реагируешь на неожиданности?",
+                "text": "Как вы обычно реагируете на неожиданности?",
                 "options": {
                     "1": {"text": "Сразу действую", "scores": {"verify": "F1"}},
                     "2": {"text": "Стараюсь уйти", "scores": {"verify": "F2"}},
@@ -1871,7 +1858,7 @@ async def start_verification(user_id, state: FSMContext):
                 }
             },
             {
-                "text": "Что для тебя важнее?",
+                "text": "Что для вас важнее?",
                 "options": {
                     "1": {"text": "Власть", "scores": {"verify": "СБ"}},
                     "2": {"text": "Деньги", "scores": {"verify": "ТФ"}},
@@ -1891,39 +1878,29 @@ async def start_verification(user_id, state: FSMContext):
         verification_questions=v_questions
     )
     
-    # Сообщаем о переходе к верификации
-    mystic = get_mystic_symbol()
     await bot.send_message(
         user_id,
-        f"{mystic} *Я почти вижу твою суть...*\n\n"
-        f"Осталось уточнить несколько деталей."
+        f"🔍 *Уточнение*\n\n"
+        f"Осталось несколько вопросов для точности..."
     )
     await asyncio.sleep(2)
     
-    # Начинаем верификацию
     await ask_verification_question(user_id, state)
 
 async def ask_verification_question(user_id, state: FSMContext):
     """Задаёт верификационный вопрос"""
     data = await state.get_data()
-    hypothesis = data.get('hypothesis')
     v_index = data.get('verification_index', 0)
     v_questions = data.get('verification_questions', [])
     
-    logger.info(f"❓ Верификация: индекс={v_index}, всего вопросов={len(v_questions)}")
+    logger.info(f"❓ Верификация: индекс={v_index}, всего={len(v_questions)}")
     
-    if not v_questions:
-        logger.error("❌ Список верификационных вопросов пуст!")
-        await finish_verification(user_id, state)
-        return
-    
-    if v_index >= len(v_questions):
+    if not v_questions or v_index >= len(v_questions):
         logger.info("✅ Все верификационные вопросы заданы")
         await finish_verification(user_id, state)
         return
     
     q = v_questions[v_index]
-    logger.info(f"📝 Задаю вопрос {v_index+1}: {q['text']}")
     
     last_id = data.get('last_message_id')
     if last_id:
@@ -1943,8 +1920,7 @@ async def ask_verification_question(user_id, state: FSMContext):
     
     sent = await bot.send_message(
         user_id,
-        f"{get_mystic_symbol()} *ПРОВЕРКА • Круг {round_num}*\n\n"
-        f"Я почти готов... Ещё один вопрос:\n\n"
+        f"🔍 *Уточнение • Круг {round_num}*\n\n"
         f"*{q['text']}*",
         reply_markup=builder.as_markup()
     )
@@ -1955,7 +1931,7 @@ async def ask_verification_question(user_id, state: FSMContext):
     )
 
 async def finish_verification(user_id, state: FSMContext):
-    """Завершение верификации и переход к финалу или новому кругу"""
+    """Завершение верификации"""
     data = await state.get_data()
     hypothesis = data.get('hypothesis')
     verification_answers = data.get('verification_answers', [])
@@ -1963,14 +1939,12 @@ async def finish_verification(user_id, state: FSMContext):
     
     logger.info(f"🏁 Завершение верификации, круг {round_num}, ответов: {len(verification_answers)}")
     
-    # Проверяем гипотезу
     success, new_hypothesis = verify_hypothesis(verification_answers, hypothesis)
     
     if success or round_num >= 2:
         logger.info(f"🎉 Финальная гипотеза: {new_hypothesis}")
         await show_fortune(user_id, state, new_hypothesis)
     else:
-        # Новый круг верификации
         logger.info(f"🔄 Новый круг верификации с гипотезой {new_hypothesis}")
         new_questions = get_verification_questions(new_hypothesis)
         await state.update_data(
@@ -1981,27 +1955,28 @@ async def finish_verification(user_id, state: FSMContext):
             verification_questions=new_questions
         )
         
-        # Сообщаем о новом круге
-        mystic = get_mystic_symbol()
         await bot.send_message(
             user_id,
-            f"{mystic} *Интересно...*\n\n"
-            f"Твои ответы заставили меня задуматься. Позволь уточнить."
+            f"🔄 *Уточним...*\n\n"
+            f"Ваши ответы требуют дополнительной проверки."
         )
         await asyncio.sleep(2)
         
-        # Начинаем новый круг
         await ask_verification_question(user_id, state)
 
 async def show_fortune(user_id, state: FSMContext, hypothesis):
-    """Показывает финальный результат для классического режима"""
+    """Показывает результат для классического режима"""
     data = await state.get_data()
     answers = data.get('answers', {})
     
     gender = answers.get('gender', 'М')
     age = answers.get('age', 30)
-    user = await bot.get_chat(user_id)
-    user_name = user.first_name or "путник"
+    
+    try:
+        user = await bot.get_chat(user_id)
+        user_name = user.first_name or "пользователь"
+    except:
+        user_name = "пользователь"
     
     narrative = hypothesis["narrative"]
     program = hypothesis["program"]
@@ -2009,10 +1984,8 @@ async def show_fortune(user_id, state: FSMContext, hypothesis):
     second = hypothesis.get("second")
     third = hypothesis.get("third")
     
-    # Получаем название роли для заголовка
     role = get_role_name(narrative, level, gender)
     
-    # Удаляем последний вопрос
     last_id = data.get('last_message_id')
     if last_id:
         try:
@@ -2022,7 +1995,6 @@ async def show_fortune(user_id, state: FSMContext, hypothesis):
     
     logger.info(f"🔍 ФИНАЛ: нарратив={narrative}, программа={program}, уровень={level}, роль={role}")
     
-    # Получаем интерпретацию
     interpretation_data = get_interpretation(
         gender=gender, 
         narrative=narrative, 
@@ -2033,57 +2005,49 @@ async def show_fortune(user_id, state: FSMContext, hypothesis):
         third_narrative=third
     )
     
-    # Проверяем тип полученных данных и форматируем
     if isinstance(interpretation_data, dict):
-        # Извлекаем данные из словаря (новая структура)
         detstvo = interpretation_data.get("детство", "")
         identichnost = interpretation_data.get("идентичность", "")
         okruzhenie = interpretation_data.get("окружение", "")
         
-        # Формируем интерпретацию в новом формате
-        interpretation = f"""*🌱 Как ты стал таким:*
+        interpretation = f"""*📋 Характеристика:*
 {detstvo}
 
-*🎭 Кто ты есть на самом деле:*
+*🎭 Особенности личности:*
 {identichnost}
 
-*🏠 Где и с кем ты живёшь:*
+*🌍 Социальная среда:*
 {okruzhenie}"""
     else:
-        # Если вернулась строка (старая версия или ошибка)
         interpretation = str(interpretation_data)
     
-    # Формируем заголовок
     season = get_life_season(age)
     sep = get_separator()
-    mystic = get_mystic_symbol()
     
     ancient_names = {
-        "F1": "БЕЙ ⚔️",
-        "F2": "БЕГИ 🏃",
-        "F3": "ЗАМРИ 🧊",
-        "F4": "ПРИТВОРИСЬ МЁРТВЫМ 💀",
-        "F5": "ЗАИСКИВАЙ 🦊",
-        "F6": "СДАЙСЯ 🏳️"
+        "F1": "Активная защита",
+        "F2": "Избегание",
+        "F3": "Замирание",
+        "F4": "Игнорирование",
+        "F5": "Приспособление",
+        "F6": "Принятие"
     }
     
     header = (
-        f"{mystic} *Судьба {user_name}* {mystic}\n\n"
+        f"🧠 *Результаты: {user_name}*\n\n"
         f"{sep}\n"
-        f"🌿 {season} — {age} лет\n"
-        f"⚡ Твоя древняя программа: *{ancient_names.get(program, program)}*\n"
-        f"📜 Твой мир: *{NARRATIVE_NAMES[narrative]}*\n"
-        f"🎭 Твоя роль: *{role}*\n"
+        f"👤 Возраст: {season}\n"
+        f"📊 Стратегия: *{ancient_names.get(program, program)}*\n"
+        f"🎭 Тип: *{NARRATIVE_NAMES[narrative]}*\n"
+        f"📈 Уровень: *{level}/6*\n"
         f"{sep}\n\n"
     )
     
-    # Отправляем
     await bot.send_chat_action(user_id, action="typing")
     await asyncio.sleep(2)
     
     full_text = header + interpretation
     
-    # Разбиваем на части если длинное сообщение
     if len(full_text) > 4000:
         mid = len(full_text) // 2
         break_point = full_text.rfind('\n', 0, mid)
@@ -2099,31 +2063,33 @@ async def show_fortune(user_id, state: FSMContext, hypothesis):
     else:
         await bot.send_message(user_id, full_text)
     
-    # Кнопка перезапуска
     builder = InlineKeyboardBuilder()
-    builder.button(text="🔄 Ещё раз", callback_data="restart")
+    builder.button(text="🔄 Пройти заново", callback_data="restart")
     builder.adjust(1)
     
     await bot.send_message(
         user_id,
-        f"{mystic} *Что дальше?* {mystic}\n\n"
-        f"Хочешь заглянуть в судьбу снова?",
+        f"📋 *Что дальше?*\n\n"
+        f"Хотите пройти тест ещё раз?",
         reply_markup=builder.as_markup()
     )
     
     await state.clear()
 
-async def show_mbti_result(user_id, state: FSMContext):
+async def show_result(user_id, state: FSMContext):
     """Показывает MBTI результат"""
     data = await state.get_data()
     answers = data.get('answers', {})
     
     gender = answers.get('gender', 'М')
     age = answers.get('age', 30)
-    user = await bot.get_chat(user_id)
-    user_name = user.first_name or "путник"
     
-    # Удаляем последний вопрос
+    try:
+        user = await bot.get_chat(user_id)
+        user_name = user.first_name or "пользователь"
+    except:
+        user_name = "пользователь"
+    
     last_id = data.get('last_message_id')
     if last_id:
         try:
@@ -2133,66 +2099,84 @@ async def show_mbti_result(user_id, state: FSMContext):
     
     logger.info(f"🔍 Расчёт MBTI для {user_name}")
     
-    # Рассчитываем MBTI тип
     mbti_result = calculate_mbti_type(answers)
-    
-    # Получаем интерпретацию
     interpretation = get_mbti_interpretation(mbti_result, gender, age)
     
-    # Формируем заголовок
     season = get_life_season(age)
     sep = get_separator()
-    mystic = get_mystic_symbol()
     
     header = (
-        f"{mystic} *Психологический портрет {user_name}* {mystic}\n\n"
+        f"🧠 *Результаты MBTI: {user_name}*\n\n"
         f"{sep}\n"
-        f"🌿 {season} — {age} лет\n"
-        f"🧠 Тип: *{mbti_result['type']} — {mbti_result['type_name']}*\n"
+        f"👤 Возраст: {season}\n"
+        f"📊 Тип: *{mbti_result['type']} — {mbti_result['type_name']}*\n"
         f"{sep}\n\n"
     )
     
-    # Отправляем
+    if not mbti_result['validation'].get('valid', True):
+        warnings = "\n".join(mbti_result['validation'].get('warnings', []))
+        header += f"⚠️ *Примечание:*\n{warnings}\n\n{sep}\n\n"
+    
     await bot.send_chat_action(user_id, action="typing")
     await asyncio.sleep(2)
     
     full_text = header + interpretation
     
-    # Разбиваем на части если длинное сообщение
     if len(full_text) > 4000:
-        mid = len(full_text) // 2
-        break_point = full_text.rfind('\n', 0, mid)
-        if break_point == -1:
-            break_point = mid
+        parts = []
+        while len(full_text) > 4000:
+            split_at = full_text.rfind('\n', 0, 4000)
+            if split_at == -1:
+                split_at = 4000
+            parts.append(full_text[:split_at])
+            full_text = full_text[split_at:]
+        parts.append(full_text)
         
-        part1 = full_text[:break_point]
-        part2 = full_text[break_point:]
-        
-        await bot.send_message(user_id, part1)
-        await asyncio.sleep(1)
-        await bot.send_message(user_id, part2)
+        for i, part in enumerate(parts):
+            await bot.send_message(user_id, part)
+            await asyncio.sleep(0.5)
     else:
         await bot.send_message(user_id, full_text)
     
-    # Кнопка перезапуска
     builder = InlineKeyboardBuilder()
-    builder.button(text="🔄 Ещё раз", callback_data="restart")
+    builder.button(text="🔄 Пройти заново", callback_data="restart")
     builder.adjust(1)
     
     await bot.send_message(
         user_id,
-        f"{mystic} *Что дальше?* {mystic}\n\n"
-        f"Хочешь заглянуть в судьбу снова?",
+        f"📋 *Что дальше?*\n\n"
+        f"Хотите пройти тест ещё раз?",
         reply_markup=builder.as_markup()
     )
     
     await state.clear()
 
+@dp.message(Command("help"))
+async def cmd_help(message: types.Message):
+    """Помощь"""
+    help_text = (
+        f"🧠 *Помощь*\n\n"
+        f"{get_separator()}\n\n"
+        f"• /start — начать тестирование\n"
+        f"• /help — показать это сообщение\n\n"
+        f"{get_separator()}\n\n"
+        f"*О тестах:*\n"
+        f"🔬 Базовый тест: 27 вопросов\n"
+        f"📊 MBTI тест: 81 вопрос\n\n"
+        f"*Шкала ответов:*\n"
+        f"1 — Совершенно не согласен\n"
+        f"2 — Скорее не согласен\n"
+        f"3 — Нейтрально\n"
+        f"4 — Скорее согласен\n"
+        f"5 — Полностью согласен"
+    )
+    
+    await message.answer(help_text)
+
 # ==================== ЗАПУСК ====================
 
 async def main():
     """Запуск бота"""
-    # Сбрасываем вебхук перед запуском (на всякий случай)
     try:
         await bot.delete_webhook(drop_pending_updates=True)
         logger.info("✅ Вебхук сброшен")
@@ -2200,11 +2184,10 @@ async def main():
         logger.warning(f"⚠️ Не удалось сбросить вебхук: {e}")
     
     print("\n" + "="*50)
-    print("🔮 ТАЙНЫЙ ШЁПОТ v4.0 с MBTI")
+    print("🧠 ПСИХОЛОГИЧЕСКИЙ ПРОФАЙЛЕР v4.0")
     print("="*50)
-    print("🚀 Бот запущен и готов к работе...\n")
-    print("📝 Логирование включено (уровень DEBUG)")
-    print("📁 Лог сохраняется в bot_debug.log")
+    print("🚀 Бот запущен")
+    print("📝 Логирование включено")
     print("="*50 + "\n")
     
     await dp.start_polling(bot)
