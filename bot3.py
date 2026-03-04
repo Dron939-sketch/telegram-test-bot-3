@@ -18,7 +18,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.utils.keyboard import InlineKeyboardBuilder
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Optional
 
 # Загружаем токен
 load_dotenv()
@@ -542,7 +542,19 @@ def calculate_profile(data: Dict) -> Dict:
     
     scores = {}
     for cat, questions in categories.items():
-        values = [int(data.get(q, 3)) for q in questions]  # 3 - нейтрально по умолчанию
+        values = []
+        for q in questions:
+            val = data.get(q)
+            if val is None:
+                logger.warning(f"⚠️ Отсутствует ответ на вопрос {q}, использую 3")
+                values.append(3)
+            else:
+                try:
+                    values.append(int(val))
+                except ValueError:
+                    logger.warning(f"⚠️ Неверное значение {val} для {q}, использую 3")
+                    values.append(3)
+        
         scores[cat] = round(sum(values) / len(values), 1)
     
     # Сортируем по убыванию
@@ -735,6 +747,7 @@ def get_recommendation(dominant: str, scores: Dict, secondary: str = None) -> st
         base += secondary_rec.get(secondary, "")
     
     return base
+
 # ==================== ХЕНДЛЕРЫ ====================
 
 @dp.message(Command("start"))
@@ -779,17 +792,21 @@ async def ask_question(user_id: int, state: FSMContext, question: Dict):
     if last_id:
         try:
             await bot.delete_message(user_id, last_id)
-        except:
-            pass
+        except Exception as e:
+            logger.warning(f"Не удалось удалить сообщение: {e}")
     
     # Определяем прогресс
     all_questions = PHYSICAL_QUESTIONS + ENVIRONMENT_QUESTIONS + REINFORCEMENT_QUESTIONS
-    current_index = 0
-    
-    for q in all_questions:
+    current_index = -1
+    for i, q in enumerate(all_questions):
         if q["id"] == question["id"]:
+            current_index = i
             break
-        current_index += 1
+    
+    if current_index == -1:
+        logger.error(f"❌ Вопрос {question['id']} не найден в списке")
+        await bot.send_message(user_id, "❌ Ошибка. Начните заново: /start")
+        return
     
     progress = get_progress_bar(current_index + 1, len(all_questions))
     
@@ -813,14 +830,28 @@ async def process_answer(callback: types.CallbackQuery, state: FSMContext):
     """Обработка ответа"""
     await callback.answer()
     
+    # Парсим callback data
     parts = callback.data.split('_')
+    if len(parts) < 3:
+        logger.error(f"❌ Неверный формат callback: {callback.data}")
+        await callback.message.answer("❌ Ошибка. Начните заново: /start")
+        return
+    
     q_id = parts[1]
     value = parts[2]
+    
+    logger.info(f"📝 Получен ответ: {q_id} = {value}")
     
     # Сохраняем ответ
     data = await state.get_data()
     data[q_id] = value
     await state.update_data(data)
+    
+    # Удаляем сообщение с вопросом
+    try:
+        await bot.delete_message(callback.from_user.id, callback.message.message_id)
+    except Exception as e:
+        logger.warning(f"Не удалось удалить сообщение: {e}")
     
     # Определяем следующий вопрос
     all_questions = PHYSICAL_QUESTIONS + ENVIRONMENT_QUESTIONS + REINFORCEMENT_QUESTIONS
@@ -880,6 +911,10 @@ async def process_answer(callback: types.CallbackQuery, state: FSMContext):
         
         if next_q["id"] in state_map:
             await state.set_state(state_map[next_q["id"]])
+        else:
+            logger.error(f"❌ Нет состояния для вопроса {next_q['id']}")
+            await callback.message.answer("❌ Ошибка. Начните заново: /start")
+            return
         
         await ask_question(callback.from_user.id, state, next_q)
         
@@ -897,8 +932,8 @@ async def show_result(user_id: int, state: FSMContext):
     if last_id:
         try:
             await bot.delete_message(user_id, last_id)
-        except:
-            pass
+        except Exception as e:
+            logger.warning(f"Не удалось удалить сообщение: {e}")
     
     # Рассчитываем профиль
     profile = calculate_profile(data)
@@ -920,7 +955,7 @@ async def show_result(user_id: int, state: FSMContext):
     await bot.send_message(
         user_id,
         f"📋 <b>Что дальше?</b>\n\n"
-        f"Хотите пройти тест ещё раз или поделиться с друзьями?",
+        f"Хотите пройти тест ещё раз?",
         reply_markup=builder.as_markup()
     )
     
