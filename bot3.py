@@ -684,7 +684,7 @@ def get_profile_description(profile: Dict) -> str:
     
     # Рекомендации
     text += f"""
-\n💡 <b>Рекомендации:</b>
+💡 <b>Рекомендации:</b>
 • Развивайте {secondary} — это ваша вторая по эффективности стратегия
 • {get_recommendation(dominant, scores)}
 • Учитывайте свои физические данные — они дают преимущества и ограничения
