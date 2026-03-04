@@ -656,7 +656,7 @@ def get_profile_description(profile: Dict) -> str:
         env_desc.append("• Росли в бедности — научились ценить ресурсы")
     
     # Собираем описание
-text = f"""
+    text = f"""
 🧠 <b>ВАШ ПРОФИЛЬ</b>
 
 {descriptions[dominant]}
@@ -668,34 +668,34 @@ text = f"""
 • 🤝 ЧВ (общение): {scores['ЧВ']}/6
 
 <b>Доминирует:</b> {dominant}
-<b>Вторичная стратегия:</b> {secondary} {secondary_desc.get(secondary, '')}
+<b>Вторичная стратегия:</b> {secondary} {secondary_desc[secondary]}
 
 <b>Что дано от природы:</b>
 """
 
-# Добавляем физические характеристики безопасно
-height_desc = ["низкий", "ниже среднего", "средний", "выше среднего", "высокий"]
-strength_desc = ["слабый", "ниже среднего", "средняя", "выше среднего", "очень сильный"]
-looks_desc = ["незаметная", "обычная", "симпатичная", "красивая", "модельная"]
+    # Добавляем физические характеристики безопасно
+    height_desc = ["низкий", "ниже среднего", "средний", "выше среднего", "высокий"]
+    strength_desc = ["слабый", "ниже среднего", "средняя", "выше среднего", "очень сильный"]
+    looks_desc = ["незаметная", "обычная", "симпатичная", "красивая", "модельная"]
 
-text += f"<i>Рост:</i> {height_desc[physical['height']-1]}\n"
-text += f"<i>Сила:</i> {strength_desc[physical['strength']-1]}\n"
-text += f"<i>Внешность:</i> {looks_desc[physical['looks']-1]}\n"
+    text += f"<i>Рост:</i> {height_desc[physical['height']-1]}\n"
+    text += f"<i>Сила:</i> {strength_desc[physical['strength']-1]}\n"
+    text += f"<i>Внешность:</i> {looks_desc[physical['looks']-1]}\n"
 
-if physical_desc:
-    text += "\n<b>Заметки по физическим данным:</b>\n" + "\n".join(physical_desc) + "\n"
+    if physical_desc:
+        text += "\n<b>Заметки по физическим данным:</b>\n" + "\n".join(physical_desc) + "\n"
 
-if env_desc:
-    text += "\n<b>Как повлияло окружение:</b>\n" + "\n".join(env_desc) + "\n"
+    if env_desc:
+        text += "\n<b>Как повлияло окружение:</b>\n" + "\n".join(env_desc) + "\n"
 
-# Рекомендации отдельно (не в f-строке из-за эмодзи)
-text += "\n💡 <b>Рекомендации:</b>\n"
-text += f"• Развивайте {secondary} — это ваша вторая по эффективности стратегия\n"
-text += f"• {get_recommendation(dominant, scores, secondary)}\n"
-text += "• Учитывайте свои физические данные — они дают преимущества и ограничения\n"
-text += "• Окружение можно менять — то, что работало в детстве, может не работать сейчас\n"
-
-return text
+    # Рекомендации отдельно (не в f-строке из-за эмодзи)
+    text += "\n💡 <b>Рекомендации:</b>\n"
+    text += f"• Развивайте {secondary} — это ваша вторая по эффективности стратегия\n"
+    text += f"• {get_recommendation(dominant, scores, secondary)}\n"
+    text += "• Учитывайте свои физические данные — они дают преимущества и ограничения\n"
+    text += "• Окружение можно менять — то, что работало в детстве, может не работать сейчас\n"
+    
+    return text
 
 def get_recommendation(dominant: str, scores: Dict) -> str:
     """Возвращает рекомендацию по развитию"""
