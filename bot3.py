@@ -750,6 +750,48 @@ def get_recommendation(dominant: str, scores: Dict, secondary: str = None) -> st
 
 # ==================== ХЕНДЛЕРЫ ====================
 
+async def ask_question(user_id: int, state: FSMContext, question: Dict):
+    """Задаёт вопрос"""
+    
+    data = await state.get_data()
+    last_id = data.get('last_message_id')
+    
+    if last_id:
+        try:
+            await bot.delete_message(user_id, last_id)
+        except Exception as e:
+            logger.debug(f"Не удалось удалить сообщение: {e}")
+    
+    # Определяем прогресс
+    all_questions = PHYSICAL_QUESTIONS + ENVIRONMENT_QUESTIONS + REINFORCEMENT_QUESTIONS
+    current_index = -1
+    for i, q in enumerate(all_questions):
+        if q["id"] == question["id"]:
+            current_index = i
+            break
+    
+    if current_index == -1:
+        logger.error(f"❌ Вопрос {question['id']} не найден")
+        await bot.send_message(user_id, "❌ Ошибка. Начните заново: /start")
+        return
+    
+    progress = get_progress_bar(current_index + 1, len(all_questions))
+    
+    builder = InlineKeyboardBuilder()
+    for key, text in question["options"].items():
+        builder.button(text=text, callback_data=f"ans_{question['id']}_{key}")
+    builder.adjust(1)
+    
+    sent = await bot.send_message(
+        user_id,
+        f"📋 <b>Вопрос {current_index+1}/{len(all_questions)}</b>\n"
+        f"<code>{progress}</code>\n\n"
+        f"{question['text']}",
+        reply_markup=builder.as_markup()
+    )
+    
+    await state.update_data(last_message_id=sent.message_id)
+
 @dp.message(Command("start"))
 async def cmd_start(message: types.Message, state: FSMContext):
     """Начало тестирования"""
@@ -772,6 +814,16 @@ async def cmd_start(message: types.Message, state: FSMContext):
     builder.adjust(1)
     
     await message.answer(intro, reply_markup=builder.as_markup())
+
+@dp.callback_query(lambda c: c.data == "start_test")
+async def process_start(callback: types.CallbackQuery, state: FSMContext):
+    """Начинаем тест"""
+    await callback.answer()
+    
+    await state.update_data(last_message_id=None)
+    await state.set_state(ProfileState.height)
+    
+    await ask_question(callback.from_user.id, state, PHYSICAL_QUESTIONS[0])
 
 @dp.callback_query(lambda c: c.data.startswith('ans_'))
 async def process_answer(callback: types.CallbackQuery, state: FSMContext):
