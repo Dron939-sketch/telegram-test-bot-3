@@ -773,72 +773,33 @@ async def cmd_start(message: types.Message, state: FSMContext):
     
     await message.answer(intro, reply_markup=builder.as_markup())
 
-@dp.callback_query(lambda c: c.data == "start_test")
-async def process_start(callback: types.CallbackQuery, state: FSMContext):
-    """Начинаем тест"""
-    await callback.answer()
-    
-    await state.update_data(last_message_id=None)
-    await state.set_state(ProfileState.height)
-    
-    await ask_question(callback.from_user.id, state, PHYSICAL_QUESTIONS[0])
-
-async def ask_question(user_id: int, state: FSMContext, question: Dict):
-    """Задаёт вопрос"""
-    
-    data = await state.get_data()
-    last_id = data.get('last_message_id')
-    
-    if last_id:
-        try:
-            await bot.delete_message(user_id, last_id)
-        except Exception as e:
-            logger.warning(f"Не удалось удалить сообщение: {e}")
-    
-    # Определяем прогресс
-    all_questions = PHYSICAL_QUESTIONS + ENVIRONMENT_QUESTIONS + REINFORCEMENT_QUESTIONS
-    current_index = -1
-    for i, q in enumerate(all_questions):
-        if q["id"] == question["id"]:
-            current_index = i
-            break
-    
-    if current_index == -1:
-        logger.error(f"❌ Вопрос {question['id']} не найден в списке")
-        await bot.send_message(user_id, "❌ Ошибка. Начните заново: /start")
-        return
-    
-    progress = get_progress_bar(current_index + 1, len(all_questions))
-    
-    builder = InlineKeyboardBuilder()
-    for key, text in question["options"].items():
-        builder.button(text=text, callback_data=f"ans_{question['id']}_{key}")
-    builder.adjust(1)
-    
-    sent = await bot.send_message(
-        user_id,
-        f"📋 <b>Вопрос {current_index+1}/{len(all_questions)}</b>\n"
-        f"<code>{progress}</code>\n\n"
-        f"{question['text']}",
-        reply_markup=builder.as_markup()
-    )
-    
-    await state.update_data(last_message_id=sent.message_id)
-
 @dp.callback_query(lambda c: c.data.startswith('ans_'))
 async def process_answer(callback: types.CallbackQuery, state: FSMContext):
     """Обработка ответа"""
     await callback.answer()
     
     # Парсим callback data
+    # Формат: ans_sb_q1_1  или ans_height_3
     parts = callback.data.split('_')
+    
     if len(parts) < 3:
         logger.error(f"❌ Неверный формат callback: {callback.data}")
         await callback.message.answer("❌ Ошибка. Начните заново: /start")
         return
     
-    q_id = parts[1]
-    value = parts[2]
+    # Собираем ID вопроса (может быть составным: "sb_q1" или простым: "height")
+    if len(parts) == 3:
+        # Простой формат: ans_height_3
+        q_id = parts[1]  # "height"
+        value = parts[2]  # "3"
+    elif len(parts) == 4:
+        # Сложный формат: ans_sb_q1_1
+        q_id = f"{parts[1]}_{parts[2]}"  # "sb_q1"
+        value = parts[3]  # "1"
+    else:
+        logger.error(f"❌ Неверный формат callback: {callback.data}")
+        await callback.message.answer("❌ Ошибка. Начните заново: /start")
+        return
     
     logger.info(f"📝 Получен ответ: {q_id} = {value}")
     
@@ -847,11 +808,11 @@ async def process_answer(callback: types.CallbackQuery, state: FSMContext):
     data[q_id] = value
     await state.update_data(data)
     
-    # Удаляем сообщение с вопросом
+    # Удаляем сообщение с вопросом (игнорируем ошибку, если сообщение уже удалено)
     try:
         await bot.delete_message(callback.from_user.id, callback.message.message_id)
     except Exception as e:
-        logger.warning(f"Не удалось удалить сообщение: {e}")
+        logger.debug(f"Не удалось удалить сообщение: {e}")
     
     # Определяем следующий вопрос
     all_questions = PHYSICAL_QUESTIONS + ENVIRONMENT_QUESTIONS + REINFORCEMENT_QUESTIONS
