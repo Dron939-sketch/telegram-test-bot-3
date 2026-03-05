@@ -1397,11 +1397,13 @@ async def call_deepseek(prompt, system_message="", max_tokens=500, retry_count=3
     logger.info(f"📝 Длина промпта: {len(prompt)} символов")
     logger.info(f"🎯 max_tokens: {max_tokens}")
 
+    # ИСПРАВЛЕНО: Только один правильный URL
+    url = "https://api.deepseek.com/chat/completions"
+    
     headers = {
         "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
         "Content-Type": "application/json",
-        "Accept": "application/json",  # Добавлено
-        "Accept-Encoding": "gzip, deflate",
+        "Accept": "application/json",
     }
 
     messages = []
@@ -1409,111 +1411,80 @@ async def call_deepseek(prompt, system_message="", max_tokens=500, retry_count=3
         messages.append({"role": "system", "content": system_message})
     messages.append({"role": "user", "content": prompt})
 
+    # ИСПРАВЛЕНО: Правильный формат данных
     data = {
         "model": "deepseek-chat",
         "messages": messages,
         "temperature": 0.7,
         "max_tokens": max_tokens,
+        "stream": False
     }
 
-    urls = [
-        "https://api.deepseek.com/v1/chat/completions",
-        "https://api.deepseek.com/chat/completions",
-    ]
+    # ВРЕМЕННО: Добавьте для отладки
+    import json
+    logger.info(f"📤 Отправляемые данные: {json.dumps(data, ensure_ascii=False)[:500]}...")
 
     for attempt in range(retry_count):
-        for url_idx, url in enumerate(urls):
-            try:
-                logger.info(f"📡 Попытка {attempt + 1}/{retry_count}, URL {url_idx + 1}: {url}")
+        try:
+            logger.info(f"📡 Попытка {attempt + 1}/{retry_count}")
+            
+            timeout = aiohttp.ClientTimeout(total=60, connect=30, sock_read=60)
+            
+            async with aiohttp.ClientSession() as session:
+                start_time = datetime.datetime.now()
                 
-                timeout = aiohttp.ClientTimeout(total=60, connect=30, sock_read=60)
-                
-                async with aiohttp.ClientSession() as session:
-                    start_time = datetime.datetime.now()
+                async with session.post(
+                    url,
+                    headers=headers,
+                    json=data,  # Важно: используем json=, а не data=
+                    timeout=timeout
+                ) as response:
+                    end_time = datetime.datetime.now()
+                    duration = (end_time - start_time).total_seconds()
                     
-                    async with session.post(
-                        url,
-                        headers=headers,
-                        json=data,
-                        timeout=timeout,
-                        compress=True
-                    ) as response:
-                        end_time = datetime.datetime.now()
-                        duration = (end_time - start_time).total_seconds()
-                        
-                        logger.info(f"⏱ Время ответа: {duration:.2f} сек, статус: {response.status}")
-                        
-                        if response.status == 200:
-                            # Успешный ответ - читаем JSON
-                            try:
-                                result = await asyncio.wait_for(response.json(), timeout=120)
-                                logger.info("✅ DeepSeek API успешно ответил")
-                                
-                                if result and "choices" in result and len(result["choices"]) > 0:
-                                    content = result["choices"][0]["message"]["content"]
-                                    logger.info(f"📦 Размер ответа: {len(content)} символов")
-                                    return content
-                                else:
-                                    logger.error("❌ Пустой ответ от API")
-                                    continue
-                                    
-                            except asyncio.TimeoutError:
-                                logger.error("⏰ Таймаут при чтении JSON ответа (120 сек)")
-                                continue
-                            except Exception as e:
-                                logger.error(f"❌ Ошибка парсинга JSON: {e}")
-                                # Пробуем прочитать как текст для диагностики
-                                try:
-                                    text_response = await response.text()
-                                    logger.error(f"📄 Текст ответа (первые 200 символов): {text_response[:200]}")
-                                except:
-                                    pass
-                                continue
-                        else:
-                            # Ошибка - читаем как текст
-                            try:
-                                error_text = await response.text()
-                                logger.error(f"❌ Ошибка {response.status}: {error_text[:500]}")
-                            except:
-                                logger.error(f"❌ Ошибка {response.status}: не удалось прочитать тело ответа")
-                                error_text = ""
-                            
-                            if response.status == 401:
-                                logger.error("🔑 НЕВЕРНЫЙ API КЛЮЧ!")
-                                return None
-                            elif response.status == 429:
-                                logger.error("⏳ Превышен лимит запросов")
-                                wait_time = (2 ** attempt) + random.random()
-                                await asyncio.sleep(wait_time)
-                            elif response.status == 400:
-                                logger.error("🔧 Некорректный запрос - возможно, слишком большой max_tokens или проблема с форматом")
-                                # Пробуем прочитать ответ как текст еще раз для диагностики
-                                if error_text:
-                                    logger.error(f"📄 Тело ответа (первые 500 символов): {error_text[:500]}")
-                                wait_time = (2 ** attempt) + random.random()
-                                await asyncio.sleep(wait_time)
-                            elif response.status >= 500:
-                                logger.error(f"🔧 Серверная ошибка DeepSeek")
-                                wait_time = (2 ** attempt) + random.random()
-                                await asyncio.sleep(wait_time)
+                    logger.info(f"⏱ Время ответа: {duration:.2f} сек, статус: {response.status}")
+                    
+                    # Пытаемся прочитать ответ
+                    response_text = await response.text()
+                    logger.info(f"📄 Ответ сервера: {response_text[:500]}")
+                    
+                    if response.status == 200:
+                        try:
+                            result = json.loads(response_text)
+                            if result and "choices" in result and len(result["choices"]) > 0:
+                                content = result["choices"][0]["message"]["content"]
+                                logger.info(f"✅ Успех! Длина ответа: {len(content)}")
+                                return content
                             else:
-                                logger.error(f"❌ Необработанная ошибка {response.status}")
-                                return None
-                            
-            except asyncio.TimeoutError:
-                logger.error(f"⏰ ТАЙМАУТ (попытка {attempt + 1}, URL {url_idx + 1})")
-                wait_time = (2 ** attempt) + random.random()
-                await asyncio.sleep(wait_time)
-                
-            except aiohttp.ClientError as e:
-                logger.error(f"🌐 Сетевая ошибка: {e}")
-                wait_time = (2 ** attempt) + random.random()
-                await asyncio.sleep(wait_time)
-                
-            except Exception as e:
-                logger.error(f"💥 Неожиданная ошибка: {e}")
-                wait_time = (2 ** attempt) + random.random()
-                await asyncio.sleep(wait_time)
+                                logger.error(f"❌ Странный формат ответа: {result}")
+                        except json.JSONDecodeError as e:
+                            logger.error(f"❌ Ошибка парсинга JSON: {e}")
+                    else:
+                        logger.error(f"❌ Ошибка HTTP {response.status}: {response_text}")
+                        
+                        if response.status == 401:
+                            logger.error("🔑 НЕВЕРНЫЙ API КЛЮЧ!")
+                            return None
+                        elif response.status == 429:
+                            logger.error("⏳ Превышен лимит запросов")
+                        elif response.status == 400:
+                            logger.error("🔧 Некорректный запрос - проверьте формат данных")
+                        
+                        if attempt < retry_count - 1:
+                            wait_time = (2 ** attempt) + random.random()
+                            logger.info(f"⏳ Ожидание {wait_time:.2f} сек перед повтором...")
+                            await asyncio.sleep(wait_time)
+                        
+        except asyncio.TimeoutError:
+            logger.error(f"⏰ Таймаут (попытка {attempt + 1})")
+        except aiohttp.ClientError as e:
+            logger.error(f"🌐 Сетевая ошибка: {e}")
+        except Exception as e:
+            logger.error(f"💥 Неожиданная ошибка: {e}")
+        
+        if attempt < retry_count - 1:
+            wait_time = (2 ** attempt) + random.random()
+            await asyncio.sleep(wait_time)
     
     logger.error("❌ ВСЕ ПОПЫТКИ НЕ УДАЛИСЬ")
     return None
