@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 ВИРТУАЛЬНЫЙ ПСИХОЛОГ - Матрица Поведений 4×6
-ПОЛНАЯ ВЕРСИЯ с живыми профилями уровней, статистикой для админа и улучшенным AI
+ПОЛНАЯ ВЕРСИЯ с ИНТИМНЫМ ПРОФИЛЕМ
 """
 
 import os
@@ -33,7 +33,7 @@ TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN", "")
 DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY", "")
 
 # ID администраторов (замените на свой Telegram ID)
-ADMIN_IDS = [532205848]  # ⚠️ ВАЖНО: УКАЖИТЕ СВОЙ TELEGRAM ID
+ADMIN_IDS = [123456789]  # ⚠️ ВАЖНО: УКАЖИТЕ СВОЙ TELEGRAM ID
 
 # Хранилище данных пользователей
 user_data = {}
@@ -1577,7 +1577,6 @@ def get_priority_order(scores: dict) -> list:
     else:
         return [k for k, _ in sorted(scores.items(), key=lambda x: x[1])]
 
-# УЛУЧШЕННАЯ ФУНКЦИЯ call_deepseek с повторными попытками
 async def call_deepseek(prompt, system_message="", max_tokens=500, retry_count=3):
     """Асинхронный вызов DeepSeek API с повторными попытками"""
     if not DEEPSEEK_API_KEY:
@@ -1991,6 +1990,126 @@ async def show_level_detail(callback: types.CallbackQuery, vector_key: str):
 
 
 # ══════════════════════════════════════════════
+#  НОВАЯ ФУНКЦИЯ: ИНТИМНЫЙ ПРОФИЛЬ
+# ══════════════════════════════════════════════
+
+def create_intimate_profile_prompt(scores):
+    """Формирует промпт для генерации интимного профиля"""
+    
+    # Получаем уровни
+    cv_level = level(scores["ЧВ"])
+    sb_level = level(scores["СБ"])
+    tf_level = level(scores["ТФ"])
+    ub_level = level(scores["УБ"])
+    
+    # Собираем профили
+    cv_profile = LEVEL_PROFILES["ЧВ"].get(cv_level, {})
+    sb_profile = LEVEL_PROFILES["СБ"].get(sb_level, {})
+    tf_profile = LEVEL_PROFILES["ТФ"].get(tf_level, {})
+    ub_profile = LEVEL_PROFILES["УБ"].get(ub_level, {})
+    
+    prompt = f"""ТЫ — ПСИХОЛОГ-СЕКСОЛОГ, ПИСАТЕЛЬ. Твоя задача — написать интимный профиль человека.
+
+ДАННЫЕ:
+ЧВ (Отношения): уровень {cv_level}/6 — {VECTORS['ЧВ']['levels'][cv_level]['name']}
+Архетип: {cv_profile.get('archetype', '')}
+Суть: {cv_profile.get('archetype_desc', '')}
+Цитата: {cv_profile.get('quote', '')}
+Болит: {cv_profile.get('pain_costs', [''])[0] if cv_profile.get('pain_costs') else ''}
+
+СБ (Реакция на угрозу): уровень {sb_level}/6 — {VECTORS['СБ']['levels'][sb_level]['name']}
+Архетип: {sb_profile.get('archetype', '')}
+
+ТФ (Ресурсы): уровень {tf_level}/6 — {VECTORS['ТФ']['levels'][tf_level]['name']}
+УБ (Понимание мира): уровень {ub_level}/6 — {VECTORS['УБ']['levels'][ub_level]['name']}
+
+НАПИШИ ИНТИМНЫЙ ПРОФИЛЬ ИЗ 8 БЛОКОВ:
+
+1. ЗАГОЛОВОК: «ЧВ-{cv_level}_СБ-{sb_level} — {cv_profile.get('archetype', '')}»
+   Цитата (1 предложение-суть)
+
+2. КТО ТЫ В ПОСТЕЛИ (2-3 абзаца):
+   Яркая метафора. Твоя суперсила. Твоя трагедия. Как это выглядит и чувствуется.
+
+3. ЧТО ТЕБЯ ЗАВОДИТ (5 пунктов):
+   Конкретные сцены. Запахи. Звуки. Телесные реакции. Без общих слов.
+
+4. ЧТО ВЫКЛЮЧАЕТ (4 пункта):
+   Что убивает мгновенно. Детали, после которых всё пропало.
+
+5. ТВОИ ТАЙНЫЕ ЖЕЛАНИЯ (4 пункта):
+   Чего хочешь, но боишься признать. Что было бы, если б не стыдно.
+
+6. ЧТО ШЕПТАТЬ ТЕБЕ В ПОТЁМКАХ (5 фраз):
+   Короткие фразы в кавычках, от которых сносит крышу.
+
+7. ЧТО ВЫДАЁТ ТЕБЯ (4 пункта):
+   Микродвижения, привычки, по которым видно, что происходит внутри.
+
+8. ТВОЁ ГЛАВНОЕ (2 абзаца):
+   Чего ищешь на самом деле. В чём точка роста. Что должен про себя понять.
+
+СТИЛЬ: Телесный, конкретный, метафоричный. Без воды. Без морализаторства.
+Текст должен быть узнаваемым и пронзительным. Пиши от второго лица («ты»)."""
+    
+    return prompt
+
+async def show_intimate_profile(callback: types.CallbackQuery):
+    """Генерирует интимный профиль на основе данных пользователя"""
+    user_id = callback.from_user.id
+    user = user_data[user_id]
+    
+    # Проверяем, пройден ли тест полностью
+    if not all(len(v) >= 8 for v in user["scores"].values()):
+        await callback.message.edit_text(
+            "⚠️ Сначала завершите все этапы теста",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="◀️ Назад", callback_data="show_results")]
+            ])
+        )
+        return
+    
+    await callback.message.edit_text("🔥 *Составляю интимный профиль...*\n\n_Это займёт около 20 секунд_", parse_mode='Markdown')
+    
+    scores = {k: round(mean(v), 1) for k, v in user["scores"].items()}
+    
+    # Формируем промпт
+    prompt = create_intimate_profile_prompt(scores)
+    
+    # Вызываем API
+    system_message = "Ты — психолог-сексолог, автор метода Variatica. Пишешь глубокие, пронзительные, хирургически точные психологические портреты."
+    response = await call_deepseek(prompt, system_message, max_tokens=3000)
+    
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="◀️ Назад к профилю", callback_data="show_results")]
+    ])
+    
+    if response:
+        # Разбиваем на части если слишком длинный
+        if len(response) > 4000:
+            parts = [response[i:i+4000] for i in range(0, len(response), 4000)]
+            await callback.message.edit_text(
+                f"🔥 *ИНТИМНЫЙ ПРОФИЛЬ*\n\n{parts[0]}",
+                parse_mode='Markdown',
+                reply_markup=None
+            )
+            for part in parts[1:-1]:
+                await callback.message.answer(part, parse_mode='Markdown')
+            await callback.message.answer(parts[-1], parse_mode='Markdown', reply_markup=keyboard)
+        else:
+            await callback.message.edit_text(
+                f"🔥 *ИНТИМНЫЙ ПРОФИЛЬ*\n\n{response}",
+                parse_mode='Markdown',
+                reply_markup=keyboard
+            )
+    else:
+        await callback.message.edit_text(
+            "⚠️ Не удалось сгенерировать профиль. Попробуйте позже.",
+            reply_markup=keyboard
+        )
+
+
+# ══════════════════════════════════════════════
 #  ОБРАБОТЧИКИ TELEGRAM
 # ══════════════════════════════════════════════
 
@@ -2034,7 +2153,6 @@ async def start_command(message: types.Message):
         parse_mode='Markdown'
     )
 
-# НОВАЯ КОМАНДА: статистика для админа
 async def stats_command(message: types.Message):
     """Показывает статистику бота (только для админа)"""
     if message.from_user.id not in ADMIN_IDS:
@@ -2043,7 +2161,6 @@ async def stats_command(message: types.Message):
     
     await message.answer(stats.get_stats_text(), parse_mode='Markdown')
 
-# НОВАЯ КОМАНДА: проверка статуса API
 async def apistatus_command(message: types.Message):
     """Проверяет статус DeepSeek API (только для админа)"""
     if message.from_user.id not in ADMIN_IDS:
@@ -2208,6 +2325,10 @@ async def callback_handler(callback: types.CallbackQuery):
     elif data == "ai_recommendations":
         await show_ai_recommendations(callback)
     
+    # НОВАЯ ВЕТКА: интимный профиль
+    elif data == "intimate_profile":
+        await show_intimate_profile(callback)
+    
     elif data == "smart_questions":
         await show_smart_questions(callback)
     
@@ -2300,7 +2421,7 @@ async def show_results(callback: types.CallbackQuery):
             if pattern:
                 text += f"• *{VECTORS[key]['name']}:* {pattern[:200]}...\n\n"
     
-    # Четыре кнопки в ряду по две
+    # НОВЫЙ ДИЗАЙН: 5 кнопок в две строки (добавлена кнопка интимного профиля)
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [
             InlineKeyboardButton(text="🧠 Анализ", callback_data="ai_analysis"),
@@ -2308,7 +2429,7 @@ async def show_results(callback: types.CallbackQuery):
         ],
         [
             InlineKeyboardButton(text="💡 Рекомендации", callback_data="ai_recommendations"),
-            InlineKeyboardButton(text="📋 Подробнее", callback_data="standard_analysis")
+            InlineKeyboardButton(text="🔥 Интимный профиль", callback_data="intimate_profile")
         ],
         [
             InlineKeyboardButton(text="◀️ Назад", callback_data="back_to_menu")
@@ -2822,7 +2943,7 @@ async def main():
         logger.warning("DeepSeek API ключ не найден, AI-функции будут использовать fallback-ответы")
     
     logger.info("Бот запущен...")
-    print("🚀 Виртуальный психолог запущен с НОВЫМ ДИЗАЙНОМ, СТАТИСТИКОЙ и УЛУЧШЕННЫМ AI!")
+    print("🚀 Виртуальный психолог запущен с ИНТИМНЫМ ПРОФИЛЕМ!")
     print(f"👤 Ваш Telegram ID для админки: {ADMIN_IDS[0] if ADMIN_IDS else 'не указан'}")
     print("📊 Команды для админа: /stats, /apistatus")
     
