@@ -1538,7 +1538,7 @@ async def show_stage_details(callback: types.CallbackQuery, stage_key: str):
     
     text = (
         f"{vec['emoji']} *{intro['title']}*\n"
-        f"{'━' * 25}\n\n"
+        f"{'━' * 18}\n\n"
         f"🔍 *Что я исследую:*\n"
         f"{intro['what']}\n\n"
         f"💫 *Как это влияет на жизнь:*\n"
@@ -1567,7 +1567,7 @@ async def show_stage_intro(callback: types.CallbackQuery, stage_key: str):
     
     text = (
         f"{vec['emoji']} *{intro['title']}*\n"
-        f"{'━' * 25}\n\n"
+        f"{'━' * 18}\n\n"
         f"🔍 *Что я исследую:*\n"
         f"{intro['what']}\n\n"
         f"📝 *{intro['questions_count']} вопросов*\n\n"
@@ -1626,7 +1626,7 @@ async def show_stage_feedback(callback: types.CallbackQuery, stage_key: str):
     
     text = (
         f"{vec['emoji']} *ЭТАП {stage_num} ЗАВЕРШЁН*\n"
-        f"{'━' * 25}\n\n"
+        f"{'━' * 18}\n\n"
         f"{stages_done}\n\n"
         f"*{vec['name']}*\n"
         f"Уровень: *{lvl}/6 — {level_info['name']}*\n"
@@ -1690,7 +1690,7 @@ async def send_next_question(callback: types.CallbackQuery):
         text = (
             f"{vec['emoji']} *{vec['name'].upper()}*\n\n"
             f"{question['text']}\n\n"
-            f"{'━' * 25}\n"
+            f"{'━' * 18}\n"
             f"▸ Вопрос {current_q_idx + 1}/{total_in_stage} • {progress_bar}"
         )
         
@@ -1806,7 +1806,7 @@ async def show_level_detail(callback: types.CallbackQuery, vector_key: str):
     
     text = (
         f"{vec['emoji']} *{vec['name']}* — уровень {lvl}/6\n"
-        f"{'━' * 25}\n\n"
+        f"{'━' * 18}\n\n"
         f"🎭 *{profile.get('archetype', '')}*\n"
         f"_{profile.get('archetype_desc', '')}_\n\n"
         f"💬 {profile.get('quote', '')}\n\n"
