@@ -2,13 +2,13 @@
 # -*- coding: utf-8 -*-
 """
 ВИРТУАЛЬНЫЙ ПСИХОЛОГ - Матрица Поведений 4×6
-ПОЛНАЯ ВЕРСИЯ со всеми исправлениями
+ПОЛНАЯ ВЕРСИЯ с 4 этапами по 5 вопросов
 """
 
 import os
 import json
 import logging
-import aiohttp  # ✅ добавлен aiohttp
+import aiohttp
 import random
 import asyncio
 from statistics import mean
@@ -16,7 +16,6 @@ from dotenv import load_dotenv
 from aiogram import Bot, Dispatcher, types
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.filters import Command
-# ✅ from aiogram import F - УДАЛЕН (не используется)
 
 # Загружаем переменные окружения
 load_dotenv()
@@ -34,6 +33,85 @@ DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY", "")
 
 # Хранилище данных пользователей
 user_data = {}
+
+# ══════════════════════════════════════════════
+#  КОНСТАНТЫ ЭТАПОВ
+# ══════════════════════════════════════════════
+
+# Порядок этапов — фиксированный, не случайный
+STAGE_ORDER = ["СБ", "ТФ", "УБ", "ЧВ"]
+
+# Экраны-объяснения перед каждым этапом
+STAGE_INTROS = {
+    "СБ": {
+        "title": "ЭТАП 1 из 4 — РЕАКЦИЯ НА УГРОЗУ",
+        "emoji": "🛡",
+        "what": "Сейчас я исследую как вы реагируете когда на вас давят, угрожают или нарушают ваши границы.",
+        "why": "Это одна из самых базовых программ. Она запускается автоматически — вы часто не замечаете что уже среагировали.",
+        "what_you_learn": "Узнаете свой автоматизм под давлением и поймёте насколько он вам помогает или мешает.",
+        "questions_count": 5,
+    },
+    "ТФ": {
+        "title": "ЭТАП 2 из 4 — ДОБЫЧА РЕСУРСОВ",
+        "emoji": "💰",
+        "what": "Сейчас я исследую как вы добываете деньги и материальные блага — вашу ресурсную стратегию.",
+        "why": "Эта стратегия определяет не только доход, но и вашу реальную свободу. Нет ресурсов — нет выборов.",
+        "what_you_learn": "Узнаете на каком уровне ваша стратегия и почему деньги ведут себя именно так.",
+        "questions_count": 5,
+    },
+    "УБ": {
+        "title": "ЭТАП 3 из 4 — ПОНИМАНИЕ МИРА",
+        "emoji": "🔍",
+        "what": "Сейчас я исследую как вы объясняете себе непонятное — кризисы, странное поведение людей, неудачи.",
+        "why": "То как вы объясняете мир определяет что вы будете с ним делать. Разные объяснения — разные действия.",
+        "what_you_learn": "Узнаете какая картина мира у вас в голове и даёт ли она вам контроль над ситуацией.",
+        "questions_count": 5,
+    },
+    "ЧВ": {
+        "title": "ЭТАП 4 из 4 — ОТНОШЕНИЯ С ЛЮДЬМИ",
+        "emoji": "🤝",
+        "what": "Последний этап. Исследую вашу стратегию в отношениях — как строите связи, просите, влияете.",
+        "why": "Все ваши цели достигаются через людей или с людьми. Стратегия здесь решает многое.",
+        "what_you_learn": "Узнаете ваш паттерн в отношениях и почему они складываются именно так.",
+        "questions_count": 5,
+    },
+}
+
+# Тексты обратной связи после каждого этапа
+STAGE_FEEDBACKS = {
+    "СБ": {
+        1: "Я вижу — в момент давления тело и разум как будто выключаются. Это не слабость. Это выученная реакция. И её можно изменить.",
+        2: "Ваш ответ — уход. Вы умеете покидать неудобные ситуации. Вопрос: куда это вас приводит со временем?",
+        3: "Вы соглашаетесь внешне — но внутри не согласны. Знакомо ощущение когда злость копится и потом взрывается?",
+        4: "Вы умеете держать лицо. Это навык. Но есть цена — люди не знают настоящего вас.",
+        5: "Вы умеете снижать напряжение. Это зрелая реакция. Есть только один вопрос — не гасите ли вы то что нужно было сказать?",
+        6: "Вы умеете защищаться прямо. Редкий навык. Ключевой вопрос теперь — точность: когда это нужно, а когда достаточно диалога.",
+    },
+    "ТФ": {
+        1: "Деньги пока приходят через других. Это честно. Давайте разберёмся что именно мешает изменить это.",
+        2: "Вы умеете находить — но каждый раз заново. Нет системы которая работала бы без постоянного поиска.",
+        3: "Вы умеете обменивать своё на чужое. Есть активность — но нет накопления. Начинаете каждый раз с нуля.",
+        4: "Честный труд — надёжная база. Но вы — главный ресурс системы. Остановились — всё остановилось.",
+        5: "У вас есть запас. Это даёт свободу говорить 'нет'. Следующий шаг — заставить запас работать.",
+        6: "Вы выстраиваете системы. Это мощно. Риск один — потеря связи с реальностью. Системы нужно слышать снизу.",
+    },
+    "УБ": {
+        1: "Непонятное игнорируется. Это даёт покой. Но то чего не понимаешь — начинает управлять тобой.",
+        2: "Вы объясняете мир через судьбу и знаки. Это снижает тревогу. Но убирает вашу роль в происходящем.",
+        3: "Вы доверяете экспертам. Это разумно. Риск: когда меняется эксперт — меняется вся ваша картина.",
+        4: "Вы активно ищете объяснения. Энергии много. Но направлена она на поиск виноватых — не на решения.",
+        5: "Вы проверяете сами. Это сила. Теперь важно из проверок делать обобщения — иначе данные есть, картины нет.",
+        6: "Вы мыслите системами. Это редко. Проверяйте модели действиями — теория без практики остаётся теорией.",
+    },
+    "ЧВ": {
+        1: "Несколько близких людей — это тепло и опора. Но если они исчезают — вы теряетесь. Это уязвимость.",
+        2: "Вы хорошо подстраиваетесь. Люди принимают вас. Вопрос: кто вы когда не подстраиваетесь?",
+        3: "Вас замечают. Это ценно. Но близость строится не на впечатлении — а на том что под ним.",
+        4: "Вы понимаете людей — это редкий дар. Но используете его в одну сторону. Что если попробовать быть прямым?",
+        5: "У вас есть настоящие партнёрства. Это основа. Теперь — масштаб. Мир больше вашего ближнего круга.",
+        6: "Широкая сеть — сила. Но без нескольких глубоких точек опоры она рассыпается при первом испытании.",
+    },
+}
 
 # ══════════════════════════════════════════════
 #  ДАННЫЕ МАТРИЦЫ
@@ -95,147 +173,198 @@ VECTORS = {
 }
 
 # ══════════════════════════════════════════════
-#  ВОПРОСЫ ТЕСТА
+#  НОВЫЕ ВОПРОСЫ (4 варианта, 5 на каждый вектор)
 # ══════════════════════════════════════════════
 
 QUESTIONS = {
     "СБ": [
         {
-            "text": "Начальник кричит на вас несправедливо. Что вы делаете?",
+            "text": "Начальник кричит на вас несправедливо на совещании. Что происходит?",
             "options": [
-                (1, "Теряюсь, не могу ничего сказать"),
-                (2, "Придумываю причину уйти из ситуации"),
-                (3, "Соглашаюсь со всем — лишь бы прекратить"),
-                (4, "Внешне спокоен, внутри кипит"),
-                (5, "Ищу слова чтобы разрядить обстановку"),
-                (6, "Говорю прямо что считаю это несправедливым"),
+                (1, "Теряюсь, слова не идут"),
+                (2, "Придумываю причину уйти"),
+                (3, "Киваю, но внутри кипит"),
+                (4, "Спокойно говорю что думаю"),
             ]
         },
         {
-            "text": "В споре вам говорят что вы неправы, хотя вы уверены в обратном:",
+            "text": "В споре вам говорят что вы неправы. Вы уверены — правы вы. Как реагируете?",
             "options": [
-                (1, "Замолкаю и не могу найти слова"),
-                (2, "Меняю тему или ухожу от разговора"),
-                (3, "Соглашаюсь — так проще"),
-                (4, "Киваю, но внутренне остаюсь при своём"),
-                (5, "Пытаюсь найти в их словах долю правды"),
-                (6, "Спокойно отстаиваю свою позицию"),
+                (1, "Замолкаю, не могу возразить"),
+                (2, "Меняю тему или ухожу"),
+                (3, "Соглашаюсь чтобы закончить"),
+                (4, "Отстаиваю позицию спокойно"),
             ]
         },
         {
-            "text": "Кто-то нарушает ваши границы — занял ваше место, взял без спроса. Ваш первый импульс:",
+            "text": "Кто-то занял ваше место в очереди, делая вид что не заметил. Первый импульс:",
             "options": [
-                (1, "Ступор. Стою и не знаю что делать"),
-                (2, "Молча ухожу, найду другое"),
-                (3, "Уступаю, хотя злюсь"),
-                (4, "Делаю вид что не заметил"),
-                (5, "Вежливо, но твёрдо обозначаю"),
-                (6, "Прямо говорю — это моё"),
+                (1, "Стою и не знаю что делать"),
+                (2, "Молча встаю в другое место"),
+                (3, "Злюсь, но промолчу"),
+                (4, "Говорю: извините, я был здесь"),
+            ]
+        },
+        {
+            "text": "Друг постоянно опаздывает. Это уже достало. Что делаете?",
+            "options": [
+                (1, "Терплю, не знаю как сказать"),
+                (2, "Начинаю избегать встреч"),
+                (3, "Намекаю но не говорю прямо"),
+                (4, "Говорю прямо: меня это злит"),
+            ]
+        },
+        {
+            "text": "Вам дали задачу которую вы считаете бессмысленной. Как поступите?",
+            "options": [
+                (1, "Молча делаю, хотя не согласен"),
+                (2, "Затягиваю и стараюсь избежать"),
+                (3, "Делаю формально, без инициативы"),
+                (4, "Говорю о своих сомнениях"),
             ]
         },
     ],
+
     "ТФ": [
         {
-            "text": "Вам срочно нужны деньги. Что делаете первым?",
+            "text": "Вам срочно нужны деньги. Первое что приходит в голову:",
             "options": [
-                (1, "Прошу в долг у близких"),
-                (2, "Ищу случайный заработок, подработку"),
-                (3, "Предлагаю что-то своё в обмен"),
-                (4, "Берусь за конкретную работу и делаю"),
-                (5, "Использую отложенный резерв"),
-                (6, "Организую других чтобы решить задачу"),
+                (1, "Попросить в долг у близких"),
+                (2, "Поискать случайную подработку"),
+                (3, "Предложить что-то своё за деньги"),
+                (4, "Задействовать систему которую уже выстроил"),
             ]
         },
         {
-            "text": "Как вы в основном зарабатываете или добываете ресурсы?",
+            "text": "Как описывает ваш способ зарабатывать деньги?",
             "options": [
-                (1, "Скорее через других — сам не очень умею"),
-                (2, "Нахожу где что лежит плохо — работа, скидки, возможности"),
-                (3, "Через обмен навыками и услугами"),
-                (4, "Своим прямым трудом — сколько вложил, столько получил"),
-                (5, "Зарабатываю и обязательно откладываю"),
-                (6, "Выстраиваю системы которые работают на меня"),
+                (1, "Скорее через других, сам не очень"),
+                (2, "Ищу где что плохо лежит — работа, скидки"),
+                (3, "Своим прямым трудом — вложил, получил"),
+                (4, "Системами которые работают на меня"),
             ]
         },
         {
-            "text": "Когда появляются лишние деньги:",
+            "text": "Получили неожиданные деньги — вдвое больше обычного. Что сделаете?",
             "options": [
-                (1, "Трачу сразу или раздаю — всё равно куда-то денутся"),
-                (2, "Трачу на текущие потребности"),
-                (3, "Вкладываю во что-то что можно перепродать"),
-                (4, "Вкладываю в инструменты для своей работы"),
-                (5, "Откладываю в резерв — страховка прежде всего"),
-                (6, "Инвестирую в проекты или людей"),
+                (1, "Потрачу — всё равно куда-то денутся"),
+                (2, "Куплю то что давно хотел"),
+                (3, "Отложу часть в резерв"),
+                (4, "Вложу туда где они принесут ещё"),
+            ]
+        },
+        {
+            "text": "Как вы относитесь к ситуации «нет стабильного дохода»?",
+            "options": [
+                (1, "Это нормально, как-то само решается"),
+                (2, "Стресс, но буду искать подработки"),
+                (3, "Есть запас, несколько месяцев протяну"),
+                (4, "У меня несколько источников, один упадёт — другие держат"),
+            ]
+        },
+        {
+            "text": "Что для вас главное в работе или деле которым занимаетесь?",
+            "options": [
+                (1, "Чтобы кто-то дал работу и платил"),
+                (2, "Найти что-то интересное и не слишком трудное"),
+                (3, "Честно работать и получать за это"),
+                (4, "Выстроить так чтобы росло без меня"),
             ]
         },
     ],
+
     "УБ": [
         {
-            "text": "Происходит что-то непонятное — кризис, странные события. Ваша первая реакция:",
+            "text": "Происходит кризис — экономика падает, всё непонятно. Ваша первая реакция:",
             "options": [
-                (1, "Стараюсь не думать об этом — само разберётся"),
-                (2, "Это судьба, карма или знак"),
-                (3, "Читаю что говорят эксперты и следую их мнению"),
-                (4, "Ясно кто за этим стоит и зачем"),
-                (5, "Начинаю собирать информацию и проверять"),
-                (6, "Строю модель: что происходит и почему"),
+                (1, "Стараюсь не думать — само разберётся"),
+                (2, "Это судьба или знак, нужно принять"),
+                (3, "Читаю экспертов и следую их советам"),
+                (4, "Собираю факты, строю свою картину"),
             ]
         },
         {
-            "text": "Вы не понимаете почему люди вокруг ведут себя определённым образом:",
+            "text": "Коллега поступил странно и вы не понимаете зачем. Что делаете?",
             "options": [
-                (1, "Мне не очень важно и интересно разбираться"),
-                (2, "Видимо такова их природа или так суждено"),
-                (3, "Есть психология которая это объясняет — читаю"),
-                (4, "Они что-то скрывают или преследуют скрытые цели"),
-                (5, "Наблюдаю и ищу закономерности в их поведении"),
-                (6, "Строю гипотезу, проверяю, уточняю понимание"),
+                (1, "Не интересуюсь, не моё дело"),
+                (2, "Видимо такой человек, что с него взять"),
+                (3, "Спрошу у кого-то кто лучше разбирается в людях"),
+                (4, "Наблюдаю, ищу закономерность в его поведении"),
             ]
         },
         {
-            "text": "Берётесь за незнакомое дело. Как подходите?",
+            "text": "Вам предложили незнакомое дело. Как подходите к нему?",
             "options": [
                 (1, "Скорее откажусь — слишком непонятно"),
-                (2, "Буду действовать интуитивно, как пойдёт"),
+                (2, "Буду действовать интуитивно"),
                 (3, "Найду курс или эксперта и буду следовать"),
-                (4, "Изучу чужие неудачи — кто и почему провалился"),
-                (5, "Попробую сам, увижу что не работает, скорректирую"),
-                (6, "Сначала разберусь в принципах, потом буду действовать"),
+                (4, "Разберусь в принципах, потом буду действовать"),
+            ]
+        },
+        {
+            "text": "Что-то не получается уже долго. Как объясняете себе причину?",
+            "options": [
+                (1, "Не везёт, не мой период"),
+                (2, "Кто-то или что-то мешает"),
+                (3, "Я что-то делаю не так — надо найти того кто подскажет"),
+                (4, "Анализирую что именно не работает и почему"),
+            ]
+        },
+        {
+            "text": "Вам дали противоречивые советы два эксперта. Как решаете кому верить?",
+            "options": [
+                (1, "Выбираю кто симпатичнее или убедительнее"),
+                (2, "Верю тому у кого больше регалий"),
+                (3, "Ищу ещё мнения, голосую большинством"),
+                (4, "Проверяю аргументы обоих своим опытом"),
             ]
         },
     ],
+
     "ЧВ": [
         {
-            "text": "В новом коллективе вы обычно:",
+            "text": "Вы пришли в незнакомый коллектив. Что делаете первые дни?",
             "options": [
-                (1, "Держусь рядом с кем-то одним кто принял меня"),
-                (2, "Смотрю как ведут себя остальные и повторяю"),
-                (3, "Стараюсь произвести впечатление, заявить о себе"),
-                (4, "Анализирую кто здесь важен и как на них повлиять"),
-                (5, "Ищу тех с кем интересно работать на равных"),
-                (6, "Думаю кто из этих людей какую ценность представляет"),
+                (1, "Держусь рядом с тем кто принял меня"),
+                (2, "Смотрю как ведут себя остальные и копирую"),
+                (3, "Стараюсь запомниться, показать себя"),
+                (4, "Наблюдаю кто здесь кто и думаю как выстроить отношения"),
             ]
         },
         {
-            "text": "Когда вам нужна помощь другого человека:",
+            "text": "Вам нужна помощь человека которого вы не очень знаете. Как просите?",
             "options": [
-                (1, "Трудно просить — боюсь испортить отношения"),
-                (2, "Делаю как они хотят чтобы потом попросить"),
-                (3, "Показываю что я особенный и заслуживаю помощи"),
-                (4, "Нахожу что им нужно и использую это как рычаг"),
-                (5, "Говорю прямо и предлагаю что-то реальное взамен"),
-                (6, "У меня обычно есть нужный человек в сети"),
+                (1, "Трудно просить — боюсь отказа"),
+                (2, "Сначала делаю для него что-то, потом прошу"),
+                (3, "Объясняю насколько это важно именно для меня"),
+                (4, "Говорю прямо что нужно и что готов дать взамен"),
             ]
         },
         {
-            "text": "Ваши отношения с людьми в целом:",
+            "text": "Отношения с важным для вас человеком стали хуже. Что делаете?",
             "options": [
-                (1, "Глубокая привязанность к нескольким без которых тяжело"),
+                (1, "Терплю — боюсь что станет ещё хуже"),
+                (2, "Стараюсь стать более удобным для него"),
+                (3, "Создаю ситуации чтобы он вспомнил как было хорошо"),
+                (4, "Говорю прямо что происходит и хочу разобраться"),
+            ]
+        },
+        {
+            "text": "Как бы вы описали ваши отношения с людьми в целом?",
+            "options": [
+                (1, "Несколько близких без которых очень тяжело"),
                 (2, "Хорошо подстраиваюсь под окружение"),
-                (3, "Нравлюсь многим, люди замечают меня"),
-                (4, "Умею нужным образом повлиять на нужных людей"),
-                (5, "Несколько крепких партнёрств на основе доверия"),
-                (6, "Широкая разнообразная сеть контактов"),
+                (3, "Много знакомых, нравлюсь людям"),
+                (4, "Несколько партнёрств и широкая сеть разных связей"),
+            ]
+        },
+        {
+            "text": "Вы хотите что-то получить от человека который вам не обязан. Ваш подход:",
+            "options": [
+                (1, "Жду когда он сам предложит"),
+                (2, "Делаю то что ему понравится чтобы расположить"),
+                (3, "Объясняю почему именно я заслуживаю помощи"),
+                (4, "Говорю прямо и предлагаю взаимовыгодный обмен"),
             ]
         },
     ]
@@ -243,7 +372,6 @@ QUESTIONS = {
 
 # ══════════════════════════════════════════════
 #  ПАТТЕРНЫ — ЧТО ПРОИСХОДИТ В ЖИЗНИ
-#  ✅ ПОЛНАЯ ВЕРСИЯ СО ВСЕМИ УРОВНЯМИ 1-6
 # ══════════════════════════════════════════════
 
 LIFE_PATTERNS = {
@@ -464,9 +592,31 @@ RECOMMENDATIONS = {
 #  ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
 # ══════════════════════════════════════════════
 
+# ✅ НОВАЯ ФУНКЦИЯ ПЕРЕСЧЁТА (1..4 → 1..6)
 def level(score):
-    """Дробный балл → целый уровень"""
-    return max(1, min(6, round(score)))
+    """
+    Дробный балл 1..4 → целый уровень 1..6
+    
+    Таблица преобразования:
+    1.00 - 1.49  →  1
+    1.50 - 2.00  →  2
+    2.01 - 2.50  →  3
+    2.51 - 3.00  →  4
+    3.01 - 3.50  →  5
+    3.51 - 4.00  →  6
+    """
+    if score <= 1.49:
+        return 1
+    elif score <= 2.00:
+        return 2
+    elif score <= 2.50:
+        return 3
+    elif score <= 3.00:
+        return 4
+    elif score <= 3.50:
+        return 5
+    else:
+        return 6
 
 def get_profile_text(scores):
     """Формирует текст профиля с эмодзи и без аббревиатур"""
@@ -499,7 +649,6 @@ def get_priority_order(scores: dict) -> list:
     else:
         return [k for k, _ in sorted(scores.items(), key=lambda x: x[1])]
 
-# ✅ НОВАЯ АСИНХРОННАЯ ФУНКЦИЯ
 async def call_deepseek(prompt, system_message="", max_tokens=500):
     """Асинхронный вызов DeepSeek API"""
     if not DEEPSEEK_API_KEY:
@@ -541,10 +690,6 @@ async def call_deepseek(prompt, system_message="", max_tokens=500):
         logger.error(f"DeepSeek API error: {e}")
         return None
 
-# ══════════════════════════════════════════════
-#  ГЕНЕРАЦИЯ УМНЫХ ВОПРОСОВ ПОД ПРОФИЛЬ
-# ══════════════════════════════════════════════
-
 def generate_smart_questions(scores):
     """Генерирует 4-5 вопросов на основе профиля"""
     questions = []
@@ -554,7 +699,6 @@ def generate_smart_questions(scores):
     ub = level(scores["УБ"])
     cv = level(scores["ЧВ"])
     
-    # Вопросы про ресурсы
     if tf <= 2:
         questions.append("Как начать зарабатывать, если нет денег?")
         questions.append("Почему мне не везет с деньгами?")
@@ -562,7 +706,6 @@ def generate_smart_questions(scores):
         questions.append("Как увеличить доход без новых вложений?")
         questions.append("Как создать финансовую подушку?")
     
-    # Вопросы про защиту
     if sb <= 2:
         questions.append("Как перестать бояться конфликтов?")
         questions.append("Как научиться говорить 'нет'?")
@@ -570,32 +713,162 @@ def generate_smart_questions(scores):
         questions.append("Почему я злюсь внутри, но молчу?")
         questions.append("Как защищать границы без агрессии?")
     
-    # Вопросы про понимание
     if ub <= 2:
         questions.append("Как понять, что происходит в жизни?")
     elif ub == 4:
         questions.append("Как перестать искать заговоры?")
     
-    # Вопросы про отношения
     if cv <= 2:
         questions.append("Как перестать зависеть от других?")
     elif cv <= 4:
         questions.append("Почему отношения поверхностные?")
     
-    # Общие вопросы
     general = [
         "С чего начать изменения?",
         "Что мне делать с этой ситуацией?",
         "Как не срываться на близких?"
     ]
     
-    # Добираем до 5 вопросов
     while len(questions) < 5:
         for q in general:
             if q not in questions and len(questions) < 5:
                 questions.append(q)
     
     return questions[:5]
+
+# ══════════════════════════════════════════════
+#  НОВЫЕ ФУНКЦИИ ЭТАПОВ
+# ══════════════════════════════════════════════
+
+async def show_stage_intro(callback: types.CallbackQuery, stage_key: str):
+    """Показывает экран-объяснение перед этапом"""
+    intro = STAGE_INTROS[stage_key]
+    stage_num = STAGE_ORDER.index(stage_key) + 1
+    
+    text = (
+        f"{intro['emoji']} *{intro['title']}*\n"
+        f"{'━' * 25}\n\n"
+        f"*Что я исследую:*\n"
+        f"{intro['what']}\n\n"
+        f"*Почему это важно:*\n"
+        f"{intro['why']}\n\n"
+        f"*Что вы узнаете:*\n"
+        f"{intro['what_you_learn']}\n\n"
+        f"📝 *{intro['questions_count']} вопросов*\n\n"
+        f"_Выбирайте первый ответ который приходит в голову.\n"
+        f"Нет правильных или неправильных._"
+    )
+    
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(
+            text=f"Начать этап {stage_num} →",
+            callback_data=f"begin_stage_{stage_key}"
+        )]
+    ])
+    
+    await callback.message.edit_text(text, reply_markup=keyboard, parse_mode='Markdown')
+
+
+async def show_stage_feedback(callback: types.CallbackQuery, stage_key: str):
+    """Показывает итог этапа и переходит к следующему"""
+    user_id = callback.from_user.id
+    user = user_data[user_id]
+    
+    scores_list = user["scores"][stage_key]
+    avg = round(mean(scores_list), 2)
+    lvl = level(avg)
+    
+    vec = VECTORS[stage_key]
+    level_info = vec["levels"][lvl]
+    
+    feedback = STAGE_FEEDBACKS[stage_key].get(lvl, "Анализирую ваши ответы...")
+    
+    stage_num = STAGE_ORDER.index(stage_key) + 1
+    stages_done = "✅ " * stage_num + "⬜ " * (4 - stage_num)
+    
+    text = (
+        f"{vec['emoji']} *ЭТАП {stage_num} ЗАВЕРШЁН*\n"
+        f"{'━' * 25}\n\n"
+        f"{stages_done}\n\n"
+        f"*{vec['name']}*\n"
+        f"Уровень: *{lvl}/6 — {level_info['name']}*\n\n"
+        f"_{feedback}_\n\n"
+    )
+    
+    next_stage_idx = STAGE_ORDER.index(stage_key) + 1
+    
+    if next_stage_idx < len(STAGE_ORDER):
+        next_stage = STAGE_ORDER[next_stage_idx]
+        next_intro = STAGE_INTROS[next_stage]
+        
+        text += f"Следующий этап: {next_intro['emoji']} *{next_intro['title']}*"
+        
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(
+                text=f"Перейти к этапу {next_stage_idx + 1} →",
+                callback_data=f"stage_intro_{next_stage}"
+            )]
+        ])
+    else:
+        text += "Все этапы пройдены. Формирую ваш профиль..."
+        
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(
+                text="🧠 Посмотреть мой профиль →",
+                callback_data="show_results"
+            )]
+        ])
+    
+    await callback.message.edit_text(text, reply_markup=keyboard, parse_mode='Markdown')
+
+
+async def send_next_question(callback: types.CallbackQuery):
+    """Отправляет следующий вопрос текущего этапа"""
+    user_id = callback.from_user.id
+    user = user_data[user_id]
+    
+    current_stage = user["current_stage"]
+    current_q_idx = user["current_question"]
+    stage_questions = QUESTIONS[current_stage]
+    stage_num = STAGE_ORDER.index(current_stage) + 1
+    
+    total_in_stage = len(stage_questions)
+    
+    progress = int((current_q_idx / total_in_stage) * 8)
+    progress_bar = "█" * progress + "░" * (8 - progress)
+    
+    stages_done = "✅ " * (stage_num - 1) + "🔵 " + "⬜ " * (4 - stage_num)
+    
+    if current_q_idx < total_in_stage:
+        question = stage_questions[current_q_idx]
+        
+        keyboard = []
+        for score, option_text in question["options"]:
+            keyboard.append([InlineKeyboardButton(
+                text=option_text[:55],
+                callback_data=f"answer_{score}"
+            )])
+        
+        vec = VECTORS[current_stage]
+        
+        text = (
+            f"{stages_done}\n"
+            f"{vec['emoji']} Этап {stage_num}/4 — *{vec['name']}*\n"
+            f"`[{progress_bar}]` вопрос {current_q_idx + 1}/{total_in_stage}\n\n"
+            f"*{question['text']}*"
+        )
+        
+        await callback.message.edit_text(
+            text,
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard),
+            parse_mode='Markdown'
+        )
+        
+        user["current_question"] += 1
+    
+    else:
+        await show_stage_feedback(callback, current_stage)
+
 
 # ══════════════════════════════════════════════
 #  ОБРАБОТЧИКИ TELEGRAM
@@ -605,13 +878,13 @@ async def start_command(message: types.Message):
     """Приветствие виртуального психолога"""
     user_id = message.from_user.id
     
-    # ✅ dialogue_history удален
+    # ✅ НОВАЯ структура user_data
     user_data[user_id] = {
         "stage": "menu",
         "scores": {k: [] for k in VECTORS},
-        "current_vector": None,
+        "current_stage": None,
         "current_question": 0,
-        "questions_order": []
+        "profile_complete": False,
     }
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
@@ -620,13 +893,23 @@ async def start_command(message: types.Message):
         [InlineKeyboardButton(text="🤖 О AI", callback_data="ai_info")]
     ])
     
+    # ✅ НОВЫЙ стартовый экран с именем пользователя
+    user_name = message.from_user.first_name or "Пользователь"
+    
     await message.answer(
-        "🧠 *ВИРТУАЛЬНЫЙ ПСИХОЛОГ*\n\n"
-        "Привет! Я помогу разобраться в ваших поведенческих паттернах.\n\n"
-        "• 12 вопросов (5-7 минут)\n"
-        "• Персональный анализ\n"
-        "• AI-диалог с учетом вашего профиля\n\n"
-        "_Все ответы конфиденциальны_",
+        f"🧠 *ВИРТУАЛЬНЫЙ ПСИХОЛОГ*\n\n"
+        f"{user_name}, привет.\n\n"
+        f"Я исследую четыре области вашей психики:\n\n"
+        f"🛡 *Реакция на угрозу* — что происходит под давлением\n"
+        f"💰 *Добыча ресурсов* — как вы взаимодействуете с деньгами\n"
+        f"🔍 *Понимание мира* — как объясняете непонятное\n"
+        f"🤝 *Отношения* — ваша стратегия с людьми\n\n"
+        f"{'━' * 25}\n\n"
+        f"📋 *20 вопросов* — 4 этапа по 5\n"
+        f"⏱ *7–10 минут*\n"
+        f"🔒 *Всё конфиденциально*\n\n"
+        f"_Перед каждым этапом я объясню что исследую\n"
+        f"и почему это важно._",
         reply_markup=keyboard,
         parse_mode='Markdown'
     )
@@ -639,23 +922,24 @@ async def callback_handler(callback: types.CallbackQuery):
     data = callback.data
     
     if user_id not in user_data:
-        # ✅ dialogue_history удален
+        # ✅ НОВАЯ структура user_data
         user_data[user_id] = {
             "stage": "menu",
             "scores": {k: [] for k in VECTORS},
-            "current_vector": None,
+            "current_stage": None,
             "current_question": 0,
-            "questions_order": []
+            "profile_complete": False,
         }
     
     if data == "start_test":
+        # ✅ НОВЫЙ старт теста с этапами
         user_data[user_id]["stage"] = "testing"
         user_data[user_id]["scores"] = {k: [] for k in VECTORS}
-        vectors = list(VECTORS.keys())
-        random.shuffle(vectors)
-        user_data[user_id]["questions_order"] = vectors
+        user_data[user_id]["current_stage"] = STAGE_ORDER[0]
         user_data[user_id]["current_question"] = 0
-        await send_next_question(callback)
+        user_data[user_id]["profile_complete"] = False
+        
+        await show_stage_intro(callback, STAGE_ORDER[0])
     
     elif data == "about":
         keyboard = InlineKeyboardMarkup(inline_keyboard=[
@@ -703,12 +987,26 @@ async def callback_handler(callback: types.CallbackQuery):
             parse_mode='Markdown'
         )
     
-    # ✅ ИСПРАВЛЕНО: принимаем score напрямую, без +1
+    # ✅ НОВЫЕ ВЕТКИ для этапов
+    elif data.startswith("stage_intro_"):
+        stage_key = data.replace("stage_intro_", "")
+        user_data[user_id]["current_stage"] = stage_key
+        user_data[user_id]["current_question"] = 0
+        await show_stage_intro(callback, stage_key)
+    
+    elif data.startswith("begin_stage_"):
+        stage_key = data.replace("begin_stage_", "")
+        user_data[user_id]["current_stage"] = stage_key
+        user_data[user_id]["current_question"] = 0
+        await send_next_question(callback)
+    
+    # ✅ ИСПРАВЛЕННАЯ ветка answer_
     elif data.startswith("answer_"):
-        score = int(data.split("_")[1])  # ✅ достаём сразу балл
+        score = int(data.split("_")[1])
         user = user_data[user_id]
-        current_vector = user["current_vector"]
-        user["scores"][current_vector].append(score)  # ✅ пишем напрямую
+        current_stage = user["current_stage"]
+        
+        user["scores"][current_stage].append(score)
         await send_next_question(callback)
     
     elif data == "show_results":
@@ -740,13 +1038,13 @@ async def callback_handler(callback: types.CallbackQuery):
         )
     
     elif data == "restart_test":
-        # ✅ dialogue_history удален
+        # ✅ НОВАЯ структура при рестарте
         user_data[user_id] = {
             "stage": "menu",
             "scores": {k: [] for k in VECTORS},
-            "current_vector": None,
+            "current_stage": None,
             "current_question": 0,
-            "questions_order": []
+            "profile_complete": False,
         }
         keyboard = InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text="🧠 Начать тест", callback_data="start_test")],
@@ -766,49 +1064,9 @@ async def callback_handler(callback: types.CallbackQuery):
             user_data[user_id]["stage"] = "answering_question"
             await handle_smart_question(callback, questions[idx])
 
-async def send_next_question(callback: types.CallbackQuery):
-    """Отправляет следующий вопрос теста с прогресс-баром"""
-    user_id = callback.from_user.id
-    user = user_data[user_id]
-    
-    total_questions = 12
-    answered = sum(len(v) for v in user["scores"].values())
-    progress = int((answered / total_questions) * 10)
-    progress_bar = "█" * progress + "░" * (10 - progress)
-    
-    while user["questions_order"]:
-        current_vector = user["questions_order"][0]
-        vector_questions = QUESTIONS[current_vector]
-        current_q_idx = user["current_question"]
-        
-        if current_q_idx < len(vector_questions):
-            user["current_vector"] = current_vector
-            question = vector_questions[current_q_idx]
-            
-            keyboard = []
-            # ✅ ИСПРАВЛЕНО: передаём score, не индекс
-            for i, (score, option) in enumerate(question["options"]):
-                clean_option = option.split(". ")[-1] if ". " in option else option
-                keyboard.append([InlineKeyboardButton(
-                    text=clean_option[:50], 
-                    callback_data=f"answer_{score}"  # ✅ записываем сам балл
-                )])
-            
-            await callback.message.edit_text(
-                f"*Вопрос {answered + 1}/12*\n"
-                f"`{progress_bar}`\n\n"
-                f"{question['text']}",
-                reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard),
-                parse_mode='Markdown'
-            )
-            
-            user["current_question"] += 1
-            return
-        else:
-            user["questions_order"].pop(0)
-            user["current_question"] = 0
-    
-    await show_results(callback)
+# ══════════════════════════════════════════════
+#  ОСТАЛЬНЫЕ ФУНКЦИИ (БЕЗ ИЗМЕНЕНИЙ)
+# ══════════════════════════════════════════════
 
 async def show_results(callback: types.CallbackQuery):
     """Показывает результаты теста"""
@@ -843,13 +1101,12 @@ async def show_results(callback: types.CallbackQuery):
     )
 
 async def show_standard_analysis(callback: types.CallbackQuery):
-    """Показывает стандартный анализ (как в консольной версии)"""
+    """Показывает стандартный анализ"""
     user_id = callback.from_user.id
     scores = {k: round(mean(v), 1) for k, v in user_data[user_id]["scores"].items()}
     
     text = get_profile_text(scores)
     
-    # Жизненные паттерны
     text += "\n🔍 *ПОЧЕМУ ЭТО ПРОИСХОДИТ*\n"
     for key in ["ТФ", "СБ", "УБ", "ЧВ"]:
         lvl = level(scores[key])
@@ -857,8 +1114,6 @@ async def show_standard_analysis(callback: types.CallbackQuery):
             pattern = LIFE_PATTERNS[key][lvl][:150] + "..."
             text += f"\n• *{VECTORS[key]['name']}*: {pattern}\n"
     
-    # Корреляции
-    # ✅ ИСПРАВЛЕНО: конвертируем в целые уровни
     scores_as_levels = {k: level(v) for k, v in scores.items()}
     active = [c for c in CORRELATIONS if c["condition"](scores_as_levels)]
     if active:
@@ -866,7 +1121,6 @@ async def show_standard_analysis(callback: types.CallbackQuery):
         for c in active[:2]:
             text += f"\n⚡ *{c['title']}*\n{c['solution']}\n"
     
-    # Рекомендации
     order = get_priority_order(scores)
     text += "\n📋 *РЕКОМЕНДАЦИИ*\n"
     
@@ -900,7 +1154,7 @@ async def show_standard_analysis(callback: types.CallbackQuery):
         )
 
 async def show_ai_analysis(callback: types.CallbackQuery):
-    """Краткий AI-анализ (3-4 предложения)"""
+    """Краткий AI-анализ"""
     user_id = callback.from_user.id
     scores = {k: round(mean(v), 1) for k, v in user_data[user_id]["scores"].items()}
     
@@ -921,7 +1175,6 @@ async def show_ai_analysis(callback: types.CallbackQuery):
 
 Без воды, только суть."""
     
-    # ✅ ДОБАВЛЕН await
     response = await call_deepseek(prompt, "Ты психолог. Отвечай кратко, 3-4 предложения.", max_tokens=300)
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
@@ -960,7 +1213,6 @@ async def show_ai_recommendations(callback: types.CallbackQuery):
 
 Дай 3 КОНКРЕТНЫХ совета, что делать прямо сейчас. Каждый совет - 1 предложение."""
     
-    # ✅ ДОБАВЛЕН await
     response = await call_deepseek(prompt, "Ты коуч. Только конкретные действия.", max_tokens=300)
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
@@ -1034,7 +1286,6 @@ async def handle_smart_question(callback: types.CallbackQuery, question: str):
     
     prompt = f"Вопрос: {question}\n\nДай короткий, практичный ответ с учетом моего профиля."
     
-    # ✅ ДОБАВЛЕН await
     response = await call_deepseek(prompt, system_prompt, max_tokens=300)
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
@@ -1099,7 +1350,6 @@ async def handle_message(message: types.Message):
     
     user_prompt = f"Вопрос: {message.text}\n\nДай короткий, практичный ответ с учетом моего профиля."
     
-    # ✅ ДОБАВЛЕН await
     response = await call_deepseek(user_prompt, system_prompt, max_tokens=300)
     
     await thinking.delete()
