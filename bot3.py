@@ -1395,10 +1395,12 @@ async def call_deepseek(prompt, system_message="", max_tokens=500, retry_count=3
 
     logger.info(f"🔑 API ключ (первые 5 символов): {DEEPSEEK_API_KEY[:5]}...")
     logger.info(f"📝 Длина промпта: {len(prompt)} символов")
+    logger.info(f"🎯 max_tokens: {max_tokens}")
 
     headers = {
         "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
+        "Accept-Encoding": "gzip, deflate",
     }
 
     messages = []
@@ -1432,7 +1434,8 @@ async def call_deepseek(prompt, system_message="", max_tokens=500, retry_count=3
                         url,
                         headers=headers,
                         json=data,
-                        timeout=timeout
+                        timeout=timeout,
+                        compress=True
                     ) as response:
                         end_time = datetime.datetime.now()
                         duration = (end_time - start_time).total_seconds()
@@ -1442,12 +1445,21 @@ async def call_deepseek(prompt, system_message="", max_tokens=500, retry_count=3
                         if response.status == 200:
                             # Читаем JSON с отдельным таймаутом
                             try:
-                                read_timeout = aiohttp.ClientTimeout(total=120)
-                                result = await response.json()
+                                # Применяем таймаут 120 секунд к чтению JSON
+                                result = await asyncio.wait_for(response.json(), timeout=120)
                                 logger.info("✅ DeepSeek API успешно ответил")
-                                return result["choices"][0]["message"]["content"]
+                                
+                                # Проверяем структуру ответа
+                                if result and "choices" in result and len(result["choices"]) > 0:
+                                    content = result["choices"][0]["message"]["content"]
+                                    logger.info(f"📦 Размер ответа: {len(content)} символов")
+                                    return content
+                                else:
+                                    logger.error("❌ Пустой ответ от API")
+                                    continue
+                                    
                             except asyncio.TimeoutError:
-                                logger.error("⏰ Таймаут при чтении JSON ответа")
+                                logger.error("⏰ Таймаут при чтении JSON ответа (120 сек)")
                                 continue
                             except Exception as e:
                                 logger.error(f"❌ Ошибка парсинга JSON: {e}")
@@ -1963,7 +1975,7 @@ async def show_results_examples(callback: types.CallbackQuery):
 # ══════════════════════════════════════════════
 
 def create_intimate_profile_prompt(scores):
-    """Формирует промпт для генерации интимного профиля"""
+    """Формирует СОКРАЩЕННЫЙ промпт для интимного профиля"""
     
     # Получаем уровни
     cv_level = level(scores["ЧВ"])
@@ -1971,55 +1983,36 @@ def create_intimate_profile_prompt(scores):
     tf_level = level(scores["ТФ"])
     ub_level = level(scores["УБ"])
     
-    # Собираем профили
+    # Собираем основные данные
     cv_profile = LEVEL_PROFILES["ЧВ"].get(cv_level, {})
     sb_profile = LEVEL_PROFILES["СБ"].get(sb_level, {})
-    tf_profile = LEVEL_PROFILES["ТФ"].get(tf_level, {})
-    ub_profile = LEVEL_PROFILES["УБ"].get(ub_level, {})
     
-    prompt = f"""ТЫ — ПСИХОЛОГ-СЕКСОЛОГ, ПИСАТЕЛЬ. Твоя задача — написать интимный профиль человека.
+    prompt = f"""ТЫ — ПСИХОЛОГ-СЕКСОЛОГ. Напиши интимный профиль человека.
 
 ДАННЫЕ:
-ЧВ (Отношения): уровень {cv_level}/6 — {VECTORS['ЧВ']['levels'][cv_level]['name']}
-Архетип: {cv_profile.get('archetype', '')}
-Суть: {cv_profile.get('archetype_desc', '')}
-Цитата: {cv_profile.get('quote', '')}
-Болит: {cv_profile.get('pain_costs', [''])[0] if cv_profile.get('pain_costs') else ''}
+ЧВ (Отношения): уровень {cv_level}/6, архетип {cv_profile.get('archetype', '')}
+СБ (Реакция на угрозу): уровень {sb_level}/6, архетип {sb_profile.get('archetype', '')}
+ТФ (Ресурсы): уровень {tf_level}/6
+УБ (Понимание мира): уровень {ub_level}/6
 
-СБ (Реакция на угрозу): уровень {sb_level}/6 — {VECTORS['СБ']['levels'][sb_level]['name']}
-Архетип: {sb_profile.get('archetype', '')}
+НАПИШИ ПРОФИЛЬ ИЗ 5 БЛОКОВ:
 
-ТФ (Ресурсы): уровень {tf_level}/6 — {VECTORS['ТФ']['levels'][tf_level]['name']}
-УБ (Понимание мира): уровень {ub_level}/6 — {VECTORS['УБ']['levels'][ub_level]['name']}
+1. ЗАГОЛОВОК: «{cv_level}ЧВ-{sb_level}СБ — {cv_profile.get('archetype', '')}»
+   Одна фраза-суть.
 
-НАПИШИ ИНТИМНЫЙ ПРОФИЛЬ ИЗ 8 БЛОКОВ:
+2. КТО ТЫ В ПОСТЕЛИ (1 абзац):
+   Яркая метафора. Суперсила и трагедия.
 
-1. ЗАГОЛОВОК: «ЧВ-{cv_level}_СБ-{sb_level} — {cv_profile.get('archetype', '')}»
-   Цитата (1 предложение-суть)
+3. ЧТО ТЕБЯ ЗАВОДИТ (4 конкретных пункта):
+   Сцены, запахи, звуки, телесные реакции.
 
-2. КТО ТЫ В ПОСТЕЛИ (2-3 абзаца):
-   Яркая метафора. Твоя суперсила. Твоя трагедия. Как это выглядит и чувствуется.
+4. ЧТО ВЫКЛЮЧАЕТ (3 пункта):
+   Что убивает возбуждение мгновенно.
 
-3. ЧТО ТЕБЯ ЗАВОДИТ (5 пунктов):
-   Конкретные сцены. Запахи. Звуки. Телесные реакции. Без общих слов.
+5. ТВОЁ ГЛАВНОЕ (1 абзац):
+   Чего ищешь на самом деле.
 
-4. ЧТО ВЫКЛЮЧАЕТ (4 пункта):
-   Что убивает мгновенно. Детали, после которых всё пропало.
-
-5. ТВОИ ТАЙНЫЕ ЖЕЛАНИЯ (4 пункта):
-   Чего хочешь, но боишься признать. Что было бы, если б не стыдно.
-
-6. ЧТО ШЕПТАТЬ ТЕБЕ В ПОТЁМКАХ (5 фраз):
-   Короткие фразы в кавычках, от которых сносит крышу.
-
-7. ЧТО ВЫДАЁТ ТЕБЯ (4 пункта):
-   Микродвижения, привычки, по которым видно, что происходит внутри.
-
-8. ТВОЁ ГЛАВНОЕ (2 абзаца):
-   Чего ищешь на самом деле. В чём точка роста. Что должен про себя понять.
-
-СТИЛЬ: Телесный, конкретный, метафоричный. Без воды. Без морализаторства.
-Текст должен быть узнаваемым и пронзительным. Пиши от второго лица («ты»)."""
+СТИЛЬ: Телесный, конкретный, метафоричный. Пиши от второго лица («ты»)."""
     
     return prompt
 
@@ -2045,9 +2038,9 @@ async def show_intimate_profile(callback: types.CallbackQuery):
     # Формируем промпт
     prompt = create_intimate_profile_prompt(scores)
     
-    # Вызываем API
-    system_message = "Ты — психолог-сексолог, автор метода Variatica. Пишешь глубокие, пронзительные, хирургически точные психологические портреты."
-    response = await call_deepseek(prompt, system_message, max_tokens=3000)
+    # Вызываем API с уменьшенным max_tokens
+    system_message = "Ты — психолог-сексолог. Пишешь глубокие, пронзительные психологические портреты."
+    response = await call_deepseek(prompt, system_message, max_tokens=1500)
     
     # ВЕРТИКАЛЬНЫЕ КНОПКИ
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
@@ -2105,22 +2098,22 @@ async def start_command(message: types.Message):
     text = (
         f"🧠 *МАТРИЦА ПОВЕДЕНИЙ 4×6*\n"
         f"_лаборатория психологических профилей_\n\n"
-        f"Привет, {user_name}.\n\n"
+        f"*Привет, {user_name}.*\n\n"
         f"Это не тест. Это вскрытие ваших\n"
         f"поведенческих шаблонов. Без наркоза.\n\n"
         f"📌 *ЗАЧЕМ:*\n"
         f"Потому что если вы снова наступите\n"
         f"на те же грабли — грабли обидятся.\n\n"
-        f"4 сферы, которые мы препарируем:\n\n"
+        f"*4 сферы, которые мы препарируем:*\n\n"
         f"🛡 *Реакция на угрозу*\n"
-        f"  → Как вы орете или молчите, когда давят\n\n"
+        f"  *→* Как вы орете или молчите, когда давят\n\n"
         f"💰 *Добыча ресурсов*\n"
-        f"  → Почему деньги то есть, то нет\n\n"
+        f"  *→* Почему деньги то есть, то нет\n\n"
         f"🔍 *Понимание мира*\n"
-        f"  → Кто виноват и что делать (спойлер: вы)\n\n"
+        f"  *→* Кто виноват и что делать (спойлер: вы)\n\n"
         f"🤝 *Отношения с людьми*\n"
-        f"  → Почему вы снова терпите фигню\n\n"
-        f"──────────────────────\n\n"
+        f"  *→* Почему вы снова терпите фигню\n\n"
+        f"──────────────────────\n"
         f"⏱ 12 минут • 32 вопроса\n"
         f"🔒 Ваши тайны умрут вместе с сессией"
     )
@@ -2413,7 +2406,7 @@ async def show_results(callback: types.CallbackQuery):
     bottleneck_lvl = level(scores[bottleneck_key])
     bottleneck_profile = LEVEL_PROFILES.get(bottleneck_key, {}).get(bottleneck_lvl, {})
     
-    text += f"──────────────────────\n\n"
+    text += f"──────────────────────\n"
     text += f"🎯 *УЗКОЕ МЕСТО:*\n"
     text += f"   {VECTORS[bottleneck_key]['name']} ({bottleneck_key}-{bottleneck_lvl})\n"
     if bottleneck_profile.get('pain_costs'):
@@ -2650,9 +2643,9 @@ async def show_ai_analysis(callback: types.CallbackQuery):
 ВЗАИМОСВЯЗИ:
 {correlations_text}
 
-ТЕПЕРЬ НАПИШИ ПОЛНЫЙ АНАЛИЗ В ТОЧНОСТИ КАК В ПРИМЕРЕ. НЕ СОКРАЩАЙ. ИСПОЛЬЗУЙ ВСЕ БЛОКИ."""
+ТЕПЕРЬ НАПИШИ ПОЛНЫЙ АНАЛИЗ. НЕ СОКРАЩАЙ. ИСПОЛЬЗУЙ ВСЕ БЛОКИ."""
     
-    system_message = "Ты психолог с 20-летним опытом, автор метода Variatica. Твой стиль — метафоры, телесность, конкретные сцены, ирония, парадоксы. Пиши полноценно, не сокращая."
+    system_message = "Ты психолог с 20-летним опытом, автор метода Variatica. Твой стиль — метафоры, телесность, конкретные сцены, ирония, парадоксы."
     response = await call_deepseek(prompt, system_message, max_tokens=3000)
     
     # ВЕРТИКАЛЬНЫЕ КНОПКИ
@@ -2700,18 +2693,18 @@ async def show_ai_recommendations(callback: types.CallbackQuery):
         f"*СЕГОДНЯ (5 минут):*\n"
         f"Напишите инструкцию, как мыть кофеварку.\n"
         f"Отдайте коллеге. Не дышите в спину.\n\n"
-        f"──────────────────────\n\n"
+        f"──────────────────────\n"
         f"*НА ЭТОЙ НЕДЕЛЕ:*\n"
         f"Выберите одну задачу, которую ненавидите.\n"
         f"Наймите человека (студента, фрилансера).\n"
         f"Заплатите. Не проверяйте. Умрите от ужаса.\n"
         f"Проснитесь — мир не рухнул.\n\n"
-        f"──────────────────────\n\n"
+        f"──────────────────────\n"
         f"*В ЭТОМ МЕСЯЦЕ:*\n"
         f"Создайте «подушку» — 3 ваших зарплаты.\n"
         f"Это даст право сказать «нет» начальнику.\n"
         f"(Попрактикуйтесь сначала на кошке).\n\n"
-        f"──────────────────────\n\n"
+        f"──────────────────────\n"
         f"*ЦИТАТА ДНЯ:*\n"
         f"«Если ты такой умный, почему такой бедный?\n"
         f" А, понятно. Ты вкалываешь, а не строишь\n"
