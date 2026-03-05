@@ -1442,44 +1442,54 @@ async def call_deepseek(prompt, system_message="", max_tokens=500, retry_count=3
                         
                         logger.info(f"⏱ Время ответа: {duration:.2f} сек, статус: {response.status}")
                         
-                        if response.status == 200:
-                            # Читаем JSON с отдельным таймаутом
-                            try:
-                                # Применяем таймаут 120 секунд к чтению JSON
-                                result = await asyncio.wait_for(response.json(), timeout=120)
-                                logger.info("✅ DeepSeek API успешно ответил")
-                                
-                                # Проверяем структуру ответа
-                                if result and "choices" in result and len(result["choices"]) > 0:
-                                    content = result["choices"][0]["message"]["content"]
-                                    logger.info(f"📦 Размер ответа: {len(content)} символов")
-                                    return content
-                                else:
-                                    logger.error("❌ Пустой ответ от API")
-                                    continue
-                                    
-                            except asyncio.TimeoutError:
-                                logger.error("⏰ Таймаут при чтении JSON ответа (120 сек)")
-                                continue
-                            except Exception as e:
-                                logger.error(f"❌ Ошибка парсинга JSON: {e}")
-                                continue
-                        else:
-                            error_text = await response.text()
-                            logger.error(f"❌ Ошибка {response.status}: {error_text}")
-                            
-                            if response.status == 401:
-                                logger.error("🔑 НЕВЕРНЫЙ API КЛЮЧ!")
-                                return None
-                            elif response.status == 429:
-                                logger.error("⏳ Превышен лимит запросов")
-                                wait_time = (2 ** attempt) + random.random()
-                                await asyncio.sleep(wait_time)
-                            elif response.status >= 500:
-                                wait_time = (2 ** attempt) + random.random()
-                                await asyncio.sleep(wait_time)
-                            else:
-                                return None
+                      if response.status == 200:
+    # Успешный ответ - читаем JSON
+    try:
+        result = await asyncio.wait_for(response.json(), timeout=120)
+        logger.info("✅ DeepSeek API успешно ответил")
+        
+        if result and "choices" in result and len(result["choices"]) > 0:
+            content = result["choices"][0]["message"]["content"]
+            logger.info(f"📦 Размер ответа: {len(content)} символов")
+            return content
+        else:
+            logger.error("❌ Пустой ответ от API")
+            continue
+            
+    except asyncio.TimeoutError:
+        logger.error("⏰ Таймаут при чтении JSON ответа (120 сек)")
+        continue
+    except Exception as e:
+        logger.error(f"❌ Ошибка парсинга JSON: {e}")
+        # Пробуем прочитать как текст для диагностики
+        try:
+            text_response = await response.text()
+            logger.error(f"📄 Текст ответа (первые 200 символов): {text_response[:200]}")
+        except:
+            pass
+        continue
+else:
+    # Ошибка - читаем как текст
+    error_text = await response.text()
+    logger.error(f"❌ Ошибка {response.status}: {error_text[:500]}")
+    
+    if response.status == 401:
+        logger.error("🔑 НЕВЕРНЫЙ API КЛЮЧ!")
+        return None
+    elif response.status == 429:
+        logger.error("⏳ Превышен лимит запросов")
+        wait_time = (2 ** attempt) + random.random()
+        await asyncio.sleep(wait_time)
+    elif response.status == 400:
+        logger.error("🔧 Некорректный запрос - возможно, слишком большой max_tokens или проблема с форматом")
+        # Уменьшаем max_tokens для следующей попытки?
+        wait_time = (2 ** attempt) + random.random()
+        await asyncio.sleep(wait_time)
+    elif response.status >= 500:
+        wait_time = (2 ** attempt) + random.random()
+        await asyncio.sleep(wait_time)
+    else:
+        return None
                             
             except asyncio.TimeoutError:
                 logger.error(f"⏰ ТАЙМАУТ (попытка {attempt + 1}, URL {url_idx + 1})")
