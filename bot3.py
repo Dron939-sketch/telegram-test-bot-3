@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-МАТРИЦА ПОВЕДЕНИЙ 4×6 - Telegram Bot
-ПОЛНАЯ ВЕРСИЯ со всеми данными
+МАТРИЦА ПОВЕДЕНИЙ 4×6 - Telegram Bot (aiogram версия)
+ПОЛНАЯ ВЕРСИЯ со всеми данными из консольного теста
 """
 
 import os
@@ -10,19 +10,19 @@ import json
 import logging
 import requests
 import random
+import asyncio
 from statistics import mean
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
 from dotenv import load_dotenv
+from aiogram import Bot, Dispatcher, types
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.filters import Command
+from aiogram import F
 
 # Загружаем переменные окружения
 load_dotenv()
 
 # Настройка логирования
-logging.basicConfig(
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    level=logging.INFO
-)
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # ══════════════════════════════════════════════
@@ -36,7 +36,7 @@ DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY", "")
 user_data = {}
 
 # ══════════════════════════════════════════════
-#  ДАННЫЕ МАТРИЦЫ - ВЕКТОРЫ
+#  ДАННЫЕ МАТРИЦЫ
 # ══════════════════════════════════════════════
 
 VECTORS = {
@@ -89,6 +89,7 @@ VECTORS = {
         }
     }
 }
+
 # ══════════════════════════════════════════════
 #  ВОПРОСЫ ТЕСТА
 # ══════════════════════════════════════════════
@@ -235,6 +236,7 @@ QUESTIONS = {
         },
     ]
 }
+
 # ══════════════════════════════════════════════
 #  ПАТТЕРНЫ — ЧТО ПРОИСХОДИТ В ЖИЗНИ
 # ══════════════════════════════════════════════
@@ -311,6 +313,7 @@ CORRELATIONS = [
         "solution": "Используйте понимание как инструмент для роста ТФ — это ваше реальное преимущество."
     },
 ]
+
 # ══════════════════════════════════════════════
 #  РЕКОМЕНДАЦИИ ПО УРОВНЯМ
 # ══════════════════════════════════════════════
@@ -456,7 +459,7 @@ def level(score):
     return max(1, min(6, round(score)))
 
 def get_profile_text(scores):
-    """Формирует текст профиля"""
+    """Формирует текст профиля как в консольной версии"""
     text = "📊 *ВАШ ПРОФИЛЬ*\n\n"
     
     for key, score in scores.items():
@@ -464,16 +467,28 @@ def get_profile_text(scores):
         lvl = level(score)
         info = vec["levels"][lvl]
         
-        bar = "█" * lvl + "░" * (6 - lvl)
+        filled = "█" * lvl
+        empty = "░" * (6 - lvl)
+        bar = filled + empty
+        
         text += f"*{key}* `[{bar}]` {score:.1f}/6\n"
-        text += f"_{vec['name']}_: *{info['name']}*\n"
+        text += f"_{vec['name']}_: *{info['name']}* — {info['action']}\n"
         text += f"└ {info['desc']}\n\n"
+    
+    sb = level(scores["СБ"])
+    tf = level(scores["ТФ"])
+    ub = level(scores["УБ"])
+    cv = level(scores["ЧВ"])
+    
+    text += f"─────────────────────\n"
+    text += f"*Профиль:* СБ-{sb} ТФ-{tf} УБ-{ub} ЧВ-{cv}\n"
     
     return text
 
 def get_priority_order(scores: dict) -> list:
-    """Определяет порядок приоритетов"""
+    """Определяет порядок приоритетов как в консольной версии"""
     tf = level(scores["ТФ"])
+    
     if tf <= 2:
         rest = sorted([(k, v) for k, v in scores.items() if k != "ТФ"], key=lambda x: x[1])
         return ["ТФ"] + [r[0] for r in rest]
@@ -524,9 +539,9 @@ def call_deepseek(prompt, system_message=""):
 #  ОБРАБОТЧИКИ TELEGRAM
 # ══════════════════════════════════════════════
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def start_command(message: types.Message):
     """Обработчик команды /start"""
-    user_id = update.effective_user.id
+    user_id = message.from_user.id
     
     user_data[user_id] = {
         "stage": "menu",
@@ -536,14 +551,13 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "questions_order": []
     }
     
-    keyboard = [
-        [InlineKeyboardButton("🧠 Пройти тест", callback_data="start_test")],
-        [InlineKeyboardButton("ℹ️ О тесте", callback_data="about")],
-        [InlineKeyboardButton("🤖 AI-анализ", callback_data="ai_info")]
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🧠 Пройти тест", callback_data="start_test")],
+        [InlineKeyboardButton(text="ℹ️ О тесте", callback_data="about")],
+        [InlineKeyboardButton(text="🤖 AI-анализ", callback_data="ai_info")]
+    ])
     
-    await update.message.reply_text(
+    await message.answer(
         "🧠 *Добро пожаловать в Матрицу Поведений 4×6!*\n\n"
         "Этот тест поможет понять ваши базовые поведенческие паттерны:\n"
         "• *СБ* — реакция на угрозу\n"
@@ -551,17 +565,16 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "• *УБ* — понимание непонятного\n"
         "• *ЧВ* — отношения с людьми\n\n"
         "Выберите действие:",
-        reply_markup=reply_markup,
+        reply_markup=keyboard,
         parse_mode='Markdown'
     )
 
-async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def callback_handler(callback: types.CallbackQuery):
     """Обработчик нажатий на кнопки"""
-    query = update.callback_query
-    await query.answer()
+    await callback.answer()
     
-    user_id = update.effective_user.id
-    data = query.data
+    user_id = callback.from_user.id
+    data = callback.data
     
     if user_id not in user_data:
         user_data[user_id] = {
@@ -579,10 +592,14 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         random.shuffle(vectors)
         user_data[user_id]["questions_order"] = vectors
         user_data[user_id]["current_question"] = 0
-        await send_next_question(update, context)
+        await send_next_question(callback)
     
     elif data == "about":
-        await query.edit_message_text(
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="◀️ Назад", callback_data="back_to_menu")]
+        ])
+        
+        await callback.message.edit_text(
             "📚 *О МАТРИЦЕ ПОВЕДЕНИЙ 4×6*\n\n"
             "Тест основан на модели, описывающей 4 ключевых вектора поведения:\n\n"
             "*СБ (Угроза)* — как вы реагируете, когда на вас давят\n"
@@ -597,34 +614,35 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "• Рекомендации по развитию\n"
             "• AI-анализ от DeepSeek",
             parse_mode='Markdown',
-            reply_markup=InlineKeyboardMarkup([[
-                InlineKeyboardButton("◀️ Назад", callback_data="back_to_menu")
-            ]])
+            reply_markup=keyboard
         )
     
     elif data == "ai_info":
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="◀️ Назад", callback_data="back_to_menu")]
+        ])
+        
         if DEEPSEEK_API_KEY:
             text = "🤖 *DeepSeek AI доступен!*\n\nПосле прохождения теста вы сможете:\n• Получить глубокий анализ профиля\n• Задать вопросы о результатах\n• Получить персональные рекомендации"
         else:
             text = "⚠️ *DeepSeek AI не настроен*\n\nAPI ключ не найден. Доступен только стандартный анализ."
         
-        await query.edit_message_text(
+        await callback.message.edit_text(
             text,
             parse_mode='Markdown',
-            reply_markup=InlineKeyboardMarkup([[
-                InlineKeyboardButton("◀️ Назад", callback_data="back_to_menu")
-            ]])
+            reply_markup=keyboard
         )
     
     elif data == "back_to_menu":
-        keyboard = [
-            [InlineKeyboardButton("🧠 Пройти тест", callback_data="start_test")],
-            [InlineKeyboardButton("ℹ️ О тесте", callback_data="about")],
-            [InlineKeyboardButton("🤖 AI-анализ", callback_data="ai_info")]
-        ]
-        await query.edit_message_text(
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="🧠 Пройти тест", callback_data="start_test")],
+            [InlineKeyboardButton(text="ℹ️ О тесте", callback_data="about")],
+            [InlineKeyboardButton(text="🤖 AI-анализ", callback_data="ai_info")]
+        ])
+        
+        await callback.message.edit_text(
             "🧠 *Матрица Поведений 4×6*\n\nВыберите действие:",
-            reply_markup=InlineKeyboardMarkup(keyboard),
+            reply_markup=keyboard,
             parse_mode='Markdown'
         )
     
@@ -635,23 +653,21 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user = user_data[user_id]
         current_vector = user["current_vector"]
         
-        # Сохраняем ответ (индекс + 1 = балл)
         user["scores"][current_vector].append(answer_idx + 1)
         
-        # Переходим к следующему вопросу
-        await send_next_question(update, context)
+        await send_next_question(callback)
     
     elif data == "show_results":
-        await show_test_results(update, context)
+        await show_test_results(callback)
     
     elif data == "standard_analysis":
-        await show_standard_analysis(update, context)
+        await show_standard_analysis(callback)
     
     elif data == "ai_analysis":
-        await show_ai_analysis(update, context)
+        await show_ai_analysis(callback)
     
     elif data == "ai_recommendations":
-        await show_ai_recommendations(update, context)
+        await show_ai_recommendations(callback)
     
     elif data == "restart_test":
         user_data[user_id] = {
@@ -661,21 +677,22 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "current_question": 0,
             "questions_order": []
         }
-        keyboard = [
-            [InlineKeyboardButton("🧠 Пройти тест", callback_data="start_test")],
-            [InlineKeyboardButton("ℹ️ О тесте", callback_data="about")],
-            [InlineKeyboardButton("🤖 AI-анализ", callback_data="ai_info")]
-        ]
-        await query.edit_message_text(
+        
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="🧠 Пройти тест", callback_data="start_test")],
+            [InlineKeyboardButton(text="ℹ️ О тесте", callback_data="about")],
+            [InlineKeyboardButton(text="🤖 AI-анализ", callback_data="ai_info")]
+        ])
+        
+        await callback.message.edit_text(
             "🧠 *Матрица Поведений 4×6*\n\nВыберите действие:",
-            reply_markup=InlineKeyboardMarkup(keyboard),
+            reply_markup=keyboard,
             parse_mode='Markdown'
         )
 
-async def send_next_question(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def send_next_question(callback: types.CallbackQuery):
     """Отправляет следующий вопрос теста"""
-    query = update.callback_query
-    user_id = update.effective_user.id
+    user_id = callback.from_user.id
     user = user_data[user_id]
     
     while user["questions_order"]:
@@ -690,17 +707,17 @@ async def send_next_question(update: Update, context: ContextTypes.DEFAULT_TYPE)
             keyboard = []
             for i, (score, option) in enumerate(question["options"]):
                 btn_text = f"{i+1}. {option[:40]}..." if len(option) > 40 else f"{i+1}. {option}"
-                keyboard.append([InlineKeyboardButton(btn_text, callback_data=f"answer_{i}")])
+                keyboard.append([InlineKeyboardButton(text=btn_text, callback_data=f"answer_{i}")])
             
-            keyboard.append([InlineKeyboardButton("❌ Отменить тест", callback_data="back_to_menu")])
+            keyboard.append([InlineKeyboardButton(text="❌ Отменить тест", callback_data="back_to_menu")])
             
             progress = f"Вопрос {current_q_idx + 1}/{len(vector_questions)} по вектору {current_vector}"
             
-            await query.edit_message_text(
+            await callback.message.edit_text(
                 f"🧠 *{current_vector} — {VECTORS[current_vector]['name']}*\n\n"
                 f"_{progress}_\n\n"
                 f"{question['text']}",
-                reply_markup=InlineKeyboardMarkup(keyboard),
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard),
                 parse_mode='Markdown'
             )
             
@@ -710,86 +727,103 @@ async def send_next_question(update: Update, context: ContextTypes.DEFAULT_TYPE)
             user["questions_order"].pop(0)
             user["current_question"] = 0
     
-    await show_test_results(update, context)
+    await show_test_results(callback)
 
-async def show_test_results(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def show_test_results(callback: types.CallbackQuery):
     """Показывает результаты теста"""
-    query = update.callback_query
-    user_id = update.effective_user.id
+    user_id = callback.from_user.id
     user = user_data[user_id]
     
     scores = {k: round(mean(v), 1) for k, v in user["scores"].items()}
     text = get_profile_text(scores)
     
     bottleneck = get_priority_order(scores)[0]
-    text += f"\n🎯 *УЗКОЕ МЕСТО:* {bottleneck} — {VECTORS[bottleneck]['name']}\n"
+    text += f"\n🎯 *УЗКОЕ МЕСТО:* {bottleneck} — {VECTORS[bottleneck]['name']}"
     
     if DEEPSEEK_API_KEY:
-        keyboard = [
-            [InlineKeyboardButton("🧠 AI-анализ", callback_data="ai_analysis"),
-             InlineKeyboardButton("💡 AI-рекомендации", callback_data="ai_recommendations")],
-            [InlineKeyboardButton("📋 Стандартный анализ", callback_data="standard_analysis")],
-            [InlineKeyboardButton("🔄 Пройти заново", callback_data="restart_test")],
-            [InlineKeyboardButton("🏠 Главное меню", callback_data="back_to_menu")]
-        ]
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [
+                InlineKeyboardButton(text="🧠 AI-анализ", callback_data="ai_analysis"),
+                InlineKeyboardButton(text="💡 AI-рекомендации", callback_data="ai_recommendations")
+            ],
+            [InlineKeyboardButton(text="📋 Стандартный анализ", callback_data="standard_analysis")],
+            [InlineKeyboardButton(text="🔄 Пройти заново", callback_data="restart_test")],
+            [InlineKeyboardButton(text="🏠 Главное меню", callback_data="back_to_menu")]
+        ])
     else:
-        keyboard = [
-            [InlineKeyboardButton("📋 Стандартный анализ", callback_data="standard_analysis")],
-            [InlineKeyboardButton("🔄 Пройти заново", callback_data="restart_test")],
-            [InlineKeyboardButton("🏠 Главное меню", callback_data="back_to_menu")]
-        ]
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="📋 Стандартный анализ", callback_data="standard_analysis")],
+            [InlineKeyboardButton(text="🔄 Пройти заново", callback_data="restart_test")],
+            [InlineKeyboardButton(text="🏠 Главное меню", callback_data="back_to_menu")]
+        ])
     
-    await query.edit_message_text(
+    await callback.message.edit_text(
         text,
-        reply_markup=InlineKeyboardMarkup(keyboard),
+        reply_markup=keyboard,
         parse_mode='Markdown'
     )
 
-async def show_standard_analysis(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Показывает стандартный анализ"""
-    query = update.callback_query
-    user_id = update.effective_user.id
+async def show_standard_analysis(callback: types.CallbackQuery):
+    """Показывает стандартный анализ (как в консольной версии)"""
+    user_id = callback.from_user.id
     scores = {k: round(mean(v), 1) for k, v in user_data[user_id]["scores"].items()}
     
     text = get_profile_text(scores)
     
-    # Паттерны
-    text += "\n🔍 *ЖИЗНЕННЫЕ ПАТТЕРНЫ*\n"
+    # Жизненные паттерны
+    text += "\n🔍 *ПОЧЕМУ ЭТО ПРОИСХОДИТ В ВАШЕЙ ЖИЗНИ*\n"
     for key in ["ТФ", "СБ", "УБ", "ЧВ"]:
         lvl = level(scores[key])
         if key in LIFE_PATTERNS and lvl in LIFE_PATTERNS[key]:
-            text += f"\n*{key}:* {LIFE_PATTERNS[key][lvl][:150]}...\n"
+            text += f"\n*{key}:* {LIFE_PATTERNS[key][lvl]}\n"
     
     # Корреляции
     active = [c for c in CORRELATIONS if c["condition"](scores)]
     if active:
         text += "\n🔗 *СВЯЗИ МЕЖДУ ВЕКТОРАМИ*\n"
-        for c in active[:2]:
-            text += f"\n⚡ *{c['title']}*\n{c['solution']}\n"
+        for c in active:
+            text += f"\n⚡ *{c['title']}*\n{c['explanation']}\n➜ {c['solution']}\n"
     
     # Рекомендации
     order = get_priority_order(scores)
     text += "\n📋 *РЕКОМЕНДАЦИИ*\n"
-    for i, key in enumerate(order[:3]):
+    
+    icons = ["🔴", "🟡", "🟢", "⚪"]
+    labels = ["НАЧАТЬ ЗДЕСЬ", "СЛЕДУЮЩИЙ ШАГ", "РАЗВИВАТЬ", "ПОДДЕРЖИВАТЬ"]
+    
+    for i, key in enumerate(order):
         lvl = level(scores[key])
         if key in RECOMMENDATIONS and lvl in RECOMMENDATIONS[key]:
-            text += f"\n*{key}*: {RECOMMENDATIONS[key][lvl][0]}\n"
+            text += f"\n{icons[i] if i < len(icons) else '⚪'} *{key}* — {labels[i] if i < len(labels) else 'ПОДДЕРЖИВАТЬ'}\n"
+            for rec in RECOMMENDATIONS[key][lvl][:2]:  # Первые 2 рекомендации
+                text += f"  • {rec}\n"
     
-    await query.edit_message_text(
-        text,
-        parse_mode='Markdown',
-        reply_markup=InlineKeyboardMarkup([[
-            InlineKeyboardButton("◀️ Назад", callback_data="show_results")
-        ]])
-    )
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="◀️ Назад к результатам", callback_data="show_results")]
+    ])
+    
+    # Разбиваем на части если текст слишком длинный
+    if len(text) > 4000:
+        parts = [text[i:i+4000] for i in range(0, len(text), 4000)]
+        for i, part in enumerate(parts):
+            if i == 0:
+                await callback.message.edit_text(part, parse_mode='Markdown')
+            else:
+                await callback.message.answer(part, parse_mode='Markdown')
+        await callback.message.answer("Выберите действие:", reply_markup=keyboard)
+    else:
+        await callback.message.edit_text(
+            text,
+            reply_markup=keyboard,
+            parse_mode='Markdown'
+        )
 
-async def show_ai_analysis(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def show_ai_analysis(callback: types.CallbackQuery):
     """Показывает AI-анализ"""
-    query = update.callback_query
-    user_id = update.effective_user.id
+    user_id = callback.from_user.id
     scores = {k: round(mean(v), 1) for k, v in user_data[user_id]["scores"].items()}
     
-    await query.edit_message_text("🤔 *Анализирую ваш профиль...*\nЭто займет несколько секунд", parse_mode='Markdown')
+    await callback.message.edit_text("🤔 *Анализирую ваш профиль...*\nЭто займет несколько секунд", parse_mode='Markdown')
     
     profile_data = {}
     for key in scores:
@@ -804,123 +838,125 @@ async def show_ai_analysis(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 {json.dumps(profile_data, indent=2, ensure_ascii=False)}
 
-Напиши анализ из 3 частей:
+Напиши анализ из 3 частей как в консольной версии:
 1. ПОРТРЕТ: как человек воспринимает мир
 2. КЛЮЧЕВОЙ КОНФЛИКТ: главное противоречие
 3. ТОЧКА РОСТА: с чего начать изменения"""
     
-    response = call_deepseek(prompt, "Ты психолог. Отвечай кратко, по делу, на русском.")
+    response = call_deepseek(prompt, "Ты психолог. Отвечай подробно, на русском.")
+    
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="◀️ К результатам", callback_data="show_results")]
+    ])
     
     if response:
-        await query.edit_message_text(
-            f"🧠 *AI-АНАЛИЗ*\n\n{response}\n\n_Анализ предоставлен DeepSeek_",
+        await callback.message.edit_text(
+            f"🧠 *AI-АНАЛИЗ*\n\n{response}",
             parse_mode='Markdown',
-            reply_markup=InlineKeyboardMarkup([[
-                InlineKeyboardButton("◀️ К результатам", callback_data="show_results")
-            ]])
+            reply_markup=keyboard
         )
     else:
-        await query.edit_message_text(
+        await callback.message.edit_text(
             "⚠️ Не удалось получить ответ от AI. Попробуйте позже.",
-            reply_markup=InlineKeyboardMarkup([[
-                InlineKeyboardButton("◀️ Назад", callback_data="show_results")
-            ]])
+            reply_markup=keyboard
         )
 
-async def show_ai_recommendations(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def show_ai_recommendations(callback: types.CallbackQuery):
     """Показывает AI-рекомендации"""
-    query = update.callback_query
-    user_id = update.effective_user.id
+    user_id = callback.from_user.id
     scores = {k: round(mean(v), 1) for k, v in user_data[user_id]["scores"].items()}
     
-    await query.edit_message_text("💡 *Генерирую рекомендации...*", parse_mode='Markdown')
+    await callback.message.edit_text("💡 *Генерирую рекомендации...*", parse_mode='Markdown')
     
     bottleneck = get_priority_order(scores)[0]
-    profile_summary = "\n".join([f"{key}: {level(scores[key])} ур." for key in scores])
+    profile_summary = "\n".join([f"{key}: {level(scores[key])} ур. ({VECTORS[key]['levels'][level(scores[key])]['name']})" for key in scores])
     
     prompt = f"""Профиль:
 {profile_summary}
 Узкое место: {bottleneck}
 
-Дай 5 конкретных микро-шагов на неделю. Каждый шаг должен быть выполним за 15 минут."""
+Дай 5 конкретных микро-шагов на неделю, как в консольной версии теста."""
     
     response = call_deepseek(prompt, "Ты коуч. Только конкретные действия.")
     
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="◀️ К результатам", callback_data="show_results")]
+    ])
+    
     if response:
-        await query.edit_message_text(
+        await callback.message.edit_text(
             f"📌 *ПЕРСОНАЛЬНЫЕ РЕКОМЕНДАЦИИ*\n\n{response}",
             parse_mode='Markdown',
-            reply_markup=InlineKeyboardMarkup([[
-                InlineKeyboardButton("◀️ К результатам", callback_data="show_results")
-            ]])
+            reply_markup=keyboard
         )
     else:
-        await query.edit_message_text(
+        await callback.message.edit_text(
             "⚠️ Не удалось получить рекомендации.",
-            reply_markup=InlineKeyboardMarkup([[
-                InlineKeyboardButton("◀️ Назад", callback_data="show_results")
-            ]])
+            reply_markup=keyboard
         )
 
-async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def handle_message(message: types.Message):
     """Обработчик текстовых сообщений"""
-    user_id = update.effective_user.id
+    user_id = message.from_user.id
     
     if user_id not in user_data:
-        await update.message.reply_text(
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="🏠 Меню", callback_data="back_to_menu")]
+        ])
+        await message.answer(
             "Используйте /start для начала работы",
-            reply_markup=InlineKeyboardMarkup([[
-                InlineKeyboardButton("🏠 Меню", callback_data="back_to_menu")
-            ]])
+            reply_markup=keyboard
         )
         return
     
     if not DEEPSEEK_API_KEY:
-        await update.message.reply_text("⚠️ AI-режим недоступен. Нет API ключа.")
+        await message.answer("⚠️ AI-режим недоступен. Нет API ключа.")
         return
     
     scores = user_data[user_id].get("scores", {})
-    if not scores or not all(scores.values()):
-        await update.message.reply_text("Сначала пройдите тест через /start")
+    if not scores or not all(len(v) > 0 for v in scores.values()):
+        await message.answer("Сначала пройдите тест через /start")
         return
     
     avg_scores = {k: round(mean(v), 1) for k, v in scores.items() if v}
     
-    await update.message.reply_text("🤔 Думаю...")
+    await message.answer("🤔 Думаю...")
     
-    prompt = f"Профиль пользователя: {avg_scores}\n\nВопрос: {update.message.text}\n\nОтветь коротко и по делу."
+    prompt = f"Профиль пользователя: {avg_scores}\n\nВопрос: {message.text}\n\nОтветь коротко и по делу."
     response = call_deepseek(prompt, "Ты психолог. Отвечай на русском, 2-3 предложения.")
     
     if response:
-        await update.message.reply_text(f"🤖 {response}")
+        await message.answer(f"🤖 {response}")
     else:
-        await update.message.reply_text("⚠️ Не удалось получить ответ")
+        await message.answer("⚠️ Не удалось получить ответ")
 
 # ══════════════════════════════════════════════
 #  ЗАПУСК БОТА
 # ══════════════════════════════════════════════
 
-def main():
+async def main():
     """Запуск бота"""
     if not TELEGRAM_TOKEN:
         logger.error("TELEGRAM_TOKEN не найден в переменных окружения")
         print("Ошибка: TELEGRAM_TOKEN не найден! Создайте файл .env с TELEGRAM_TOKEN=ваш_токен")
         return
     
+    bot = Bot(token=TELEGRAM_TOKEN)
+    dp = Dispatcher()
+    
+    dp.message.register(start_command, Command("start"))
+    dp.callback_query.register(callback_handler)
+    dp.message.register(handle_message)
+    
     if DEEPSEEK_API_KEY:
         logger.info("DeepSeek API ключ найден")
     else:
         logger.warning("DeepSeek API ключ не найден, AI-функции отключены")
     
-    application = Application.builder().token(TELEGRAM_TOKEN).build()
-    
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(CallbackQueryHandler(button_handler))
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-    
     logger.info("Бот запущен...")
     print("Бот запущен! Нажмите Ctrl+C для остановки")
-    application.run_polling(allowed_updates=Update.ALL_TYPES)
+    
+    await dp.start_polling(bot)
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
