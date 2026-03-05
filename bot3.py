@@ -2040,7 +2040,6 @@ async def show_intimate_profile(callback: types.CallbackQuery):
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="🧠 МЫСЛИ ПСИХОЛОГА", callback_data="ai_analysis")],
         [InlineKeyboardButton(text="💡 ЧТО ДЕЛАТЬ", callback_data="ai_recommendations")],
-        [InlineKeyboardButton(text="🔞 ИНТИМНЫЙ ПРОФИЛЬ", callback_data="intimate_profile")],
         [InlineKeyboardButton(text="◀️ Назад к профилю", callback_data="show_results")]
     ])
     
@@ -2048,18 +2047,25 @@ async def show_intimate_profile(callback: types.CallbackQuery):
         # Разбиваем на части если слишком длинный
         if len(response) > 4000:
             parts = [response[i:i+4000] for i in range(0, len(response), 4000)]
+            
+            # Первая часть с заголовком (без Markdown)
             await callback.message.edit_text(
-                f"🔞 *ИНТИМНЫЙ ПРОФИЛЬ*\n\n{parts[0]}",
-                parse_mode='Markdown',
+                f"🔞 ИНТИМНЫЙ ПРОФИЛЬ\n\n{parts[0]}",
+                parse_mode=None,  # Отключаем Markdown
                 reply_markup=None
             )
+            
+            # Остальные части (без Markdown)
             for part in parts[1:-1]:
-                await callback.message.answer(part, parse_mode='Markdown')
-            await callback.message.answer(parts[-1], parse_mode='Markdown', reply_markup=keyboard)
+                await callback.message.answer(part, parse_mode=None)
+            
+            # Последняя часть с кнопками (без Markdown)
+            await callback.message.answer(parts[-1], parse_mode=None, reply_markup=keyboard)
         else:
+            # Весь ответ целиком (без Markdown)
             await callback.message.edit_text(
-                f"🔞 *ИНТИМНЫЙ ПРОФИЛЬ*\n\n{response}",
-                parse_mode='Markdown',
+                f"🔞 ИНТИМНЫЙ ПРОФИЛЬ\n\n{response}",
+                parse_mode=None,  # Отключаем Markdown
                 reply_markup=keyboard
             )
     else:
