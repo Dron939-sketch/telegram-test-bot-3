@@ -12,6 +12,7 @@ import aiohttp
 import random
 import asyncio
 import datetime
+import re
 from statistics import mean
 from dotenv import load_dotenv
 from aiogram import Bot, Dispatcher, types
@@ -1242,7 +1243,7 @@ LEVEL_PROFILES = {
 }
 
 # ══════════════════════════════════════════════
-#  СТАТИСТИКА (ПЕРЕНЕСЕНО СЮДА, ПОСЛЕ VECTORS)
+#  СТАТИСТИКА
 # ══════════════════════════════════════════════
 
 class Statistics:
@@ -1386,7 +1387,7 @@ def get_priority_order(scores: dict) -> list:
     else:
         return [k for k, _ in sorted(scores.items(), key=lambda x: x[1])]
 
-# УЛУЧШЕННАЯ ФУНКЦИЯ call_deepseek с обработкой ошибок
+# ФУНКЦИЯ call_deepseek
 async def call_deepseek(prompt, system_message="", max_tokens=500, retry_count=3):
     """Асинхронный вызов DeepSeek API с правильной обработкой таймаутов"""
     if not DEEPSEEK_API_KEY:
@@ -1416,7 +1417,6 @@ async def call_deepseek(prompt, system_message="", max_tokens=500, retry_count=3
         try:
             logger.info(f"📡 Попытка {attempt + 1}/{retry_count}")
             
-            # Увеличиваем таймаут для больших ответов
             timeout = aiohttp.ClientTimeout(total=120, connect=30, sock_read=120)
             
             async with aiohttp.ClientSession() as session:
@@ -1433,18 +1433,17 @@ async def call_deepseek(prompt, system_message="", max_tokens=500, retry_count=3
                         error_text = await response.text()
                         logger.error(f"❌ Ошибка API {response.status}: {error_text[:200]}")
                         
-                        if response.status == 429:  # Rate limit
+                        if response.status == 429:
                             wait_time = (2 ** attempt) + random.random()
                             await asyncio.sleep(wait_time)
                             continue
-                        elif response.status >= 500:  # Server error
+                        elif response.status >= 500:
                             wait_time = (2 ** attempt) + random.random()
                             await asyncio.sleep(wait_time)
                             continue
                         else:
                             return None
                     
-                    # Читаем ответ
                     try:
                         result = await response.json()
                         end_time = datetime.datetime.now()
@@ -1465,12 +1464,6 @@ async def call_deepseek(prompt, system_message="", max_tokens=500, retry_count=3
                         continue
                     except Exception as e:
                         logger.error(f"❌ Ошибка парсинга JSON: {e}")
-                        # Пробуем прочитать как текст для диагностики
-                        try:
-                            text_response = await response.text()
-                            logger.error(f"📄 Текст ответа (первые 200): {text_response[:200]}")
-                        except:
-                            pass
                         continue
                             
         except asyncio.TimeoutError:
@@ -1564,8 +1557,37 @@ def check_consistency(scores_list: list) -> bool:
     return std_dev <= 1.3
 
 # ══════════════════════════════════════════════
-#  ФУНКЦИИ ЭТАПОВ
+#  ФУНКЦИИ ЭТАПОВ (ИСПРАВЛЕННЫЕ)
 # ══════════════════════════════════════════════
+
+async def show_stage_intro(callback: types.CallbackQuery, stage_key: str):
+    """Показывает введение в этап с уменьшенными отступами"""
+    intro = STAGE_INTROS[stage_key]
+    vec = VECTORS[stage_key]
+    stage_num = STAGE_ORDER.index(stage_key) + 1
+    
+    text = (
+        f"{vec['emoji']} *{intro['title']}*\n"
+        f"{'━' * 18}\n\n"
+        f"🔍 *Что я исследую:*\n"
+        f"{intro['what']}\n\n"
+        f"📝 *{intro['questions_count']} вопросов*\n\n"
+        f"💭 _Выбирайте первый ответ который приходит в голову.\n"
+        f"Нет правильных или неправильных._"
+    )
+    
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(text=f"Начать этап {stage_num}", callback_data=f"begin_stage_{stage_key}"),
+            InlineKeyboardButton(text="🔍 Детали", callback_data=f"stage_details_{stage_key}")
+        ]
+    ])
+    
+    try:
+        await callback.message.edit_text(text, reply_markup=keyboard, parse_mode='Markdown')
+    except TelegramBadRequest as e:
+        if "message is not modified" not in str(e).lower() and "сообщение не изменено" not in str(e).lower():
+            raise
 
 async def show_stage_details(callback: types.CallbackQuery, stage_key: str):
     """Показывает детальную информацию об этапе"""
@@ -1587,36 +1609,6 @@ async def show_stage_details(callback: types.CallbackQuery, stage_key: str):
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="◀️ Назад к этапу", callback_data=f"stage_intro_{stage_key}")]
-    ])
-    
-    try:
-        await callback.message.edit_text(text, reply_markup=keyboard, parse_mode='Markdown')
-    except TelegramBadRequest as e:
-        if "message is not modified" not in str(e).lower() and "сообщение не изменено" not in str(e).lower():
-            raise
-
-async def show_stage_intro(callback: types.CallbackQuery, stage_key: str):
-    """Показывает введение в этап с двумя кнопками"""
-    intro = STAGE_INTROS[stage_key]
-    vec = VECTORS[stage_key]
-    stage_num = STAGE_ORDER.index(stage_key) + 1
-    
-    text = (
-        f"{vec['emoji']} *{intro['title']}*\n"
-        f"{'━' * 18}\n\n"
-        f"🔍 *Что я исследую:*\n"
-        f"{intro['what']}\n\n"
-        f"📝 *{intro['questions_count']} вопросов*\n\n"
-        f"💭 _Выбирайте первый ответ который приходит в голову.\n"
-        f"Нет правильных или неправильных._"
-    )
-    
-    # ГОРИЗОНТАЛЬНЫЕ КНОПКИ (две в ряд)
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [
-            InlineKeyboardButton(text=f"Начать этап {stage_num}", callback_data=f"begin_stage_{stage_key}"),
-            InlineKeyboardButton(text="🔍 Детали", callback_data=f"stage_details_{stage_key}")
-        ]
     ])
     
     try:
@@ -1652,7 +1644,7 @@ async def show_stage_feedback(callback: types.CallbackQuery, stage_key: str):
     archetype_block = ""
     if profile:
         archetype_block = (
-            f"\n🎭 *{profile['archetype']}*\n"
+            f"🎭 *{profile['archetype']}*\n"
             f"_{profile['archetype_desc']}_\n\n"
             f"💬 {profile['quote']}\n"
         )
@@ -1697,9 +1689,8 @@ async def show_stage_feedback(callback: types.CallbackQuery, stage_key: str):
         if "message is not modified" not in str(e).lower() and "сообщение не изменено" not in str(e).lower():
             raise
 
-# ИСПРАВЛЕННАЯ ФУНКЦИЯ send_next_question с обработкой ошибок
 async def send_next_question(callback: types.CallbackQuery):
-    """Отправляет следующий вопрос с проверкой на дубликаты"""
+    """Отправляет следующий вопрос с уменьшенными отступами"""
     user_id = callback.from_user.id
     user = user_data[user_id]
     
@@ -1725,7 +1716,7 @@ async def send_next_question(callback: types.CallbackQuery):
         
         text = (
             f"{vec['emoji']} *{vec['name'].upper()}*\n\n"
-            f"{question['text']}\n\n"
+            f"{question['text']}\n"
             f"{'━' * 18}\n"
             f"▸ Вопрос {current_q_idx + 1}/{total_in_stage} • {progress_bar}"
         )
@@ -1745,7 +1736,6 @@ async def send_next_question(callback: types.CallbackQuery):
         user["current_question"] += 1
     else:
         await show_stage_feedback(callback, current_stage)
-
 
 # ─── Функции уточняющих вопросов ───────────────────────────────────────────
 async def show_clarification_intro(callback: types.CallbackQuery, stage_key: str):
@@ -1792,7 +1782,6 @@ async def handle_clarification_answer(callback: types.CallbackQuery, stage_key: 
         if "message is not modified" not in str(e).lower() and "сообщение не изменено" not in str(e).lower():
             raise
 
-
 # ─── Функции проверки консистентности ──────────────────────────────────────
 async def show_consistency_warning(callback: types.CallbackQuery, stage_key: str):
     vec = VECTORS[stage_key]
@@ -1816,7 +1805,6 @@ async def show_consistency_warning(callback: types.CallbackQuery, stage_key: str
     except TelegramBadRequest as e:
         if "message is not modified" not in str(e).lower() and "сообщение не изменено" not in str(e).lower():
             raise
-
 
 # ─── Функция детального профиля уровня ─────────────────────────────────────
 async def show_level_detail(callback: types.CallbackQuery, vector_key: str):
@@ -1874,9 +1862,8 @@ async def show_level_detail(callback: types.CallbackQuery, vector_key: str):
             if "message is not modified" not in str(e).lower() and "сообщение не изменено" not in str(e).lower():
                 raise
 
-
 # ══════════════════════════════════════════════
-#  НОВЫЕ ФУНКЦИИ ЭКРАНОВ
+#  ФУНКЦИИ ЭКРАНОВ
 # ══════════════════════════════════════════════
 
 async def show_about_method(callback: types.CallbackQuery):
@@ -1910,7 +1897,6 @@ async def show_about_method(callback: types.CallbackQuery):
         f"три шага, че с этим делать»."
     )
     
-    # ВЕРТИКАЛЬНЫЕ КНОПКИ
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="🔪 Я готов, вскрывайте", callback_data="start_test")],
         [InlineKeyboardButton(text="◀️ НАЗАД", callback_data="back_to_menu")]
@@ -1951,7 +1937,6 @@ async def show_results_examples(callback: types.CallbackQuery):
         f"        но теперь не бесят)."
     )
     
-    # ВЕРТИКАЛЬНЫЕ КНОПКИ
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="🔪 ХОЧУ ТАК ЖЕ", callback_data="start_test")],
         [InlineKeyboardButton(text="◀️ НАЗАД", callback_data="back_to_menu")]
@@ -1963,21 +1948,18 @@ async def show_results_examples(callback: types.CallbackQuery):
         if "message is not modified" not in str(e).lower() and "сообщение не изменено" not in str(e).lower():
             raise
 
-
 # ══════════════════════════════════════════════
 #  ФУНКЦИЯ ИНТИМНОГО ПРОФИЛЯ
 # ══════════════════════════════════════════════
 
 def create_intimate_profile_prompt(scores):
-    """Формирует СОКРАЩЕННЫЙ промпт для интимного профиля"""
+    """Формирует промпт для интимного профиля"""
     
-    # Получаем уровни
     cv_level = level(scores["ЧВ"])
     sb_level = level(scores["СБ"])
     tf_level = level(scores["ТФ"])
     ub_level = level(scores["УБ"])
     
-    # Собираем основные данные
     cv_profile = LEVEL_PROFILES["ЧВ"].get(cv_level, {})
     sb_profile = LEVEL_PROFILES["СБ"].get(sb_level, {})
     
@@ -2011,11 +1993,10 @@ def create_intimate_profile_prompt(scores):
     return prompt
 
 async def show_intimate_profile(callback: types.CallbackQuery):
-    """Генерирует интимный профиль на основе данных пользователя"""
+    """Генерирует интимный профиль с сохранением"""
     user_id = callback.from_user.id
     user = user_data[user_id]
     
-    # Проверяем, пройден ли тест полностью
     if not all(len(v) >= 8 for v in user["scores"].values()):
         await callback.message.edit_text(
             "⚠️ Сначала завершите все этапы теста",
@@ -2025,7 +2006,6 @@ async def show_intimate_profile(callback: types.CallbackQuery):
         )
         return
     
-    # Проверяем, есть ли уже сохраненный профиль
     if user.get("intimate_profile"):
         profile_text = user["intimate_profile"]
         await show_saved_intimate_profile(callback, profile_text)
@@ -2034,16 +2014,11 @@ async def show_intimate_profile(callback: types.CallbackQuery):
     await callback.message.edit_text("🔥 *Составляю интимный профиль...*\n\n_Это займёт около 20 секунд_", parse_mode='Markdown')
     
     scores = {k: round(mean(v), 1) for k, v in user["scores"].items()}
-    
-    # Формируем промпт
     prompt = create_intimate_profile_prompt(scores)
-    
-    # Вызываем API
     system_message = "Ты — психолог-сексолог. Пишешь глубокие, пронзительные психологические портреты."
     response = await call_deepseek(prompt, system_message, max_tokens=1500)
     
     if response:
-        # Сохраняем результат
         user["intimate_profile"] = response
         await show_saved_intimate_profile(callback, response)
     else:
@@ -2055,42 +2030,29 @@ async def show_intimate_profile(callback: types.CallbackQuery):
         )
 
 async def show_saved_intimate_profile(callback: types.CallbackQuery, profile_text: str):
-    """Показывает сохраненный интимный профиль с экранированием"""
-    
-    # Экранируем спецсимволы Markdown
-    import re
+    """Показывает сохраненный интимный профиль"""
     
     def escape_markdown(text):
-        # Спецсимволы, которые нужно экранировать: _ * [ ] ( ) ~ ` > # + - = | { } . !
         escape_chars = r'_*[]()~`>#+-=|{}.!'
         return re.sub(f'([{re.escape(escape_chars)}])', r'\\\1', text)
     
-    # КНОПКИ
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="🧠 МЫСЛИ ПСИХОЛОГА", callback_data="ai_analysis")],
         [InlineKeyboardButton(text="💡 ЧТО ДЕЛАТЬ", callback_data="ai_recommendations")],
         [InlineKeyboardButton(text="◀️ Назад к профилю", callback_data="show_results")]
     ])
     
-    # Экранируем текст
     safe_text = escape_markdown(profile_text)
     
-    # Разбиваем на части если слишком длинный
     if len(safe_text) > 3500:
         parts = [safe_text[i:i+3500] for i in range(0, len(safe_text), 3500)]
-        
-        # Первая часть с заголовком
         await callback.message.edit_text(
             f"🔞 *ИНТИМНЫЙ ПРОФИЛЬ*\n\n{parts[0]}",
             parse_mode='Markdown',
             reply_markup=None
         )
-        
-        # Остальные части
         for part in parts[1:-1]:
             await callback.message.answer(part, parse_mode='Markdown')
-        
-        # Последняя часть с кнопками
         await callback.message.answer(parts[-1], parse_mode='Markdown', reply_markup=keyboard)
     else:
         await callback.message.edit_text(
@@ -2098,7 +2060,6 @@ async def show_saved_intimate_profile(callback: types.CallbackQuery, profile_tex
             parse_mode='Markdown',
             reply_markup=keyboard
         )
-
 
 # ══════════════════════════════════════════════
 #  ОБРАБОТЧИКИ TELEGRAM
@@ -2114,13 +2075,14 @@ async def start_command(message: types.Message):
         "current_stage": None,
         "current_question": 0,
         "profile_complete": False,
-        "logged": False
+        "logged": False,
+        "intimate_profile": None,
+        "ai_analysis": None,
+        "ai_recommendations": None
     }
     
-    # Регистрируем старт в статистике
     stats.register_start(user_id)
     
-    # НОВЫЙ СТАРТОВЫЙ ЭКРАН с юмором и ВЕРТИКАЛЬНЫМИ кнопками
     text = (
         f"🧠 *МАТРИЦА ПОВЕДЕНИЙ 4×6*\n"
         f"_лаборатория психологических профилей_\n\n"
@@ -2144,7 +2106,6 @@ async def start_command(message: types.Message):
         f"🔒 Ваши тайны умрут вместе с сессией"
     )
     
-    # ВЕРТИКАЛЬНЫЕ КНОПКИ (каждая в отдельном списке) - убрана кнопка "В МЕНЮ"
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="🔪 ДЕЛАЕМ ВСКРЫТИЕ!", callback_data="start_test")],
         [InlineKeyboardButton(text="📖 ЧТО ЗА МЕТОД", callback_data="about_method")],
@@ -2154,7 +2115,6 @@ async def start_command(message: types.Message):
     await message.answer(text, reply_markup=keyboard, parse_mode='Markdown')
 
 async def stats_command(message: types.Message):
-    """Показывает статистику бота (только для админа)"""
     if message.from_user.id not in ADMIN_IDS:
         await message.answer("⛔ Доступ запрещен")
         return
@@ -2162,13 +2122,11 @@ async def stats_command(message: types.Message):
     await message.answer(stats.get_stats_text(), parse_mode='Markdown')
 
 async def apistatus_command(message: types.Message):
-    """Проверяет статус DeepSeek API (только для админа)"""
     if message.from_user.id not in ADMIN_IDS:
         await message.answer("⛔ Доступ запрещен")
         return
     
     status_msg = await message.answer("🔄 Проверяю DeepSeek API...")
-    
     test_prompt = "Ответь 'OK' одним словом"
     response = await call_deepseek(test_prompt, max_tokens=10)
     
@@ -2180,15 +2138,10 @@ async def apistatus_command(message: types.Message):
         )
     else:
         await status_msg.edit_text(
-            "❌ *DeepSeek API не отвечает*\n\n"
-            "Проверьте:\n"
-            "• API ключ в файле .env\n"
-            "• Подключение к интернету\n"
-            "• Баланс на аккаунте DeepSeek",
+            "❌ *DeepSeek API не отвечает*",
             parse_mode='Markdown'
         )
 
-# ИСПРАВЛЕННЫЙ callback_handler с обработкой ошибок
 async def callback_handler(callback: types.CallbackQuery):
     await callback.answer()
     
@@ -2202,7 +2155,10 @@ async def callback_handler(callback: types.CallbackQuery):
             "current_stage": None,
             "current_question": 0,
             "profile_complete": False,
-            "logged": False
+            "logged": False,
+            "intimate_profile": None,
+            "ai_analysis": None,
+            "ai_recommendations": None
         }
     
     try:
@@ -2220,34 +2176,7 @@ async def callback_handler(callback: types.CallbackQuery):
         elif data == "results_examples":
             await show_results_examples(callback)
         
-        elif data == "about":
-            keyboard = InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="◀️ Назад", callback_data="back_to_menu")]
-            ])
-            await callback.message.edit_text(
-                "📚 *О МЕТОДИКЕ*\n\n"
-                "Тест основан на модели 4 векторов поведения:\n\n"
-                "🛡 *Реакция на угрозу* — как ведете себя под давлением\n"
-                "💰 *Добыча ресурсов* — как зарабатываете и копите\n"
-                "🔍 *Понимание мира* — как объясняете непонятное\n"
-                "🤝 *Отношения* — как строите связи с людьми\n\n"
-                "Каждый вектор имеет 6 уровней — от базовых реакций до зрелых стратегий.",
-                parse_mode='Markdown',
-                reply_markup=keyboard
-            )
-        
-        elif data == "ai_info":
-            keyboard = InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="◀️ Назад", callback_data="back_to_menu")]
-            ])
-            if DEEPSEEK_API_KEY:
-                text = "🤖 *О AI-ПОМОЩНИКЕ*\n\nПосле теста вы сможете:\n\n• Задать вопросы о себе\n• Получить персональные рекомендации\n• Я помню ваш профиль и отвечаю с его учетом\n• Ответы краткие и по делу"
-            else:
-                text = "⚠️ *AI временно недоступен*\n\nДоступен только стандартный анализ."
-            await callback.message.edit_text(text, parse_mode='Markdown', reply_markup=keyboard)
-        
         elif data == "back_to_menu":
-            # ВЕРТИКАЛЬНЫЕ КНОПКИ В МЕНЮ - убрана кнопка "В МЕНЮ"
             keyboard = InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="🔪 ДЕЛАЕМ ВСКРЫТИЕ!", callback_data="start_test")],
                 [InlineKeyboardButton(text="📖 ЧТО ЗА МЕТОД", callback_data="about_method")],
@@ -2305,7 +2234,6 @@ async def callback_handler(callback: types.CallbackQuery):
         
         elif data.startswith("answer_"):
             if user_data[user_id].get("processing", False):
-                await callback.answer()
                 return
             user_data[user_id]["processing"] = True
             try:
@@ -2323,9 +2251,6 @@ async def callback_handler(callback: types.CallbackQuery):
         
         elif data == "show_results":
             await show_results(callback)
-        
-        elif data == "standard_analysis":
-            await show_standard_analysis(callback)
         
         elif data == "ai_analysis":
             await show_ai_analysis(callback)
@@ -2359,7 +2284,10 @@ async def callback_handler(callback: types.CallbackQuery):
                 "current_stage": None,
                 "current_question": 0,
                 "profile_complete": False,
-                "logged": False
+                "logged": False,
+                "intimate_profile": None,
+                "ai_analysis": None,
+                "ai_recommendations": None
             }
             keyboard = InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="🔪 ДЕЛАЕМ ВСКРЫТИЕ!", callback_data="start_test")],
@@ -2381,10 +2309,9 @@ async def callback_handler(callback: types.CallbackQuery):
     
     except TelegramBadRequest as e:
         if "message is not modified" in str(e).lower() or "сообщение не изменено" in str(e).lower():
-            logger.info(f"Ignored 'message not modified' error in callback_handler")
+            logger.info(f"Ignored 'message not modified' error")
         else:
             raise
-
 
 # ══════════════════════════════════════════════
 #  ФУНКЦИИ РЕЗУЛЬТАТОВ
@@ -2394,7 +2321,6 @@ async def show_results(callback: types.CallbackQuery):
     user_id = callback.from_user.id
     user = user_data[user_id]
     
-    # Проверка что все этапы пройдены
     for stage in STAGE_ORDER:
         if len(user["scores"][stage]) < 8:
             await callback.message.edit_text(
@@ -2407,12 +2333,10 @@ async def show_results(callback: types.CallbackQuery):
     
     scores = {k: round(mean(v), 1) for k, v in user["scores"].items()}
     
-    # Логируем завершение в статистику (только один раз)
     if not user.get("logged", False):
         stats.register_completion(user_id, scores)
         user["logged"] = True
     
-    # Формируем текст профиля с архетипами и цитатами
     text = f"🧠 *ВАШ ПРОФИЛЬ*\n\n"
     
     for key in STAGE_ORDER:
@@ -2438,26 +2362,6 @@ async def show_results(callback: types.CallbackQuery):
     if bottleneck_profile.get('pain_costs'):
         text += f"   {bottleneck_profile['pain_costs'][0]}\n"
     
-    # Добавляем детальный профиль узкого места прямо на финальный экран
-    if bottleneck_profile:
-        triggers_text = "\n".join([f"• {t}" for t in bottleneck_profile.get("triggers", [])])
-        costs_text = "\n".join([f"• {c}" for c in bottleneck_profile.get("pain_costs", [])])
-        
-        text += f"\n{VECTORS[bottleneck_key]['emoji']} *{VECTORS[bottleneck_key]['name']}* — уровень {bottleneck_lvl}/6\n"
-        text += f"{'━' * 18}\n\n"
-        text += f"🎭 *{bottleneck_profile.get('archetype', '')}*\n"
-        text += f"_{bottleneck_profile.get('archetype_desc', '')}_\n\n"
-        text += f"💬 {bottleneck_profile.get('quote', '')}\n\n"
-        text += f"*ЭТО ТЫ, ЕСЛИ...*\n"
-        text += f"{triggers_text}\n\n"
-        text += f"*ОТКУДА ЭТО ВЗЯЛОСЬ*\n"
-        text += f"{bottleneck_profile.get('pain_origin', '')}\n\n"
-        text += f"*ЧЕМ ТЫ ПЛАТИШЬ*\n"
-        text += f"{costs_text}\n\n"
-        text += f"*ЧТО ДЕЛАТЬ ПРЯМО СЕЙЧАС*\n"
-        text += f"{bottleneck_profile.get('immediate_tool', '')}"
-    
-    # ВЕРТИКАЛЬНЫЕ КНОПКИ НА ФИНАЛЬНОМ ЭКРАНЕ - убрана кнопка "ГЛУБЖЕ ПРОФИЛЬ"
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="🧠 МЫСЛИ ПСИХОЛОГА", callback_data="ai_analysis")],
         [InlineKeyboardButton(text="💡 ЧТО ДЕЛАТЬ", callback_data="ai_recommendations")],
@@ -2466,14 +2370,12 @@ async def show_results(callback: types.CallbackQuery):
         [InlineKeyboardButton(text="◀️ В МЕНЮ", callback_data="back_to_menu")]
     ])
     
-    # Разбиваем на части если слишком длинное
     if len(text) > 4000:
         parts = [text[i:i+4000] for i in range(0, len(text), 4000)]
-        for i, part in enumerate(parts):
-            if i == 0:
-                await callback.message.edit_text(part, parse_mode='Markdown', reply_markup=keyboard if i == len(parts)-1 else None)
-            else:
-                await callback.message.answer(part, parse_mode='Markdown')
+        await callback.message.edit_text(parts[0], parse_mode='Markdown', reply_markup=None)
+        for part in parts[1:-1]:
+            await callback.message.answer(part, parse_mode='Markdown')
+        await callback.message.answer(parts[-1], parse_mode='Markdown', reply_markup=keyboard)
     else:
         try:
             await callback.message.edit_text(text, reply_markup=keyboard, parse_mode='Markdown')
@@ -2481,73 +2383,20 @@ async def show_results(callback: types.CallbackQuery):
             if "message is not modified" not in str(e).lower() and "сообщение не изменено" not in str(e).lower():
                 raise
 
-async def show_standard_analysis(callback: types.CallbackQuery):
-    user_id = callback.from_user.id
-    scores = {k: round(mean(v), 1) for k, v in user_data[user_id]["scores"].items()}
-    
-    text = get_profile_text(scores)
-    
-    text += "\n🔍 *ПОЧЕМУ ЭТО ПРОИСХОДИТ*\n"
-    for key in ["ТФ", "СБ", "УБ", "ЧВ"]:
-        lvl = level(scores[key])
-        if key in LIFE_PATTERNS and lvl in LIFE_PATTERNS[key]:
-            pattern = LIFE_PATTERNS[key][lvl][:150] + "..."
-            text += f"\n• *{VECTORS[key]['name']}*: {pattern}\n"
-    
-    scores_as_levels = {k: level(v) for k, v in scores.items()}
-    active = [c for c in CORRELATIONS if c["condition"](scores_as_levels)]
-    if active:
-        text += "\n🔗 *СВЯЗИ*\n"
-        for c in active[:2]:
-            text += f"\n⚡ *{c['title']}*\n{c['solution']}\n"
-    
-    order = get_priority_order(scores)
-    text += "\n📋 *РЕКОМЕНДАЦИИ*\n"
-    
-    icons = ["●", "○", "○", "○"]
-    labels = ["НАЧАТЬ ЗДЕСЬ", "СЛЕДУЮЩИЙ ШАГ", "РАЗВИВАТЬ", "ПОДДЕРЖИВАТЬ"]
-    
-    for i, key in enumerate(order):
-        lvl = level(scores[key])
-        if key in RECOMMENDATIONS and lvl in RECOMMENDATIONS[key]:
-            text += f"\n{icons[i] if i < len(icons) else '○'} *{VECTORS[key]['name']}* — {labels[i] if i < len(labels) else 'ПОДДЕРЖИВАТЬ'}\n"
-            for rec in RECOMMENDATIONS[key][lvl][:2]:
-                text += f"  • {rec}\n"
-    
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="◀️ Назад", callback_data="show_results")]
-    ])
-    
-    if len(text) > 4000:
-        parts = [text[i:i+4000] for i in range(0, len(text), 4000)]
-        for i, part in enumerate(parts):
-            if i == 0:
-                await callback.message.edit_text(part, parse_mode='Markdown')
-            else:
-                await callback.message.answer(part, parse_mode='Markdown')
-        await callback.message.answer("Выберите действие:", reply_markup=keyboard)
-    else:
-        try:
-            await callback.message.edit_text(text, reply_markup=keyboard, parse_mode='Markdown')
-        except TelegramBadRequest as e:
-            if "message is not modified" not in str(e).lower() and "сообщение не изменено" not in str(e).lower():
-                raise
-
-
-# Резервные ответы для анализа (когда API недоступен)
+# Резервные ответы
 FALLBACK_ANALYSIS = {
     "СБ": {
         1: "Вы в стопоре под давлением. Ваше тело замирает, слова исчезают. Это не слабость — это защитный механизм, который когда-то спасал. Теперь он мешает. Начните с малого: в безопасной ситуации скажите 'нет' или 'я не согласен'. Просто чтобы тело вспомнило, что возражать можно без последствий.",
-        2: "Вы избегаете конфликтов — уходите, меняете тему, покидаете место. Это даёт временное облегчение, но проблемы не решаются. Попробуйте в следующем конфликте остаться на 2 минуты дольше обычного. Не говорите ничего, просто будьте рядом с напряжением.",
-        3: "Вы соглашаетесь внешне, но внутри кипите. Накопленная злость взрывается неожиданно. Начните с малого: вместо 'да' говорите 'мне нужно подумать'. Это даст паузу и возможность выбрать осознанно.",
-        4: "Вы носите маску — внешне спокойны, внутри буря. Люди не знают настоящего вас. Выберите одного доверенного человека и скажите ему одну правду о своих чувствах. Не всё, одну фразу: 'мне сейчас тяжело'.",
-        5: "Вы умеете гасить конфликты — это зрелый навык. Но иногда вы гасите даже нужные конфликты. Попробуйте раз в неделю не вмешиваться в чужой спор — дайте людям самим разобраться.",
-        6: "Вы умеете защищаться прямо. Теперь работайте над точностью: не всегда нужна атака. Перед конфликтом спросите себя: 'Что я хочу получить в итоге?' Если цель — мир, выберите диалог."
+        2: "Вы избегаете конфликтов — уходите, меняете тему, покидаете место. Это даёт временное облегчение, но проблемы не решаются. Попробуйте в следующем конфликте остаться на 2 минуты дольше обычного.",
+        3: "Вы соглашаетесь внешне, но внутри кипите. Накопленная злость взрывается неожиданно. Начните с малого: вместо 'да' говорите 'мне нужно подумать'.",
+        4: "Вы носите маску — внешне спокойны, внутри буря. Люди не знают настоящего вас. Выберите одного доверенного человека и скажите ему одну правду о своих чувствах.",
+        5: "Вы умеете гасить конфликты — это зрелый навык. Но иногда вы гасите даже нужные конфликты. Попробуйте раз в неделю не вмешиваться в чужой спор.",
+        6: "Вы умеете защищаться прямо. Теперь работайте над точностью: не всегда нужна атака. Перед конфликтом спросите себя: 'Что я хочу получить в итоге?'"
     },
     "ТФ": {
         1: "Ваши деньги зависят от других. Первый шаг — один навык, который можно продать. Найдите что-то, что вы умеете, и предложите это одному человеку сегодня.",
         2: "Вы находите, но не создаёте. Посмотрите на свои подработки — что повторяется? Сделайте это своей первой системой.",
-        3: "Вы зарабатываете, но не копите. Откройте отдельный счёт и переводите туда 10% от каждого дохода сразу, не тратя.",
+        3: "Вы зарабатываете, но не копите. Откройте отдельный счёт и переводите туда 10% от каждого дохода сразу.",
         4: "Вы много работаете, но вы — узкое место. Напишите инструкцию для одной своей задачи и отдайте её кому-то.",
         5: "У вас есть накопления. Теперь учитесь их умножать. Выберите один простой инструмент и вложите 10% резерва.",
         6: "Вы строите системы. Риск — отрыв от реальности. Раз в месяц общайтесь с теми, кто на нижнем уровне вашей системы."
@@ -2563,45 +2412,17 @@ FALLBACK_ANALYSIS = {
     "ЧВ": {
         1: "Вы зависите от близких. Сделайте сегодня одно действие самостоятельно — то, что обычно делаете только с ними.",
         2: "Вы подстраиваетесь под всех. В одном разговоре скажите мнение, которое расходится с собеседником. Безопасное, но своё.",
-        3: "Вас знают многие, но мало кто глубоко. Выберите одного человека и проведите с ним час без 'программы' — просто поговорите о том, что внутри.",
-        4: "Вы понимаете людей и используете это. Попробуйте один раз попросить прямо, без манипуляций: 'Мне нужна твоя помощь'.",
+        3: "Вас знают многие, но мало кто глубоко. Выберите одного человека и проведите с ним час без 'программы'.",
+        4: "Вы понимаете людей и используете это. Попробуйте один раз попросить прямо, без манипуляций.",
         5: "У вас есть настоящие партнёрства. Расширьте круг — один новый контакт из другой сферы на этой неделе.",
-        6: "У вас широкая сеть. Выберите 3 человек из неё и инвестируйте в них больше времени — они станут вашей опорой."
+        6: "У вас широкая сеть. Выберите 3 человек из неё и инвестируйте в них больше времени."
     }
 }
 
-async def show_ai_analysis_fallback(callback: types.CallbackQuery):
-    """Показывает резервный анализ когда API недоступен"""
-    user_id = callback.from_user.id
-    scores = {k: round(mean(v), 1) for k, v in user_data[user_id]["scores"].items()}
-    
-    bottleneck_key = get_priority_order(scores)[0]
-    bottleneck_lvl = level(scores[bottleneck_key])
-    
-    text = f"🧠 *ПЕРСОНАЛЬНЫЙ АНАЛИЗ*\n\n"
-    text += f"*Ваше узкое место:* {VECTORS[bottleneck_key]['name']}\n\n"
-    text += FALLBACK_ANALYSIS[bottleneck_key][bottleneck_lvl]
-    text += f"\n\n_🤖 AI-анализ временно недоступен, но вот персональный совет на основе вашего профиля._"
-    
-    # ВЕРТИКАЛЬНЫЕ КНОПКИ
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="❓ Вопросы", callback_data="smart_questions")],
-        [InlineKeyboardButton(text="💡 Рекомендации", callback_data="ai_recommendations")],
-        [InlineKeyboardButton(text="◀️ Назад", callback_data="show_results")]
-    ])
-    
-    try:
-        await callback.message.edit_text(text, parse_mode='Markdown', reply_markup=keyboard)
-    except TelegramBadRequest as e:
-        if "message is not modified" not in str(e).lower() and "сообщение не изменено" not in str(e).lower():
-            raise
-
 async def show_ai_analysis(callback: types.CallbackQuery):
-    """Умный AI-анализ с улучшенным форматированием"""
     user_id = callback.from_user.id
     user = user_data[user_id]
     
-    # Проверяем, все ли этапы пройдены
     if not all(len(user["scores"][stage]) >= 8 for stage in STAGE_ORDER):
         await callback.message.edit_text(
             "⚠️ Сначала завершите все этапы теста!",
@@ -2611,120 +2432,78 @@ async def show_ai_analysis(callback: types.CallbackQuery):
         )
         return
     
+    if user.get("ai_analysis"):
+        await show_saved_ai_analysis(callback, user["ai_analysis"])
+        return
+    
     await callback.message.edit_text("🧠 *Анализирую ваш профиль...*", parse_mode='Markdown')
     
     scores = {k: round(mean(v), 1) for k, v in user["scores"].items()}
-    
-    # Определяем узкое место
     bottleneck_key = get_priority_order(scores)[0]
     bottleneck_lvl = level(scores[bottleneck_key])
     bottleneck_profile = LEVEL_PROFILES.get(bottleneck_key, {}).get(bottleneck_lvl, {})
     bottleneck_vec = VECTORS[bottleneck_key]
-    
-    # Формируем тикер
     ticker = f"{bottleneck_key}-{bottleneck_lvl}"
     
-    # Собираем данные по всем векторам
-    vectors_data = []
-    for key in STAGE_ORDER:
-        lvl = level(scores[key])
-        profile = LEVEL_PROFILES.get(key, {}).get(lvl, {})
-        vec = VECTORS[key]
-        vectors_data.append(f"""
-{key} ({vec['name']}):
-- Уровень: {lvl}/6
-- Название: {vec['levels'][lvl]['name']}
-- Архетип: {profile.get('archetype', 'не определен')}
-- Описание: {profile.get('archetype_desc', '')}
-- Цитата: {profile.get('quote', '')}
-""")
-    
-    # Активные корреляции
-    scores_as_levels = {k: level(v) for k, v in scores.items()}
-    active_correlations = [c for c in CORRELATIONS if c["condition"](scores_as_levels)]
-    correlations_text = "\n".join([f"- {c['title']}" for c in active_correlations]) if active_correlations else "не обнаружены"
-    
-    prompt = f"""ТЫ — ПСИХОЛОГ-АНАЛИТИК, АВТОР МЕТОДА VARIATICA. Твоя задача — написать психологический портрет человека.
+    prompt = f"""ТЫ — ПСИХОЛОГ. Напиши психологический портрет человека.
 
-СТРУКТУРА АНАЛИЗА (ОБЯЗАТЕЛЬНО):
+СТРУКТУРА:
 1. ЗАГОЛОВОК: "{ticker} «{bottleneck_profile.get('archetype', '')}»"
 2. АРХЕТИП: "{bottleneck_profile.get('archetype_desc', '')}"
 3. ЦИТАТА: "{bottleneck_profile.get('quote', '')}"
+4. БЛОК "ЭТО ТЫ, ЕСЛИ..." (6 пунктов)
+5. БЛОК "СУТЬ ПРОБЛЕМЫ"
+6. БЛОК "ПЕРВЫЙ ШАГ" (4 шага)
+7. БЛОК "ЧТО ДАЛЬШЕ?" (5 пунктов)
 
-4. БЛОК "ЭТО ТЫ, ЕСЛИ..." (6 пунктов с •):
-Используй короткие, конкретные сцены из жизни, телесные ощущения.
-
-5. БЛОК "СУТЬ ПРОБЛЕМЫ: ЧТО ИДЕТ НЕ ТАК":
-- Короткий абзац о пути человека
-- Одна ключевая метафора
-- Коротко "Откуда это взялось"
-- 4 пункта "Цена:" с конкретными потерями
-
-6. БЛОК "ПЕРВЫЙ ШАГ / ИНСТРУМЕНТ" (4 четких шага)
-
-7. БЛОК "ЧТО ДАЛЬШЕ?" (5 пунктов с •)
-
-ВАЖНО: Пиши КОРОТКО, без воды. Максимум 2500 символов.
-
-ДАННЫЕ ПОЛЬЗОВАТЕЛЯ:
-- Тикер: {ticker}
-- Вектор: {bottleneck_vec['name']}
-- Уровень: {bottleneck_lvl}/6 — {bottleneck_vec['levels'][bottleneck_lvl]['name']}
-- Архетип: {bottleneck_profile.get('archetype', '')}
-- Цитата: {bottleneck_profile.get('quote', '')}
-- Инструмент: {bottleneck_profile.get('immediate_tool', '')[:200]}..."""
+ДАННЫЕ: {bottleneck_vec['name']}, уровень {bottleneck_lvl}/6, архетип {bottleneck_profile.get('archetype', '')}"""
     
-    system_message = "Ты психолог. Пиши коротко, метафорично, с эмодзи в заголовках."
+    system_message = "Ты психолог. Пиши коротко, метафорично."
     response = await call_deepseek(prompt, system_message, max_tokens=2000)
     
-    # КНОПКИ (горизонтальные + вертикальные)
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [
-            InlineKeyboardButton(text="❓ ВОПРОСЫ", callback_data="smart_questions"),
-            InlineKeyboardButton(text="💡 ЧТО ДЕЛАТЬ", callback_data="ai_recommendations")
-        ],
-        [
-            InlineKeyboardButton(text="🔞 ИНТИМНЫЙ ПРОФИЛЬ", callback_data="intimate_profile"),
-            InlineKeyboardButton(text="◀️ НАЗАД", callback_data="show_results")
-        ]
+        [InlineKeyboardButton(text="❓ ВОПРОСЫ", callback_data="smart_questions")],
+        [InlineKeyboardButton(text="💡 ЧТО ДЕЛАТЬ", callback_data="ai_recommendations")],
+        [InlineKeyboardButton(text="🔞 ИНТИМНЫЙ ПРОФИЛЬ", callback_data="intimate_profile")],
+        [InlineKeyboardButton(text="◀️ НАЗАД", callback_data="show_results")]
     ])
     
     if response:
-        # Добавляем эмодзи к заголовкам если их нет
-        formatted_response = response
-        formatted_response = formatted_response.replace("### ЭТО ТЫ, ЕСЛИ...", "### 🔍 *ЭТО ТЫ, ЕСЛИ...*")
-        formatted_response = formatted_response.replace("### СУТЬ ПРОБЛЕМЫ:", "### ⚠️ *СУТЬ ПРОБЛЕМЫ:*")
-        formatted_response = formatted_response.replace("### ПЕРВЫЙ ШАГ", "### 🛠 *ПЕРВЫЙ ШАГ*")
-        formatted_response = formatted_response.replace("### ЧТО ДАЛЬШЕ?", "### 🔮 *ЧТО ДАЛЬШЕ?*")
-        
-        await callback.message.edit_text(
-            f"🧠 *МЫСЛИ ПСИХОЛОГА*\n\n{formatted_response}",
-            parse_mode='Markdown',
-            reply_markup=keyboard
-        )
+        user["ai_analysis"] = response
+        await show_saved_ai_analysis(callback, response)
     else:
-        # Fallback с форматированием
         fallback_text = FALLBACK_ANALYSIS[bottleneck_key][bottleneck_lvl]
-        
-        # Добавляем эмодзи к заголовкам
-        fallback_with_emoji = f"""
-### 🎭 *{bottleneck_key}-{bottleneck_lvl} {bottleneck_profile.get('archetype', '')}*
-
-{fallback_text}
-
-### 🔮 *ЧТО ДАЛЬШЕ?*
-
-• 🌱 *Работай над собой* — каждый день маленький шаг
-• 📈 *Отслеживай прогресс* — записывай изменения
-• 🤝 *Делись опытом* — с теми, кому доверяешь
-"""
-        
         await callback.message.edit_text(
-            f"🧠 *МЫСЛИ ПСИХОЛОГА*\n\n{fallback_with_emoji}",
+            f"🧠 *МЫСЛИ ПСИХОЛОГА*\n\n{fallback_text}",
             parse_mode='Markdown',
             reply_markup=keyboard
         )
 
+async def show_saved_ai_analysis(callback: types.CallbackQuery, analysis_text: str):
+    """Показывает сохраненный анализ"""
+    
+    def escape_markdown(text):
+        escape_chars = r'_*[]()~`>#+-=|{}.!'
+        return re.sub(f'([{re.escape(escape_chars)}])', r'\\\1', text)
+    
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="❓ ВОПРОСЫ", callback_data="smart_questions")],
+        [InlineKeyboardButton(text="💡 ЧТО ДЕЛАТЬ", callback_data="ai_recommendations")],
+        [InlineKeyboardButton(text="🔞 ИНТИМНЫЙ ПРОФИЛЬ", callback_data="intimate_profile")],
+        [InlineKeyboardButton(text="◀️ НАЗАД", callback_data="show_results")]
+    ])
+    
+    safe_text = escape_markdown(analysis_text)
+    full_text = f"🧠 *МЫСЛИ ПСИХОЛОГА*\n\n{safe_text}"
+    
+    if len(full_text) > 4000:
+        parts = [full_text[i:i+4000] for i in range(0, len(full_text), 4000)]
+        await callback.message.edit_text(parts[0], parse_mode='Markdown', reply_markup=None)
+        for part in parts[1:-1]:
+            await callback.message.answer(part, parse_mode='Markdown')
+        await callback.message.answer(parts[-1], parse_mode='Markdown', reply_markup=keyboard)
+    else:
+        await callback.message.edit_text(full_text, parse_mode='Markdown', reply_markup=keyboard)
 
 async def show_ai_recommendations(callback: types.CallbackQuery):
     user_id = callback.from_user.id
@@ -2733,38 +2512,28 @@ async def show_ai_recommendations(callback: types.CallbackQuery):
     await callback.message.edit_text("💡 *Думаю...*", parse_mode='Markdown')
     
     bottleneck_key = get_priority_order(scores)[0]
-    bottleneck_lvl = level(scores[bottleneck_key])
-    bn_profile = LEVEL_PROFILES.get(bottleneck_key, {}).get(bottleneck_lvl, {})
     
-    # НОВЫЙ ТЕКСТ с юмором
     text = (
-        f"💡 *ЧТО ДЕЛАТЬ (спойлер: не пить)*\n\n"
-        f"*СЕГОДНЯ (5 минут):*\n"
+        f"💡 *ЧТО ДЕЛАТЬ*\n\n"
+        f"*СЕГОДНЯ:*\n"
         f"Напишите инструкцию, как мыть кофеварку.\n"
         f"Отдайте коллеге. Не дышите в спину.\n\n"
-        f"──────────────────────\n"
         f"*НА ЭТОЙ НЕДЕЛЕ:*\n"
         f"Выберите одну задачу, которую ненавидите.\n"
-        f"Наймите человека (студента, фрилансера).\n"
-        f"Заплатите. Не проверяйте. Умрите от ужаса.\n"
-        f"Проснитесь — мир не рухнул.\n\n"
-        f"──────────────────────\n"
+        f"Наймите человека. Заплатите. Не проверяйте.\n\n"
         f"*В ЭТОМ МЕСЯЦЕ:*\n"
         f"Создайте «подушку» — 3 ваших зарплаты.\n"
-        f"Это даст право сказать «нет» начальнику.\n"
-        f"(Попрактикуйтесь сначала на кошке).\n\n"
-        f"──────────────────────\n"
+        f"Это даст право сказать «нет» начальнику.\n\n"
         f"*ЦИТАТА ДНЯ:*\n"
         f"«Если ты такой умный, почему такой бедный?\n"
         f" А, понятно. Ты вкалываешь, а не строишь\n"
         f" систему»."
     )
     
-    # ВЕРТИКАЛЬНЫЕ КНОПКИ
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="❓ ЕЩЁ ВОПРОС", callback_data="smart_questions")],
         [InlineKeyboardButton(text="🧠 МЫСЛИ ПСИХОЛОГА", callback_data="ai_analysis")],
-        [InlineKeyboardButton(text="◀️ НАЗАД К ПРОФИЛЮ", callback_data="show_results")]
+        [InlineKeyboardButton(text="◀️ НАЗАД", callback_data="show_results")]
     ])
     
     try:
@@ -2772,7 +2541,6 @@ async def show_ai_recommendations(callback: types.CallbackQuery):
     except TelegramBadRequest as e:
         if "message is not modified" not in str(e).lower() and "сообщение не изменено" not in str(e).lower():
             raise
-
 
 async def show_smart_questions(callback: types.CallbackQuery):
     user_id = callback.from_user.id
@@ -2788,14 +2556,8 @@ async def show_smart_questions(callback: types.CallbackQuery):
             callback_data=f"ask_{i}"
         )])
     
-    keyboard.append([InlineKeyboardButton(
-        text="✏️ Спросить самому", 
-        callback_data="ask_question"
-    )])
-    keyboard.append([InlineKeyboardButton(
-        text="◀️ Назад", 
-        callback_data="show_results"
-    )])
+    keyboard.append([InlineKeyboardButton(text="✏️ Спросить самому", callback_data="ask_question")])
+    keyboard.append([InlineKeyboardButton(text="◀️ Назад", callback_data="show_results")])
     
     try:
         await callback.message.edit_text(
@@ -2808,7 +2570,6 @@ async def show_smart_questions(callback: types.CallbackQuery):
         if "message is not modified" not in str(e).lower() and "сообщение не изменено" not in str(e).lower():
             raise
 
-
 async def handle_smart_question(callback: types.CallbackQuery, question: str):
     user_id = callback.from_user.id
     scores = {k: round(mean(v), 1) for k, v in user_data[user_id]["scores"].items()}
@@ -2820,21 +2581,14 @@ async def handle_smart_question(callback: types.CallbackQuery, question: str):
         lvl = level(v)
         p = LEVEL_PROFILES.get(k, {}).get(lvl, {})
         archetype = p.get("archetype", "")
-        profile_lines.append(
-            f"{VECTORS[k]['name']}: {lvl}/6 — {VECTORS[k]['levels'][lvl]['name']}"
-            + (f" ({archetype})" if archetype else "")
-        )
+        profile_lines.append(f"{VECTORS[k]['name']}: {lvl}/6 — {VECTORS[k]['levels'][lvl]['name']}" + (f" ({archetype})" if archetype else ""))
     profile_summary = "\n".join(profile_lines)
     
     system_prompt = f"""Ты психолог. Учитывай профиль человека:
 
 {profile_summary}
 
-Отвечай:
-• Коротко (2-4 предложения)
-• По делу, без воды
-• Конкретно
-• На русском"""
+Отвечай коротко, по делу, без воды, 2-4 предложения."""
     
     prompt = f"Вопрос: {question}\n\nДай короткий, практичный ответ с учетом моего профиля."
     response = await call_deepseek(prompt, system_prompt, max_tokens=300)
@@ -2851,18 +2605,13 @@ async def handle_smart_question(callback: types.CallbackQuery, question: str):
             reply_markup=keyboard
         )
     else:
-        # Fallback ответ
         bottleneck_key = get_priority_order(scores)[0]
         bottleneck_lvl = level(scores[bottleneck_key])
-        
         await callback.message.edit_text(
-            f"❓ *{question}*\n\n"
-            f"{FALLBACK_ANALYSIS[bottleneck_key][bottleneck_lvl]}\n\n"
-            f"_🤖 AI временно недоступен, но этот совет соответствует вашему профилю._",
+            f"❓ *{question}*\n\n{FALLBACK_ANALYSIS[bottleneck_key][bottleneck_lvl]}",
             parse_mode='Markdown',
             reply_markup=keyboard
         )
-
 
 async def handle_message(message: types.Message):
     user_id = message.from_user.id
@@ -2885,7 +2634,6 @@ async def handle_message(message: types.Message):
         return
     
     scores = {k: round(mean(v), 1) for k, v in user["scores"].items()}
-    
     thinking = await message.answer("🤔 *Думаю...*", parse_mode='Markdown')
     
     profile_lines = []
@@ -2893,25 +2641,16 @@ async def handle_message(message: types.Message):
         lvl = level(v)
         p = LEVEL_PROFILES.get(k, {}).get(lvl, {})
         archetype = p.get("archetype", "")
-        profile_lines.append(
-            f"{VECTORS[k]['name']}: {lvl}/6 — {VECTORS[k]['levels'][lvl]['name']}"
-            + (f" ({archetype})" if archetype else "")
-        )
+        profile_lines.append(f"{VECTORS[k]['name']}: {lvl}/6 — {VECTORS[k]['levels'][lvl]['name']}" + (f" ({archetype})" if archetype else ""))
     profile_summary = "\n".join(profile_lines)
     
     system_prompt = f"""Ты психолог. Учитывай профиль человека:
 
 {profile_summary}
 
-Отвечай:
-• Коротко (2-4 предложения)
-• По делу, без воды
-• Конкретно
-• На русском"""
+Отвечай коротко, 2-4 предложения, по делу."""
     
-    user_prompt = f"Вопрос: {message.text}\n\nДай короткий, практичный ответ с учетом моего профиля."
-    
-    response = await call_deepseek(user_prompt, system_prompt, max_tokens=300)
+    response = await call_deepseek(f"Вопрос: {message.text}", system_prompt, max_tokens=300)
     
     await thinking.delete()
     
@@ -2921,26 +2660,17 @@ async def handle_message(message: types.Message):
     ])
     
     if response:
-        await message.answer(
-            f"🧠 *Ответ*\n\n{response}",
-            reply_markup=keyboard,
-            parse_mode='Markdown'
-        )
+        await message.answer(f"🧠 *Ответ*\n\n{response}", reply_markup=keyboard, parse_mode='Markdown')
     else:
-        # Fallback ответ
         bottleneck_key = get_priority_order(scores)[0]
         bottleneck_lvl = level(scores[bottleneck_key])
-        
         await message.answer(
-            f"🧠 *Ответ*\n\n"
-            f"{FALLBACK_ANALYSIS[bottleneck_key][bottleneck_lvl]}\n\n"
-            f"_🤖 AI временно недоступен, но этот совет соответствует вашему профилю._",
+            f"🧠 *Ответ*\n\n{FALLBACK_ANALYSIS[bottleneck_key][bottleneck_lvl]}",
             reply_markup=keyboard,
             parse_mode='Markdown'
         )
     
     user["stage"] = "menu"
-
 
 # ══════════════════════════════════════════════
 #  ЗАПУСК БОТА
@@ -2948,14 +2678,16 @@ async def handle_message(message: types.Message):
 
 async def main():
     if not TELEGRAM_TOKEN:
-        logger.error("TELEGRAM_TOKEN не найден в переменных окружения")
-        print("Ошибка: TELEGRAM_TOKEN не найден! Создайте файл .env с TELEGRAM_TOKEN=ваш_токен")
+        logger.error("TELEGRAM_TOKEN не найден")
+        print("Ошибка: TELEGRAM_TOKEN не найден!")
         return
     
     bot = Bot(token=TELEGRAM_TOKEN)
     dp = Dispatcher()
     
-    # Регистрируем хэндлеры
+    await bot.delete_webhook(drop_pending_updates=True)
+    print("✅ Вебхук удален")
+    
     dp.message.register(start_command, Command("start"))
     dp.message.register(stats_command, Command("stats"))
     dp.message.register(apistatus_command, Command("apistatus"))
@@ -2964,29 +2696,25 @@ async def main():
     
     if DEEPSEEK_API_KEY:
         logger.info("DeepSeek API ключ найден")
-        # Проверяем API при старте
         asyncio.create_task(check_api_on_startup())
     else:
-        logger.warning("DeepSeek API ключ не найден, AI-функции будут использовать fallback-ответы")
+        logger.warning("DeepSeek API ключ не найден")
     
     logger.info("Бот запущен...")
-    print("🚀 Виртуальный психолог запущен с НОВЫМИ ЭКРАНАМИ и ИНТИМНЫМ ПРОФИЛЕМ!")
-    print(f"👤 Ваш Telegram ID для админки: {ADMIN_IDS[0] if ADMIN_IDS else 'не указан'}")
-    print("📊 Команды для админа: /stats, /apistatus")
+    print("🚀 Виртуальный психолог запущен!")
+    print(f"👤 Ваш Telegram ID: {ADMIN_IDS[0] if ADMIN_IDS else 'не указан'}")
+    print("📊 Команды: /stats, /apistatus")
     
     await dp.start_polling(bot, drop_pending_updates=True)
 
 async def check_api_on_startup():
-    """Проверяет API при старте"""
     logger.info("Проверяю DeepSeek API...")
-    test_prompt = "Ответь 'OK' одним словом"
-    response = await call_deepseek(test_prompt, max_tokens=10)
+    response = await call_deepseek("Ответь 'OK' одним словом", max_tokens=10)
     if response:
-        logger.info("✅ DeepSeek API работает корректно")
+        logger.info("✅ DeepSeek API работает")
     else:
-        logger.warning("❌ DeepSeek API не отвечает. AI-функции будут использовать fallback-ответы")
+        logger.warning("❌ DeepSeek API не отвечает")
 
 if __name__ == "__main__":
-    # Создаем директорию для статистики если её нет
     os.makedirs("stats", exist_ok=True)
     asyncio.run(main())
