@@ -1,15 +1,13 @@
 #!/usr/bin/env python3
 """
-🧠 ПСИХОЛОГИЧЕСКИЙ ПРОФАЙЛЕР v7.0
-ПОЛНАЯ МАТРИЦА ПОВЕДЕНИЙ (4×6)
+🧠 ПСИХОЛОГИЧЕСКИЙ ПРОФАЙЛЕР v8.0
+ИНТЕРАКТИВНАЯ МАТРИЦА 4×6
 
-Определяет для каждого человека уникальный коктейль из 4 реакций:
-- СБ (реакция на угрозу): от 1 (стопор) до 6 (атака)
-- ТФ (реакция на ресурс): от 1 (попрошайничество) до 6 (управление)
-- УБ (реакция на неопределённость): от 1 (отрицание) до 6 (теория)
-- ЧВ (реакция на другого): от 1 (зависимость) до 6 (связи)
-
-Всего 6⁴ = 1296 уникальных типов личности!
+Анализирует не только отдельные стратегии, но и ИХ ВЗАИМОДЕЙСТВИЕ:
+- Конфликт стратегий (противоречия)
+- Синергия (усиление)
+- Компенсация (одна стратегия заменяет другую)
+- Дисбаланс (перекосы)
 """
 
 import os
@@ -26,6 +24,7 @@ from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from typing import Dict, List, Tuple, Optional
+from collections import Counter
 
 # Загружаем токен
 load_dotenv()
@@ -672,6 +671,7 @@ def calculate_profile(data: Dict) -> Dict:
     
     result = {}
     raw_scores = {}
+    confidence = {}  # Уверенность в выборе (насколько доминирует максимальный балл)
     
     for cat, questions in categories.items():
         # Собираем баллы для каждого уровня в этой категории
@@ -690,14 +690,252 @@ def calculate_profile(data: Dict) -> Dict:
         
         # Находим уровень с максимальным баллом
         dominant_level = max(level_scores, key=level_scores.get)
+        max_score = level_scores[dominant_level]
+        
+        # Вычисляем уверенность (насколько max больше среднего)
+        avg_score = sum(level_scores.values()) / len(level_scores)
+        confidence[cat] = round((max_score - avg_score) / 5 * 100, 1)  # в процентах
+        
         result[cat] = dominant_level
         raw_scores[cat] = level_scores
     
     return {
         "cocktail": result,  # Например: {"СБ": 4, "ТФ": 2, "УБ": 5, "ЧВ": 3}
         "raw_scores": raw_scores,
+        "confidence": confidence,
         "matrix": MATRIX
     }
+
+# ==================== АНАЛИЗ ВЗАИМОДЕЙСТВИЙ ====================
+
+class InteractionAnalyzer:
+    """Анализирует взаимодействие между стратегиями"""
+    
+    def __init__(self, cocktail: Dict):
+        self.cocktail = cocktail
+        self.sb = cocktail["СБ"]
+        self.tf = cocktail["ТФ"]
+        self.ub = cocktail["УБ"]
+        self.chv = cocktail["ЧВ"]
+    
+    def analyze_conflicts(self) -> List[Dict]:
+        """
+        Анализирует внутренние конфликты (противоречивые стратегии)
+        """
+        conflicts = []
+        
+        # Конфликт 1: СБ=6 (атака) + ЧВ=1 (зависимость)
+        if self.sb == 6 and self.chv == 1:
+            conflicts.append({
+                "type": "⚔️ АГРЕССИЯ VS ЗАВИСИМОСТЬ",
+                "desc": "Вы одновременно агрессивны и зависимы. Это создаёт внутреннее напряжение: хотите доминировать, но боитесь потерять отношения.",
+                "solution": "Учитесь выстраивать здоровые границы без крайностей. Развивайте ЧВ-5 (партнёрство)."
+            })
+        
+        # Конфликт 2: ТФ=1 (попрошайничество) + УБ=6 (теория)
+        if self.tf == 1 and self.ub == 6:
+            conflicts.append({
+                "type": "🔧 ИЖДИВЕНЧЕСТВО VS ТЕОРЕТИЗИРОВАНИЕ",
+                "desc": "Вы много думаете, но не хотите добывать ресурсы самостоятельно. Возможен разрыв между теорией и практикой.",
+                "solution": "Применяйте свои теории на практике. Развивайте ТФ-4 (труд)."
+            })
+        
+        # Конфликт 3: СБ=5 (подчинение) + ЧВ=4 (эксплуатация)
+        if self.sb == 5 and self.chv == 4:
+            conflicts.append({
+                "type": "🤝 ПОДЧИНЕНИЕ VS ЭКСПЛУАТАЦИЯ",
+                "desc": "Вы подчиняетесь сильным, но эксплуатируете слабых. Это классический 'вертикальный' тип личности.",
+                "solution": "Развивайте горизонтальные связи (ЧВ-5) и здоровое отстаивание границ (СБ-4)."
+            })
+        
+        # Конфликт 4: УБ=2 (мистика) + ТФ=5 (накопление)
+        if self.ub == 2 and self.tf == 5:
+            conflicts.append({
+                "type": "📚 МИСТИКА VS НАКОПЛЕНИЕ",
+                "desc": "Вы верите в знаки, но при этом практичны в ресурсах. Возможна тревога за сохранность накопленного.",
+                "solution": "Развивайте УБ-5 (проверка) чтобы снизить тревогу."
+            })
+        
+        # Конфликт 5: ЧВ=2 (подражание) + СБ=6 (атака)
+        if self.chv == 2 and self.sb == 6:
+            conflicts.append({
+                "type": "👥 ПОДРАЖАНИЕ VS АТАКА",
+                "desc": "Вы копируете других, но при этом агрессивны. Можете копировать агрессивные модели поведения.",
+                "solution": "Осознанно выбирайте образцы для подражания."
+            })
+        
+        # Конфликт 6: Все стратегии на 1-2 (инфантильность)
+        if all(v <= 2 for v in [self.sb, self.tf, self.ub, self.chv]):
+            conflicts.append({
+                "type": "🐣 ИНФАНТИЛЬНОСТЬ",
+                "desc": "Все реакции на примитивном уровне. Вы словно застряли в детстве.",
+                "solution": "Постепенно развивайте все стратегии, начиная с наиболее комфортной."
+            })
+        
+        # Конфликт 7: Все стратегии на 5-6 (гиперзрелость)
+        if all(v >= 5 for v in [self.sb, self.tf, self.ub, self.chv]):
+            conflicts.append({
+                "type": "👴 ГИПЕРЗРЕЛОСТЬ",
+                "desc": "Все реакции на максимальном уровне. Риск выгорания и потери спонтанности.",
+                "solution": "Позволяйте себе иногда быть 'ребёнком', отдыхать от контроля."
+            })
+        
+        return conflicts
+    
+    def analyze_synergy(self) -> List[Dict]:
+        """
+        Анализирует синергию (усиление стратегий)
+        """
+        synergies = []
+        
+        # Синергия 1: СБ=6 + ТФ=6 (сила + организация)
+        if self.sb == 6 and self.tf == 6:
+            synergies.append({
+                "type": "⚔️🔧 ВОЖДЬ",
+                "desc": "Вы умеете и защищать, и организовывать. Потенциал лидера, способного создать и защитить империю."
+            })
+        
+        # Синергия 2: УБ=6 + ТФ=5 (теория + накопление)
+        if self.ub == 6 and self.tf == 5:
+            synergies.append({
+                "type": "📚💰 СТРАТЕГ",
+                "desc": "Вы понимаете закономерности и накапливаете ресурсы. Способны к долгосрочному планированию."
+            })
+        
+        # Синергия 3: ЧВ=6 + УБ=5 (связи + эмпирика)
+        if self.chv == 6 and self.ub == 5:
+            synergies.append({
+                "type": "🤝🔬 ИССЛЕДОВАТЕЛЬ СВЯЗЕЙ",
+                "desc": "Вы проверяете людей на практике и строите сети. Отличный нетворкер."
+            })
+        
+        # Синергия 4: СБ=4 + ЧВ=5 (лесть + партнёрство)
+        if self.sb == 4 and self.chv == 5:
+            synergies.append({
+                "type": "⚔️🤝 ДИПЛОМАТ",
+                "desc": "Вы умеете и угождать, и сотрудничать. Способны находить подход к разным людям."
+            })
+        
+        # Синергия 5: ТФ=4 + УБ=5 (труд + эмпирика)
+        if self.tf == 4 and self.ub == 5:
+            synergies.append({
+                "type": "🔧🔬 МАСТЕР-ЭКСПЕРИМЕНТАТОР",
+                "desc": "Вы проверяете на практике то, что делаете своими руками. Инженерный склад ума."
+            })
+        
+        # Синергия 6: Все стратегии на 3-4 (баланс)
+        if all(3 <= v <= 4 for v in [self.sb, self.tf, self.ub, self.chv]):
+            synergies.append({
+                "type": "⚖️ ГАРМОНИЧНЫЙ",
+                "desc": "Сбалансированный профиль. Вы адаптивны и гибки в разных ситуациях."
+            })
+        
+        return synergies
+    
+    def analyze_compensation(self) -> List[Dict]:
+        """
+        Анализирует компенсацию (чем заменяются слабые стратегии)
+        """
+        compensations = []
+        
+        # Компенсация 1: СБ низкий, ЧВ высокий
+        if self.sb <= 2 and self.chv >= 5:
+            compensations.append({
+                "type": "🤝 КОМПЕНСИРУЕТ АГРЕССИЮ",
+                "desc": "Вы не умеете защищаться, поэтому строите отношения, чтобы вас защищали."
+            })
+        
+        # Компенсация 2: ТФ низкий, ЧВ высокий
+        if self.tf <= 2 and self.chv >= 5:
+            compensations.append({
+                "type": "🤝 КОМПЕНСИРУЕТ РЕСУРСЫ",
+                "desc": "Вы не добываете ресурсы сами, но получаете их через связи."
+            })
+        
+        # Компенсация 3: УБ низкий, ТФ высокий
+        if self.ub <= 2 and self.tf >= 5:
+            compensations.append({
+                "type": "🔧 КОМПЕНСИРУЕТ ПОНИМАНИЕ",
+                "desc": "Вы не пытаетесь понять мир, вы просто работаете и копите."
+            })
+        
+        # Компенсация 4: ЧВ низкий, ТФ высокий
+        if self.chv <= 2 and self.tf >= 5:
+            compensations.append({
+                "type": "🔧 КОМПЕНСИРУЕТ ОТНОШЕНИЯ",
+                "desc": "Вы заменяете отношения работой и накоплением."
+            })
+        
+        # Компенсация 5: Все низкие, одна высокая
+        low_count = sum(1 for v in [self.sb, self.tf, self.ub, self.chv] if v <= 2)
+        high_count = sum(1 for v in [self.sb, self.tf, self.ub, self.chv] if v >= 5)
+        
+        if low_count >= 3 and high_count >= 1:
+            high_cat = [k for k, v in self.cocktail.items() if v >= 5][0]
+            compensations.append({
+                "type": f"🎯 ГИПЕРКОМПЕНСАЦИЯ ЧЕРЕЗ {high_cat}",
+                "desc": f"Три стратегии недоразвиты, но {high_cat} гипертрофирована. Вы живёте только через эту стратегию."
+            })
+        
+        return compensations
+    
+    def analyze_imbalance(self) -> List[Dict]:
+        """
+        Анализирует дисбаланс (разброс уровней)
+        """
+        imbalances = []
+        levels = [self.sb, self.tf, self.ub, self.chv]
+        
+        # Вычисляем разброс
+        spread = max(levels) - min(levels)
+        
+        if spread >= 4:
+            imbalances.append({
+                "type": "📊 ЭКСТРЕМАЛЬНЫЙ РАЗБРОС",
+                "desc": f"Разрыв между минимальной ({min(levels)}) и максимальной ({max(levels)}) стратегиями слишком велик. Вы перекашиваетесь в одну сторону."
+            })
+        elif spread >= 3:
+            imbalances.append({
+                "type": "📊 СИЛЬНЫЙ ДИСБАЛАНС",
+                "desc": "Некоторые стратегии сильно опережают другие. Риск быть слишком однобоким."
+            })
+        
+        # Анализ направления дисбаланса
+        if max(levels) in [1, 2] and min(levels) in [1, 2]:
+            imbalances.append({
+                "type": "📉 НЕЗРЕЛЫЙ ПРОФИЛЬ",
+                "desc": "Все стратегии на низком уровне. Вы словно застыли в развитии."
+            })
+        
+        if max(levels) in [5, 6] and min(levels) in [5, 6]:
+            imbalances.append({
+                "type": "📈 ПЕРЕРАЗВИТЫЙ ПРОФИЛЬ",
+                "desc": "Все стратегии на высоком уровне. Риск перфекционизма и выгорания."
+            })
+        
+        # Дисбаланс по осям
+        if self.sb >= 5 and self.chv <= 2:
+            imbalances.append({
+                "type": "🔄 ПЕРЕКОС В АГРЕССИЮ",
+                "desc": "Вы сильны в защите, но слабы в отношениях. Можете быть одиноким воином."
+            })
+        
+        if self.chv >= 5 and self.sb <= 2:
+            imbalances.append({
+                "type": "🔄 ПЕРЕКОС В ОТНОШЕНИЯ",
+                "desc": "Вы сильны в отношениях, но слабы в защите. Можете страдать от эксплуатации."
+            })
+        
+        return imbalances
+    
+    def get_all_interactions(self) -> Dict:
+        """Собирает все типы взаимодействий"""
+        return {
+            "conflicts": self.analyze_conflicts(),
+            "synergies": self.analyze_synergy(),
+            "compensations": self.analyze_compensation(),
+            "imbalances": self.analyze_imbalance()
+        }
 
 # ==================== ИНТЕРПРЕТАЦИЯ КОКТЕЙЛЯ ====================
 
@@ -743,16 +981,21 @@ def get_cocktail_name(cocktail: Dict) -> str:
         return f"🤝 {names[max_val]}"
 
 def get_profile_description(profile: Dict) -> str:
-    """Возвращает интерпретацию коктейля"""
+    """Возвращает интерпретацию коктейля с анализом взаимодействий"""
     
     cocktail = profile["cocktail"]
     raw_scores = profile["raw_scores"]
+    confidence = profile["confidence"]
     matrix = profile["matrix"]
     
     sb_level = cocktail["СБ"]
     tf_level = cocktail["ТФ"]
     ub_level = cocktail["УБ"]
     chv_level = cocktail["ЧВ"]
+    
+    # Анализируем взаимодействия
+    analyzer = InteractionAnalyzer(cocktail)
+    interactions = analyzer.get_all_interactions()
     
     # Название коктейля
     cocktail_name = get_cocktail_name(cocktail)
@@ -773,84 +1016,67 @@ def get_profile_description(profile: Dict) -> str:
         6: "🟪 Зрелая (стратегическая)"
     }
     
-    # Сильные и слабые стороны
-    strengths = []
-    weaknesses = []
-    
-    # Анализ баланса
-    levels = [sb_level, tf_level, ub_level, chv_level]
-    avg_level = sum(levels) / 4
-    
-    if max(levels) - min(levels) <= 1:
-        strengths.append("• Гармоничный профиль — все стратегии развиты равномерно")
-    elif max(levels) >= 5:
-        strengths.append(f"• Сильная сторона: {max_cat_name(levels, cocktail)} на высоком уровне")
-    if min(levels) <= 2:
-        weaknesses.append(f"• Зона роста: {min_cat_name(levels, cocktail)} требует развития")
-    
-    # Определяем доминирующую категорию
-    max_val = max(levels)
-    max_cat = [k for k, v in cocktail.items() if v == max_val][0]
-    
     # Формируем текст
     text = f"""
 🧪 <b>ВАШ УНИКАЛЬНЫЙ КОКТЕЙЛЬ: {cocktail_name}</b>
 📊 <code>СБ={sb_level} | ТФ={tf_level} | УБ={ub_level} | ЧВ={chv_level}</code>
+🔬 <i>Уверенность определения: СБ:{confidence['СБ']}% ТФ:{confidence['ТФ']}% УБ:{confidence['УБ']}% ЧВ:{confidence['ЧВ']}%</i>
 〰️〰️〰️〰️〰️〰️〰️〰️〰️〰️
 
 <b>⚔️ РЕАКЦИЯ НА УГРОЗУ (СБ): {sb_desc['name']} [{maturity_map[sb_level]}]</b>
 {sb_desc['desc']}
-• <i>Научный аналог:</i> {sb_desc['science']}
-• <i>Эволюционный смысл:</i> {sb_desc['evolution']}
 • <i>Пример:</i> {sb_desc['example']}
 
 <b>🔧 РЕАКЦИЯ НА РЕСУРС (ТФ): {tf_desc['name']} [{maturity_map[tf_level]}]</b>
 {tf_desc['desc']}
-• <i>Научный аналог:</i> {tf_desc['science']}
-• <i>Эволюционный смысл:</i> {tf_desc['evolution']}
 • <i>Пример:</i> {tf_desc['example']}
 
 <b>📚 РЕАКЦИЯ НА НЕОПРЕДЕЛЁННОСТЬ (УБ): {ub_desc['name']} [{maturity_map[ub_level]}]</b>
 {ub_desc['desc']}
-• <i>Научный аналог:</i> {ub_desc['science']}
-• <i>Эволюционный смысл:</i> {ub_desc['evolution']}
 • <i>Пример:</i> {ub_desc['example']}
 
 <b>🤝 РЕАКЦИЯ НА ДРУГОГО (ЧВ): {chv_desc['name']} [{maturity_map[chv_level]}]</b>
 {chv_desc['desc']}
-• <i>Научный аналог:</i> {chv_desc['science']}
-• <i>Эволюционный смысл:</i> {chv_desc['evolution']}
 • <i>Пример:</i> {chv_desc['example']}
 """
     
-    # Добавляем анализ, если есть
-    if strengths or weaknesses:
-        text += "\n<b>📈 АНАЛИЗ ПРОФИЛЯ:</b>\n"
-        if strengths:
-            text += "<b>Сильные стороны:</b>\n" + "\n".join(strengths) + "\n"
-        if weaknesses:
-            text += "<b>Зоны роста:</b>\n" + "\n".join(weaknesses) + "\n"
+    # Добавляем анализ взаимодействий
+    if interactions["conflicts"] or interactions["synergies"] or interactions["compensations"] or interactions["imbalances"]:
+        text += "\n<b>🔄 АНАЛИЗ ВЗАИМОДЕЙСТВИЙ:</b>\n"
+        
+        if interactions["synergies"]:
+            text += "\n<b>✨ СИНЕРГИЯ (что усиливает друг друга):</b>\n"
+            for s in interactions["synergies"]:
+                text += f"• <b>{s['type']}</b>: {s['desc']}\n"
+        
+        if interactions["conflicts"]:
+            text += "\n<b>⚡ ВНУТРЕННИЕ КОНФЛИКТЫ:</b>\n"
+            for c in interactions["conflicts"]:
+                text += f"• <b>{c['type']}</b>: {c['desc']}\n"
+                if 'solution' in c:
+                    text += f"  <i>Решение:</i> {c['solution']}\n"
+        
+        if interactions["compensations"]:
+            text += "\n<b>🔄 КОМПЕНСАЦИИ (чем заменяете слабости):</b>\n"
+            for comp in interactions["compensations"]:
+                text += f"• <b>{comp['type']}</b>: {comp['desc']}\n"
+        
+        if interactions["imbalances"]:
+            text += "\n<b>📊 ДИСБАЛАНСЫ:</b>\n"
+            for imb in interactions["imbalances"]:
+                text += f"• <b>{imb['type']}</b>: {imb['desc']}\n"
     
-    # Добавляем рекомендации
+    # Добавляем общие рекомендации
     text += f"""
-<b>💡 РЕКОМЕНДАЦИИ:</b>
-• Ваша доминирующая стратегия — <b>{max_cat}</b>. Используйте её осознанно.
+    
+<b>💡 ОБЩИЕ РЕКОМЕНДАЦИИ:</b>
+• Ваша доминирующая стратегия — <b>{max(cocktail, key=cocktail.get)}</b>. Используйте её осознанно.
 • Развивайте менее выраженные стратегии для большей гибкости.
 • Помните: нет плохих или хороших стратегий — есть уместные и неуместные.
 • В разных ситуациях могут работать разные уровни одной стратегии.
 """
     
     return text
-
-def max_cat_name(levels, cocktail):
-    cats = {0: "СБ", 1: "ТФ", 2: "УБ", 3: "ЧВ"}
-    idx = levels.index(max(levels))
-    return cats[idx]
-
-def min_cat_name(levels, cocktail):
-    cats = {0: "СБ", 1: "ТФ", 2: "УБ", 3: "ЧВ"}
-    idx = levels.index(min(levels))
-    return cats[idx]
 
 # ==================== ХЕНДЛЕРЫ ====================
 
@@ -894,10 +1120,21 @@ async def ask_question(user_id: int, state: FSMContext, question: Dict):
         builder.button(text=text, callback_data=f"ans_{question['id']}_{key}")
     builder.adjust(1)
     
+    # Добавляем информацию о прогрессе по категории
+    cat_progress = ""
+    if "category" in question:
+        cat = question["category"]
+        level = question["level"]
+        cat_questions = [q for q in QUESTIONS if q.get("category") == cat]
+        cat_current = level
+        cat_total = len(cat_questions)
+        cat_bar = get_progress_bar(cat_current, cat_total, 6)
+        cat_progress = f"\n{category_emoji.get(cat, '')} Прогресс по {cat}: {cat_bar}"
+    
     sent = await bot.send_message(
         user_id,
         f"{emoji} <b>Вопрос {current_index+1}/{len(QUESTIONS)}</b>\n"
-        f"<code>{progress}</code>\n\n"
+        f"<code>{progress}</code>{cat_progress}\n\n"
         f"{question['text']}",
         reply_markup=builder.as_markup()
     )
@@ -911,8 +1148,8 @@ async def cmd_start(message: types.Message, state: FSMContext):
     await state.clear()
     
     intro = f"""
-🧠 <b>ПСИХОЛОГИЧЕСКИЙ ПРОФАЙЛЕР v7.0</b>
-<b>ПОЛНАЯ МАТРИЦА ПОВЕДЕНИЙ (4×6)</b>
+🧠 <b>ПСИХОЛОГИЧЕСКИЙ ПРОФАЙЛЕР v8.0</b>
+<b>ИНТЕРАКТИВНАЯ МАТРИЦА ПОВЕДЕНИЙ (4×6)</b>
 
 Здравствуйте, {message.from_user.first_name or 'пользователь'}!
 
@@ -924,6 +1161,13 @@ async def cmd_start(message: types.Message, state: FSMContext):
 🤝 <b>ЧВ (реакция на другого)</b> — от зависимости до создания связей
 
 <b>Всего {6**4} возможных типов личности!</b>
+
+<b>НОВОЕ В v8.0:</b>
+• Анализ ВЗАИМОДЕЙСТВИЙ между стратегиями
+• Выявление внутренних КОНФЛИКТОВ
+• Поиск СИНЕРГИИ (что усиливает друг друга)
+• Анализ КОМПЕНСАЦИЙ (чем заменяете слабости)
+• Оценка ДИСБАЛАНСА профиля
 
 Вам будет задано 24 вопроса — по одному на каждую стратегию.
 Оцените, насколько каждое утверждение соответствует вам:
@@ -1093,7 +1337,7 @@ async def show_result(user_id: int, state: FSMContext):
     await bot.send_message(
         user_id,
         f"📋 <b>Что дальше?</b>\n\n"
-        f"Хотите пройти тест ещё раз или поделиться результатом?",
+        f"Хотите пройти тест ещё раз?",
         reply_markup=builder.as_markup()
     )
     
@@ -1109,8 +1353,8 @@ async def restart(callback: types.CallbackQuery, state: FSMContext):
 @dp.message(Command("help"))
 async def cmd_help(message: types.Message):
     """Помощь"""
-    help_text = """
-🧠 <b>Помощь по Психологическому Профайлеру v7.0</b>
+    help_text = f"""
+🧠 <b>Помощь по Психологическому Профайлеру v8.0</b>
 
 <b>Команды:</b>
 • /start — начать тестирование
@@ -1134,6 +1378,13 @@ async def cmd_help(message: types.Message):
 
 <b>Всего {6**4} уникальных типов личности!</b>
 
+<b>Новые функции v8.0:</b>
+• Анализ взаимодействий между стратегиями
+• Выявление внутренних конфликтов
+• Поиск синергии (усиление)
+• Анализ компенсаций
+• Оценка дисбаланса
+
 <i>Научная база:</i> Кеннон (1929), Боулби, Порджес, Бандура, Поппер, теория игр и др.
 """
     
@@ -1143,7 +1394,7 @@ async def cmd_help(message: types.Message):
 async def cmd_matrix(message: types.Message):
     """Показывает полную матрицу"""
     
-    matrix_text = """
+    matrix_text = f"""
 <b>🧠 ПОЛНАЯ МАТРИЦА ПОВЕДЕНИЙ (4×6)</b>
 <i>Научно обоснованная классификация</i>
 
@@ -1196,10 +1447,11 @@ async def main():
         logger.warning(f"⚠️ Не удалось сбросить вебхук: {e}")
     
     print("\n" + "="*60)
-    print("🧠 ПСИХОЛОГИЧЕСКИЙ ПРОФАЙЛЕР v7.0")
+    print("🧠 ПСИХОЛОГИЧЕСКИЙ ПРОФАЙЛЕР v8.0")
     print("="*60)
     print("🚀 Бот запущен")
     print(f"📊 Полная матрица 4×6: {6**4} уникальных профилей")
+    print("📈 НОВОЕ: Анализ взаимодействий стратегий")
     print("="*60 + "\n")
     
     await dp.start_polling(bot)
