@@ -1442,54 +1442,53 @@ async def call_deepseek(prompt, system_message="", max_tokens=500, retry_count=3
                         
                         logger.info(f"⏱ Время ответа: {duration:.2f} сек, статус: {response.status}")
                         
-                      if response.status == 200:
-    # Успешный ответ - читаем JSON
-    try:
-        result = await asyncio.wait_for(response.json(), timeout=120)
-        logger.info("✅ DeepSeek API успешно ответил")
-        
-        if result and "choices" in result and len(result["choices"]) > 0:
-            content = result["choices"][0]["message"]["content"]
-            logger.info(f"📦 Размер ответа: {len(content)} символов")
-            return content
-        else:
-            logger.error("❌ Пустой ответ от API")
-            continue
-            
-    except asyncio.TimeoutError:
-        logger.error("⏰ Таймаут при чтении JSON ответа (120 сек)")
-        continue
-    except Exception as e:
-        logger.error(f"❌ Ошибка парсинга JSON: {e}")
-        # Пробуем прочитать как текст для диагностики
-        try:
-            text_response = await response.text()
-            logger.error(f"📄 Текст ответа (первые 200 символов): {text_response[:200]}")
-        except:
-            pass
-        continue
-else:
-    # Ошибка - читаем как текст
-    error_text = await response.text()
-    logger.error(f"❌ Ошибка {response.status}: {error_text[:500]}")
-    
-    if response.status == 401:
-        logger.error("🔑 НЕВЕРНЫЙ API КЛЮЧ!")
-        return None
-    elif response.status == 429:
-        logger.error("⏳ Превышен лимит запросов")
-        wait_time = (2 ** attempt) + random.random()
-        await asyncio.sleep(wait_time)
-    elif response.status == 400:
-        logger.error("🔧 Некорректный запрос - возможно, слишком большой max_tokens или проблема с форматом")
-        # Уменьшаем max_tokens для следующей попытки?
-        wait_time = (2 ** attempt) + random.random()
-        await asyncio.sleep(wait_time)
-    elif response.status >= 500:
-        wait_time = (2 ** attempt) + random.random()
-        await asyncio.sleep(wait_time)
-    else:
-        return None
+                        if response.status == 200:
+                            # Успешный ответ - читаем JSON
+                            try:
+                                result = await asyncio.wait_for(response.json(), timeout=120)
+                                logger.info("✅ DeepSeek API успешно ответил")
+                                
+                                if result and "choices" in result and len(result["choices"]) > 0:
+                                    content = result["choices"][0]["message"]["content"]
+                                    logger.info(f"📦 Размер ответа: {len(content)} символов")
+                                    return content
+                                else:
+                                    logger.error("❌ Пустой ответ от API")
+                                    continue
+                                    
+                            except asyncio.TimeoutError:
+                                logger.error("⏰ Таймаут при чтении JSON ответа (120 сек)")
+                                continue
+                            except Exception as e:
+                                logger.error(f"❌ Ошибка парсинга JSON: {e}")
+                                # Пробуем прочитать как текст для диагностики
+                                try:
+                                    text_response = await response.text()
+                                    logger.error(f"📄 Текст ответа (первые 200 символов): {text_response[:200]}")
+                                except:
+                                    pass
+                                continue
+                        else:
+                            # Ошибка - читаем как текст
+                            error_text = await response.text()
+                            logger.error(f"❌ Ошибка {response.status}: {error_text[:500]}")
+                            
+                            if response.status == 401:
+                                logger.error("🔑 НЕВЕРНЫЙ API КЛЮЧ!")
+                                return None
+                            elif response.status == 429:
+                                logger.error("⏳ Превышен лимит запросов")
+                                wait_time = (2 ** attempt) + random.random()
+                                await asyncio.sleep(wait_time)
+                            elif response.status == 400:
+                                logger.error("🔧 Некорректный запрос - возможно, слишком большой max_tokens или проблема с форматом")
+                                wait_time = (2 ** attempt) + random.random()
+                                await asyncio.sleep(wait_time)
+                            elif response.status >= 500:
+                                wait_time = (2 ** attempt) + random.random()
+                                await asyncio.sleep(wait_time)
+                            else:
+                                return None
                             
             except asyncio.TimeoutError:
                 logger.error(f"⏰ ТАЙМАУТ (попытка {attempt + 1}, URL {url_idx + 1})")
@@ -1754,7 +1753,6 @@ async def send_next_question(callback: types.CallbackQuery):
         except TelegramBadRequest as e:
             if "message is not modified" in str(e).lower() or "сообщение не изменено" in str(e).lower():
                 logger.info(f"Ignored 'message not modified' error for question {current_q_idx}")
-                # Все равно увеличиваем счетчик, так как пользователь уже видел вопрос
             else:
                 raise
         
@@ -1928,7 +1926,7 @@ async def show_about_method(callback: types.CallbackQuery):
     
     # ВЕРТИКАЛЬНЫЕ КНОПКИ
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🔪 Я ВНУТРИ, ВСКРОЙТЕ", callback_data="start_test")],
+        [InlineKeyboardButton(text="🔪 Я готов, вскрывайте", callback_data="start_test")],
         [InlineKeyboardButton(text="◀️ НАЗАД", callback_data="back_to_menu")]
     ])
     
@@ -2052,10 +2050,11 @@ async def show_intimate_profile(callback: types.CallbackQuery):
     system_message = "Ты — психолог-сексолог. Пишешь глубокие, пронзительные психологические портреты."
     response = await call_deepseek(prompt, system_message, max_tokens=1500)
     
-    # ВЕРТИКАЛЬНЫЕ КНОПКИ
+    # ВЕРТИКАЛЬНЫЕ КНОПКИ с эмодзи 18+
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="🧠 МЫСЛИ ПСИХОЛОГА", callback_data="ai_analysis")],
         [InlineKeyboardButton(text="💡 ЧТО ДЕЛАТЬ", callback_data="ai_recommendations")],
+        [InlineKeyboardButton(text="🔞 ИНТИМНЫЙ ПРОФИЛЬ", callback_data="intimate_profile")],
         [InlineKeyboardButton(text="◀️ Назад к профилю", callback_data="show_results")]
     ])
     
@@ -2064,7 +2063,7 @@ async def show_intimate_profile(callback: types.CallbackQuery):
         if len(response) > 4000:
             parts = [response[i:i+4000] for i in range(0, len(response), 4000)]
             await callback.message.edit_text(
-                f"🔥 *ИНТИМНЫЙ ПРОФИЛЬ*\n\n{parts[0]}",
+                f"🔞 *ИНТИМНЫЙ ПРОФИЛЬ*\n\n{parts[0]}",
                 parse_mode='Markdown',
                 reply_markup=None
             )
@@ -2073,7 +2072,7 @@ async def show_intimate_profile(callback: types.CallbackQuery):
             await callback.message.answer(parts[-1], parse_mode='Markdown', reply_markup=keyboard)
         else:
             await callback.message.edit_text(
-                f"🔥 *ИНТИМНЫЙ ПРОФИЛЬ*\n\n{response}",
+                f"🔞 *ИНТИМНЫЙ ПРОФИЛЬ*\n\n{response}",
                 parse_mode='Markdown',
                 reply_markup=keyboard
             )
@@ -2128,9 +2127,9 @@ async def start_command(message: types.Message):
         f"🔒 Ваши тайны умрут вместе с сессией"
     )
     
-    # ВЕРТИКАЛЬНЫЕ КНОПКИ (каждая в отдельном списке)
+    # ВЕРТИКАЛЬНЫЕ КНОПКИ (каждая в отдельном списке) - убрана кнопка "В МЕНЮ"
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🔪 ВСКРЫТИЕ ПОЕХАЛИ", callback_data="start_test")],
+        [InlineKeyboardButton(text="🔪 ДЕЛАЕМ ВСКРЫТИЕ!", callback_data="start_test")],
         [InlineKeyboardButton(text="📖 ЧТО ЗА МЕТОД", callback_data="about_method")],
         [InlineKeyboardButton(text="😱 РЕЗУЛЬТ В ЛИЦАХ", callback_data="results_examples")]
     ])
@@ -2231,9 +2230,9 @@ async def callback_handler(callback: types.CallbackQuery):
             await callback.message.edit_text(text, parse_mode='Markdown', reply_markup=keyboard)
         
         elif data == "back_to_menu":
-            # ВЕРТИКАЛЬНЫЕ КНОПКИ В МЕНЮ
+            # ВЕРТИКАЛЬНЫЕ КНОПКИ В МЕНЮ - убрана кнопка "В МЕНЮ"
             keyboard = InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="🔪 ВСКРЫТИЕ ПОЕХАЛИ", callback_data="start_test")],
+                [InlineKeyboardButton(text="🔪 ДЕЛАЕМ ВСКРЫТИЕ!", callback_data="start_test")],
                 [InlineKeyboardButton(text="📖 ЧТО ЗА МЕТОД", callback_data="about_method")],
                 [InlineKeyboardButton(text="😱 РЕЗУЛЬТ В ЛИЦАХ", callback_data="results_examples")]
             ])
@@ -2346,7 +2345,7 @@ async def callback_handler(callback: types.CallbackQuery):
                 "logged": False
             }
             keyboard = InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="🔪 ВСКРЫТИЕ ПОЕХАЛИ", callback_data="start_test")],
+                [InlineKeyboardButton(text="🔪 ДЕЛАЕМ ВСКРЫТИЕ!", callback_data="start_test")],
                 [InlineKeyboardButton(text="📖 ЧТО ЗА МЕТОД", callback_data="about_method")],
                 [InlineKeyboardButton(text="😱 РЕЗУЛЬТ В ЛИЦАХ", callback_data="results_examples")]
             ])
@@ -2396,7 +2395,7 @@ async def show_results(callback: types.CallbackQuery):
         stats.register_completion(user_id, scores)
         user["logged"] = True
     
-    # Формируем текст профиля с архетипами
+    # Формируем текст профиля с архетипами и цитатами
     text = f"🧠 *ВАШ ПРОФИЛЬ*\n\n"
     
     for key in STAGE_ORDER:
@@ -2422,13 +2421,31 @@ async def show_results(callback: types.CallbackQuery):
     if bottleneck_profile.get('pain_costs'):
         text += f"   {bottleneck_profile['pain_costs'][0]}\n"
     
-    # ВЕРТИКАЛЬНЫЕ КНОПКИ НА ФИНАЛЬНОМ ЭКРАНЕ
+    # Добавляем детальный профиль узкого места прямо на финальный экран
+    if bottleneck_profile:
+        triggers_text = "\n".join([f"• {t}" for t in bottleneck_profile.get("triggers", [])])
+        costs_text = "\n".join([f"• {c}" for c in bottleneck_profile.get("pain_costs", [])])
+        
+        text += f"\n{vec['emoji']} *{bottleneck_vec['name']}* — уровень {bottleneck_lvl}/6\n"
+        text += f"{'━' * 18}\n\n"
+        text += f"🎭 *{bottleneck_profile.get('archetype', '')}*\n"
+        text += f"_{bottleneck_profile.get('archetype_desc', '')}_\n\n"
+        text += f"💬 {bottleneck_profile.get('quote', '')}\n\n"
+        text += f"*ЭТО ТЫ, ЕСЛИ...*\n"
+        text += f"{triggers_text}\n\n"
+        text += f"*ОТКУДА ЭТО ВЗЯЛОСЬ*\n"
+        text += f"{bottleneck_profile.get('pain_origin', '')}\n\n"
+        text += f"*ЧЕМ ТЫ ПЛАТИШЬ*\n"
+        text += f"{costs_text}\n\n"
+        text += f"*ЧТО ДЕЛАТЬ ПРЯМО СЕЙЧАС*\n"
+        text += f"{bottleneck_profile.get('immediate_tool', '')}"
+    
+    # ВЕРТИКАЛЬНЫЕ КНОПКИ НА ФИНАЛЬНОМ ЭКРАНЕ - убрана кнопка "ГЛУБЖЕ ПРОФИЛЬ"
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="🧠 МЫСЛИ ПСИХОЛОГА", callback_data="ai_analysis")],
-        [InlineKeyboardButton(text="🎭 ГЛУБЖЕ ПРОФИЛЬ", callback_data=f"detail_{bottleneck_key}")],
         [InlineKeyboardButton(text="💡 ЧТО ДЕЛАТЬ", callback_data="ai_recommendations")],
         [InlineKeyboardButton(text="❓ ЕЩЁ ВОПРОС", callback_data="smart_questions")],
-        [InlineKeyboardButton(text="🔥 ИНТИМНЫЙ ПРОФИЛЬ", callback_data="intimate_profile")],
+        [InlineKeyboardButton(text="🔞 ИНТИМНЫЙ ПРОФИЛЬ", callback_data="intimate_profile")],
         [InlineKeyboardButton(text="◀️ В МЕНЮ", callback_data="back_to_menu")]
     ])
     
