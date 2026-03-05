@@ -2025,6 +2025,12 @@ async def show_intimate_profile(callback: types.CallbackQuery):
         )
         return
     
+    # Проверяем, есть ли уже сохраненный профиль
+    if user.get("intimate_profile"):
+        profile_text = user["intimate_profile"]
+        await show_saved_intimate_profile(callback, profile_text)
+        return
+    
     await callback.message.edit_text("🔥 *Составляю интимный профиль...*\n\n_Это займёт около 20 секунд_", parse_mode='Markdown')
     
     scores = {k: round(mean(v), 1) for k, v in user["scores"].items()}
@@ -2032,45 +2038,64 @@ async def show_intimate_profile(callback: types.CallbackQuery):
     # Формируем промпт
     prompt = create_intimate_profile_prompt(scores)
     
-    # Вызываем API с уменьшенным max_tokens
+    # Вызываем API
     system_message = "Ты — психолог-сексолог. Пишешь глубокие, пронзительные психологические портреты."
     response = await call_deepseek(prompt, system_message, max_tokens=1500)
     
-    # ВЕРТИКАЛЬНЫЕ КНОПКИ с эмодзи 18+
+    if response:
+        # Сохраняем результат
+        user["intimate_profile"] = response
+        await show_saved_intimate_profile(callback, response)
+    else:
+        await callback.message.edit_text(
+            "⚠️ Не удалось сгенерировать профиль. Попробуйте позже.",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="◀️ Назад", callback_data="show_results")]
+            ])
+        )
+
+async def show_saved_intimate_profile(callback: types.CallbackQuery, profile_text: str):
+    """Показывает сохраненный интимный профиль с экранированием"""
+    
+    # Экранируем спецсимволы Markdown
+    import re
+    
+    def escape_markdown(text):
+        # Спецсимволы, которые нужно экранировать: _ * [ ] ( ) ~ ` > # + - = | { } . !
+        escape_chars = r'_*[]()~`>#+-=|{}.!'
+        return re.sub(f'([{re.escape(escape_chars)}])', r'\\\1', text)
+    
+    # КНОПКИ
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="🧠 МЫСЛИ ПСИХОЛОГА", callback_data="ai_analysis")],
         [InlineKeyboardButton(text="💡 ЧТО ДЕЛАТЬ", callback_data="ai_recommendations")],
         [InlineKeyboardButton(text="◀️ Назад к профилю", callback_data="show_results")]
     ])
     
-    if response:
-        # Разбиваем на части если слишком длинный
-        if len(response) > 4000:
-            parts = [response[i:i+4000] for i in range(0, len(response), 4000)]
-            
-            # Первая часть с заголовком (без Markdown)
-            await callback.message.edit_text(
-                f"🔞 ИНТИМНЫЙ ПРОФИЛЬ\n\n{parts[0]}",
-                parse_mode=None,  # Отключаем Markdown
-                reply_markup=None
-            )
-            
-            # Остальные части (без Markdown)
-            for part in parts[1:-1]:
-                await callback.message.answer(part, parse_mode=None)
-            
-            # Последняя часть с кнопками (без Markdown)
-            await callback.message.answer(parts[-1], parse_mode=None, reply_markup=keyboard)
-        else:
-            # Весь ответ целиком (без Markdown)
-            await callback.message.edit_text(
-                f"🔞 ИНТИМНЫЙ ПРОФИЛЬ\n\n{response}",
-                parse_mode=None,  # Отключаем Markdown
-                reply_markup=keyboard
-            )
+    # Экранируем текст
+    safe_text = escape_markdown(profile_text)
+    
+    # Разбиваем на части если слишком длинный
+    if len(safe_text) > 3500:
+        parts = [safe_text[i:i+3500] for i in range(0, len(safe_text), 3500)]
+        
+        # Первая часть с заголовком
+        await callback.message.edit_text(
+            f"🔞 *ИНТИМНЫЙ ПРОФИЛЬ*\n\n{parts[0]}",
+            parse_mode='Markdown',
+            reply_markup=None
+        )
+        
+        # Остальные части
+        for part in parts[1:-1]:
+            await callback.message.answer(part, parse_mode='Markdown')
+        
+        # Последняя часть с кнопками
+        await callback.message.answer(parts[-1], parse_mode='Markdown', reply_markup=keyboard)
     else:
         await callback.message.edit_text(
-            "⚠️ Не удалось сгенерировать профиль. Попробуйте позже.",
+            f"🔞 *ИНТИМНЫЙ ПРОФИЛЬ*\n\n{safe_text}",
+            parse_mode='Markdown',
             reply_markup=keyboard
         )
 
