@@ -3,13 +3,54 @@
 """
 МАТРИЦА ПОВЕДЕНИЙ 4×6
 Тест поведенческого профиля с DeepSeek AI интерпретацией
-ПОЛНАЯ ВЕРСИЯ со всеми данными и промтами
+Адаптировано для работы на сервере (Render)
 """
 
 import os
+import sys
 import json
 import requests
+import time
 from statistics import mean
+
+# ══════════════════════════════════════════════
+#  ПРОВЕРКА РЕЖИМА ЗАПУСКА
+# ══════════════════════════════════════════════
+
+def is_interactive():
+    """Проверяет, запущен ли код в интерактивном режиме"""
+    return sys.stdin.isatty() and os.isatty(sys.stdout.fileno())
+
+def safe_input(prompt="", default=""):
+    """
+    Безопасный ввод, который не падает на сервере.
+    Если неинтерактивный режим - возвращает default или завершает программу
+    """
+    if not is_interactive():
+        # На сервере без интерактива просто продолжаем с тестовыми данными
+        return default
+    
+    try:
+        return input(prompt)
+    except EOFError:
+        return default
+    except KeyboardInterrupt:
+        print("\n\n  Программа прервана пользователем.")
+        sys.exit(0)
+
+def safe_int_input(prompt="", min_val=1, max_val=6, default=1):
+    """Безопасный ввод числа"""
+    if not is_interactive():
+        return default
+    
+    while True:
+        try:
+            val = int(safe_input(prompt, str(default)))
+            if min_val <= val <= max_val:
+                return val
+            print(f"  Введите число от {min_val} до {max_val}")
+        except ValueError:
+            print(f"  Введите число от {min_val} до {max_val}")
 
 # ══════════════════════════════════════════════
 #  НАСТРОЙКИ DEEPSEEK API
@@ -25,26 +66,30 @@ DEEPSEEK_CONFIG = {
 
 def setup_deepseek():
     """Настройка DeepSeek подключения"""
+    # Проверяем наличие ключа в окружении
+    if DEEPSEEK_CONFIG["api_key"]:
+        print("\n  ✅ API ключ загружен из переменных окружения")
+        return True
+    
+    # Если нет интерактива, используем демо-режим
+    if not is_interactive():
+        print("\n  ⚠️ Неинтерактивный режим, AI функции отключены")
+        return False
+    
+    # Интерактивная настройка
     print("\n  ═══════════════════════════════════════")
     print("  🧠 НАСТРОЙКА DEEPSEEK AI")
     print("  ═══════════════════════════════════════")
     print("\n  1. Ввести API ключ")
-    print("  2. Использовать переменную окружения DEEPSEEK_API_KEY")
+    print("  2. Использовать переменную окружения DEEPSEEK_API_KEY (не найдена)")
     print("  3. Пропустить (без AI)")
     print("  " + "─" * 40)
     
-    choice = input("\n  Выберите вариант (1-3): ").strip()
+    choice = safe_input("\n  Выберите вариант (1-3): ", "3")
     
     if choice == "1":
-        DEEPSEEK_CONFIG["api_key"] = input("  Введите DeepSeek API ключ: ").strip()
-        return True
-    elif choice == "2":
-        if DEEPSEEK_CONFIG["api_key"]:
-            print("  ✅ API ключ загружен из переменных окружения")
-            return True
-        else:
-            print("  ❌ Переменная DEEPSEEK_API_KEY не найдена")
-            return False
+        DEEPSEEK_CONFIG["api_key"] = safe_input("  Введите DeepSeek API ключ: ", "")
+        return bool(DEEPSEEK_CONFIG["api_key"])
     else:
         return False
 
@@ -772,7 +817,11 @@ RECOMMENDATIONS = {
 # ══════════════════════════════════════════════
 
 def clear():
-    os.system('cls' if os.name == 'nt' else 'clear')
+    """Очистка экрана (работает и на сервере)"""
+    if is_interactive():
+        os.system('cls' if os.name == 'nt' else 'clear')
+    else:
+        print("\n" * 2)
 
 def sep(char="─", w=62):
     print(char * w)
@@ -784,9 +833,14 @@ def header(title):
     sep("═")
 
 def pause(msg="  → Enter: продолжить..."):
+    """Пауза с безопасным вводом"""
     print()
     sep()
-    input(msg)
+    if is_interactive():
+        safe_input(msg)
+    else:
+        print("  (пропуск паузы в неинтерактивном режиме)")
+        time.sleep(1)
 
 def level(score):
     """Дробный балл → целый уровень"""
@@ -830,7 +884,7 @@ def prepare_correlations_data(scores):
     return [{
         "название": c["title"],
         "суть": c["explanation"][:150] + "..." if len(c["explanation"]) > 150 else c["explanation"]
-    } for c in active[:5]]  # максимум 5 корреляций
+    } for c in active[:5]]
 
 def get_deepseek_analysis(scores):
     """Получить глубокий анализ от DeepSeek"""
@@ -838,7 +892,6 @@ def get_deepseek_analysis(scores):
     profile_data = prepare_profile_data(scores)
     correlations_data = prepare_correlations_data(scores)
     
-    # Если нет активных корреляций
     if not correlations_data:
         correlations_data = [{"название": "Нет выраженных проблемных связей", 
                               "суть": "Векторы сбалансированы"}]
@@ -891,7 +944,7 @@ def get_deepseek_deep_analysis(scores):
     return call_deepseek(prompt, DEEPSEEK_PROMPTS["deep_analysis_system"])
 
 # ══════════════════════════════════════════════
-#  ФУНКЦИИ ТЕСТА (ИЗ ПРЕДЫДУЩЕЙ ВЕРСИИ)
+#  ФУНКЦИИ ТЕСТА
 # ══════════════════════════════════════════════
 
 def run_test() -> dict:
@@ -910,7 +963,12 @@ def run_test() -> dict:
   Выбирайте то что ближе всего к реальности
   а не то каким хотите быть.
     """)
-    input("  Нажмите Enter чтобы начать...")
+    
+    if not is_interactive():
+        print("\n  ⚠️ Неинтерактивный режим: используем демо-данные")
+        return {"СБ": 3.5, "ТФ": 2.5, "УБ": 4.0, "ЧВ": 3.0}
+    
+    safe_input("  Нажмите Enter чтобы начать...")
 
     raw_scores = {k: [] for k in VECTORS}
 
@@ -923,25 +981,15 @@ def run_test() -> dict:
             clear()
 
             vec = VECTORS[vector_key]
-            print(f"  Вопрос {q_num} из {total_q}  |  "
-                  f"{vector_key}: {vec['name']}")
+            print(f"  Вопрос {q_num} из {total_q}  |  {vector_key}: {vec['name']}")
             sep()
             print(f"\n  {question['text']}\n")
 
             for idx, (score, text) in enumerate(question["options"], 1):
                 print(f"  {idx}.  {text}")
 
-            while True:
-                try:
-                    ans = int(input("\n  Ваш выбор (1–6): ").strip())
-                    if 1 <= ans <= 6:
-                        raw_scores[vector_key].append(
-                            question["options"][ans - 1][0]
-                        )
-                        break
-                    print("  Введите число от 1 до 6")
-                except ValueError:
-                    print("  Введите число от 1 до 6")
+            ans = safe_int_input("\n  Ваш выбор (1–6): ", 1, 6, 3)
+            raw_scores[vector_key].append(question["options"][ans - 1][0])
 
     return {k: round(mean(v), 1) for k, v in raw_scores.items()}
 
@@ -986,8 +1034,7 @@ def show_patterns(scores: dict):
         if lvl in patterns:
             found_any = True
             vec = VECTORS[key]
-            print(f"\n  ▶  {key} — {vec['name']}  (уровень {lvl}: "
-                  f"{vec['levels'][lvl]['name']})")
+            print(f"\n  ▶  {key} — {vec['name']}  (уровень {lvl}: {vec['levels'][lvl]['name']})")
             sep("─")
             wrap_text(patterns[lvl], width=58, indent="  ")
 
@@ -1148,6 +1195,10 @@ def show_ai_recommendations(scores, bottleneck):
 def show_ai_dialogue(scores):
     """Интерактивный диалог с DeepSeek"""
     
+    if not is_interactive():
+        print("\n  ⚠️ Диалог недоступен в неинтерактивном режиме")
+        return
+    
     print("\n" + "  " + "═" * 50)
     print("  🧠 РЕЖИМ ДИАЛОГА С DEEPSEEK")
     print("  " + "═" * 50)
@@ -1158,7 +1209,7 @@ def show_ai_dialogue(scores):
     
     while True:
         print("\n  " + "─" * 40)
-        question = input("  💬 Ваш вопрос: ").strip()
+        question = safe_input("  💬 Ваш вопрос: ").strip()
         
         if not question:
             break
@@ -1191,8 +1242,12 @@ def show_ai_deep_analysis(scores):
 
 def main():
     try:
+        # Информация о режиме запуска
+        if not is_interactive():
+            print("\n  ⚠️ Запуск в неинтерактивном режиме (сервер)")
+            print("  Используются демо-данные и отключены паузы\n")
+        
         # Настройка AI
-        clear()
         use_ai = setup_deepseek()
         
         # Прохождение теста
@@ -1212,8 +1267,8 @@ def main():
         
         bottleneck = get_priority_order(scores)[0]
         
-        if use_ai:
-            # Меню AI-функций
+        if use_ai and is_interactive():
+            # Меню AI-функций (только в интерактивном режиме)
             while True:
                 clear()
                 header("РЕЖИМЫ АНАЛИЗА")
@@ -1226,7 +1281,7 @@ def main():
   6. Итог и завершение
                 """)
                 
-                choice = input("  Выберите режим (1-6): ").strip()
+                choice = safe_input("  Выберите режим (1-6): ", "6")
                 
                 if choice == "1":
                     show_ai_analysis(scores)
@@ -1245,23 +1300,28 @@ def main():
                 elif choice == "6":
                     break
         else:
-            # Стандартный режим без AI
-            pause("  → Enter: рекомендации...")
+            # Стандартный режим без AI или неинтерактивный
+            if not is_interactive():
+                print("\n  📋 Автоматический показ стандартных рекомендаций")
             show_standard_recommendations(scores)
+            pause()
         
         # Итог
         pause("  → Enter: итог...")
         show_summary(scores)
         
         print("\n" + " " * 20 + "Благодарим за прохождение теста!\n")
-        input("  → Enter: выйти...")
+        
+        if is_interactive():
+            safe_input("  → Enter: выйти...")
         
     except KeyboardInterrupt:
         print("\n\n  Тест прерван.")
     except Exception as e:
         print(f"\n\n  Ошибка: {e}")
-        import traceback
-        traceback.print_exc()
+        if is_interactive():
+            import traceback
+            traceback.print_exc()
 
 if __name__ == "__main__":
     main()
