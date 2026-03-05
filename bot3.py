@@ -1442,6 +1442,7 @@ async def call_deepseek(prompt, system_message="", max_tokens=500, retry_count=3
                         if response.status == 200:
                             # Читаем JSON с отдельным таймаутом
                             try:
+                                read_timeout = aiohttp.ClientTimeout(total=120)
                                 result = await response.json()
                                 logger.info("✅ DeepSeek API успешно ответил")
                                 return result["choices"][0]["message"]["content"]
