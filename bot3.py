@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 ВИРТУАЛЬНЫЙ ПСИХОЛОГ - Матрица Поведений 4×6
-ПОЛНАЯ ВЕРСИЯ с 4 этапами по 5 вопросов
+ПОЛНАЯ ВЕРСИЯ с уточняющими вопросами
 """
 
 import os
@@ -33,6 +33,10 @@ DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY", "")
 
 # Хранилище данных пользователей
 user_data = {}
+
+# ─── Система уточняющих вопросов ───────────────────────────────────────────
+CLARIFICATION_ZONES = [1.49, 2.00, 2.50, 3.00, 3.50]
+CLARIFICATION_MARGIN = 0.12
 
 # ══════════════════════════════════════════════
 #  КОНСТАНТЫ ЭТАПОВ
@@ -588,6 +592,62 @@ RECOMMENDATIONS = {
     }
 }
 
+# ─── Уточняющие вопросы для пограничных результатов ────────────────────────
+CLARIFICATION_QUESTIONS = {
+    "СБ": {
+        "intro": (
+            "⚡ *Один уточняющий вопрос*\n\n"
+            "Ваши ответы по реакции на давление дали пограничный результат.\n\n"
+            "Один вопрос — и картина станет точнее."
+        ),
+        "text": "Когда на вас давят — ваш первый внутренний импульс скорее:",
+        "options": [
+            (0, "Сжаться, исчезнуть, избежать"),
+            (1, "Ответить, защититься, устоять"),
+        ],
+        "result": "✅ Картина прояснилась. Продолжаем."
+    },
+    "ТФ": {
+        "intro": (
+            "⚡ *Один уточняющий вопрос*\n\n"
+            "По ресурсной стратегии — пограничный результат.\n\n"
+            "Уточним за один вопрос."
+        ),
+        "text": "Ваш доход прямо сейчас скорее зависит от:",
+        "options": [
+            (0, "Других людей или обстоятельств — не от меня"),
+            (1, "Моих конкретных действий — я управляю этим"),
+        ],
+        "result": "✅ Картина прояснилась. Продолжаем."
+    },
+    "УБ": {
+        "intro": (
+            "⚡ *Один уточняющий вопрос*\n\n"
+            "По пониманию мира — пограничный результат.\n\n"
+            "Один вопрос решит это."
+        ),
+        "text": "Когда что-то идёт не так — первая мысль обычно:",
+        "options": [
+            (0, "Что-то снаружи мешает — люди, обстоятельства, невезение"),
+            (1, "Что-то внутри — я что-то делаю неправильно или не понимаю"),
+        ],
+        "result": "✅ Картина прояснилась. Продолжаем."
+    },
+    "ЧВ": {
+        "intro": (
+            "⚡ *Один уточняющий вопрос*\n\n"
+            "По стратегии в отношениях — пограничный результат.\n\n"
+            "Уточним за один вопрос."
+        ),
+        "text": "В важных отношениях вы скорее:",
+        "options": [
+            (0, "Подстраиваюсь под другого — легче чем отстаивать своё"),
+            (1, "Говорю прямо что думаю — даже если это неудобно"),
+        ],
+        "result": "✅ Картина прояснилась. Продолжаем."
+    },
+}
+
 # ══════════════════════════════════════════════
 #  ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
 # ══════════════════════════════════════════════
@@ -736,6 +796,24 @@ def generate_smart_questions(scores):
     
     return questions[:5]
 
+# ─── Функции для уточняющих вопросов ───────────────────────────────────────
+def needs_clarification(avg: float) -> bool:
+    """True если среднее в пограничной зоне ±0.12"""
+    return any(abs(avg - b) <= CLARIFICATION_MARGIN for b in CLARIFICATION_ZONES)
+
+
+def calc_synthetic_score(scores_list: list, target_avg: float) -> float:
+    """Какой балл добавить для получения target_avg"""
+    n = len(scores_list)
+    synthetic = target_avg * (n + 1) - sum(scores_list)
+    return max(1.0, min(4.0, synthetic))
+
+
+def apply_clarification(avg: float, answer_val: int) -> float:
+    """Сдвиг на ±0.15 в зависимости от ответа"""
+    return round(avg - 0.15 if answer_val == 0 else avg + 0.15, 2)
+
+
 # ══════════════════════════════════════════════
 #  НОВЫЕ ФУНКЦИИ ЭТАПОВ
 # ══════════════════════════════════════════════
@@ -776,6 +854,15 @@ async def show_stage_feedback(callback: types.CallbackQuery, stage_key: str):
     
     scores_list = user["scores"][stage_key]
     avg = round(mean(scores_list), 2)
+    
+    # ── НОВОЕ: уточняющий вопрос при пограничном результате ──────────────────
+    already_clarified = user.get(f"{stage_key}_clarified", False)
+    if needs_clarification(avg) and not already_clarified:
+        user[f"{stage_key}_pending_avg"] = avg
+        await show_clarification_intro(callback, stage_key)
+        return
+    # ─────────────────────────────────────────────────────────────────────────
+    
     lvl = level(avg)
     
     vec = VECTORS[stage_key]
@@ -868,6 +955,45 @@ async def send_next_question(callback: types.CallbackQuery):
     
     else:
         await show_stage_feedback(callback, current_stage)
+
+
+# ─── Функции уточняющих вопросов ───────────────────────────────────────────
+async def show_clarification_intro(callback: types.CallbackQuery, stage_key: str):
+    """Экран-переход к уточняющему вопросу"""
+    cq = CLARIFICATION_QUESTIONS[stage_key]
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(text="Ответить →", callback_data=f"clarify_show_{stage_key}")
+    ]])
+    await callback.message.edit_text(cq["intro"], reply_markup=keyboard, parse_mode='Markdown')
+
+
+async def show_clarification_question(callback: types.CallbackQuery, stage_key: str):
+    """Сам уточняющий вопрос"""
+    cq = CLARIFICATION_QUESTIONS[stage_key]
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text=text, callback_data=f"clarify_answer_{stage_key}_{val}")]
+        for val, text in cq["options"]
+    ])
+    await callback.message.edit_text(f"*{cq['text']}*", reply_markup=keyboard, parse_mode='Markdown')
+
+
+async def handle_clarification_answer(callback: types.CallbackQuery, stage_key: str, answer_val: int):
+    """Применяет уточняющий ответ"""
+    user_id = callback.from_user.id
+    user = user_data[user_id]
+    
+    pending_avg = user.get(f"{stage_key}_pending_avg", 2.0)
+    corrected_avg = apply_clarification(pending_avg, answer_val)
+    synthetic = calc_synthetic_score(user["scores"][stage_key], corrected_avg)
+    
+    user["scores"][stage_key].append(synthetic)
+    user[f"{stage_key}_clarified"] = True
+    
+    cq = CLARIFICATION_QUESTIONS[stage_key]
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(text="Продолжить →", callback_data=f"after_clarification_{stage_key}")
+    ]])
+    await callback.message.edit_text(cq["result"], reply_markup=keyboard, parse_mode='Markdown')
 
 
 # ══════════════════════════════════════════════
@@ -1000,14 +1126,38 @@ async def callback_handler(callback: types.CallbackQuery):
         user_data[user_id]["current_question"] = 0
         await send_next_question(callback)
     
-    # ✅ ИСПРАВЛЕННАЯ ветка answer_
+    # ── НОВЫЕ ВЕТКИ ДЛЯ УТОЧНЯЮЩИХ ВОПРОСОВ ────────────────────────────────
+    elif data.startswith("clarify_show_"):
+        stage_key = data.replace("clarify_show_", "")
+        await show_clarification_question(callback, stage_key)
+
+    elif data.startswith("clarify_answer_"):
+        parts = data.split("_")  # clarify_answer_СБ_0
+        stage_key = parts[2]
+        answer_val = int(parts[3])
+        await handle_clarification_answer(callback, stage_key, answer_val)
+
+    elif data.startswith("after_clarification_"):
+        stage_key = data.replace("after_clarification_", "")
+        await show_stage_feedback(callback, stage_key)
+    # ────────────────────────────────────────────────────────────────────────
+    
+    # ✅ ИСПРАВЛЕННАЯ ветка answer_ с защитой от двойного нажатия
     elif data.startswith("answer_"):
-        score = int(data.split("_")[1])
-        user = user_data[user_id]
-        current_stage = user["current_stage"]
+        # Защита от двойного нажатия
+        if user_data[user_id].get("processing", False):
+            await callback.answer()
+            return
+        user_data[user_id]["processing"] = True
         
-        user["scores"][current_stage].append(score)
-        await send_next_question(callback)
+        try:
+            score = int(data.split("_")[1])
+            user = user_data[user_id]
+            current_stage = user["current_stage"]
+            user["scores"][current_stage].append(score)
+            await send_next_question(callback)
+        finally:
+            user_data[user_id]["processing"] = False
     
     elif data == "show_results":
         await show_results(callback)
