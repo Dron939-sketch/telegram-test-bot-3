@@ -33,7 +33,7 @@ TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN", "")
 DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY", "")
 
 # ID администраторов (замените на свой Telegram ID)
-ADMIN_IDS = [123456789]  # ⚠️ ВАЖНО: УКАЖИТЕ СВОЙ TELEGRAM ID
+ADMIN_IDS = [532205848]  # ⚠️ ВАЖНО: УКАЖИТЕ СВОЙ TELEGRAM ID
 
 # Хранилище данных пользователей
 user_data = {}
