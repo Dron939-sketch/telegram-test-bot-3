@@ -2,14 +2,230 @@
 # -*- coding: utf-8 -*-
 """
 МАТРИЦА ПОВЕДЕНИЙ 4×6
-Тест поведенческого профиля с анализом корреляций
+Тест поведенческого профиля с DeepSeek AI интерпретацией
+ПОЛНАЯ ВЕРСИЯ со всеми данными и промтами
 """
 
 import os
+import json
+import requests
 from statistics import mean
 
 # ══════════════════════════════════════════════
-#  ДАННЫЕ МАТРИЦЫ
+#  НАСТРОЙКИ DEEPSEEK API
+# ══════════════════════════════════════════════
+
+DEEPSEEK_CONFIG = {
+    "api_key": os.environ.get("DEEPSEEK_API_KEY", ""),
+    "model": "deepseek-chat",
+    "temperature": 0.7,
+    "max_tokens": 2000,
+    "base_url": "https://api.deepseek.com/v1"
+}
+
+def setup_deepseek():
+    """Настройка DeepSeek подключения"""
+    print("\n  ═══════════════════════════════════════")
+    print("  🧠 НАСТРОЙКА DEEPSEEK AI")
+    print("  ═══════════════════════════════════════")
+    print("\n  1. Ввести API ключ")
+    print("  2. Использовать переменную окружения DEEPSEEK_API_KEY")
+    print("  3. Пропустить (без AI)")
+    print("  " + "─" * 40)
+    
+    choice = input("\n  Выберите вариант (1-3): ").strip()
+    
+    if choice == "1":
+        DEEPSEEK_CONFIG["api_key"] = input("  Введите DeepSeek API ключ: ").strip()
+        return True
+    elif choice == "2":
+        if DEEPSEEK_CONFIG["api_key"]:
+            print("  ✅ API ключ загружен из переменных окружения")
+            return True
+        else:
+            print("  ❌ Переменная DEEPSEEK_API_KEY не найдена")
+            return False
+    else:
+        return False
+
+def call_deepseek(prompt, system_message="", temperature=None):
+    """Вызов DeepSeek API"""
+    
+    if not DEEPSEEK_CONFIG["api_key"]:
+        return None
+    
+    try:
+        headers = {
+            "Authorization": f"Bearer {DEEPSEEK_CONFIG['api_key']}",
+            "Content-Type": "application/json"
+        }
+        
+        messages = []
+        if system_message:
+            messages.append({"role": "system", "content": system_message})
+        messages.append({"role": "user", "content": prompt})
+        
+        data = {
+            "model": DEEPSEEK_CONFIG["model"],
+            "messages": messages,
+            "temperature": temperature or DEEPSEEK_CONFIG["temperature"],
+            "max_tokens": DEEPSEEK_CONFIG["max_tokens"],
+            "stream": False
+        }
+        
+        response = requests.post(
+            f"{DEEPSEEK_CONFIG['base_url']}/chat/completions",
+            headers=headers,
+            json=data,
+            timeout=60
+        )
+        
+        if response.status_code == 200:
+            return response.json()["choices"][0]["message"]["content"]
+        else:
+            print(f"\n  ⚠️ Ошибка API: {response.status_code}")
+            print(f"  {response.text}")
+            return None
+            
+    except Exception as e:
+        print(f"\n  ⚠️ Ошибка подключения: {e}")
+        return None
+
+# ══════════════════════════════════════════════
+#  ПРОМТЫ ДЛЯ DEEPSEEK AI
+# ══════════════════════════════════════════════
+
+DEEPSEEK_PROMPTS = {
+    "analysis_system": """Ты психолог-консультант с 20-летним опытом, специалист по поведенческим паттернам и личностному росту. 
+    
+    ТВОИ ПРИНЦИПЫ:
+    1. Глубина: видишь связи, которые человек сам не замечает
+    2. Конкретика: никаких общих фраз, только конкретные наблюдения
+    3. Эмпатия: говори мягко, но прямо
+    4. Практичность: каждый вывод ведет к действию
+    
+    ТВОЯ ЗАДАЧА: проанализировать результаты теста "Матрица поведений 4×6" и дать человеку реальное понимание себя.
+    
+    СТИЛЬ ОТВЕТА: живой, человеческий, без канцелярита. Используй метафоры и образы.""",
+    
+    "analysis_user": """Проанализируй этот поведенческий профиль:
+
+ПРОФИЛЬ:
+{profile_data}
+
+АКТИВНЫЕ КОРРЕЛЯЦИИ (связи между векторами):
+{correlations_data}
+
+Напиши анализ из 5 частей:
+
+1. 🎯 ПОРТРЕТ ЛИЧНОСТИ (4-5 предложений)
+   Опиши этого человека так, будто рассказываешь о нём близкому другу. 
+   Как он воспринимает мир? Что для него важно? Как он обычно действует?
+   Используй живые образы, избегай сухих терминов.
+
+2. ⚡ ГЛАВНЫЙ ВНУТРЕННИЙ КОНФЛИКТ (3-4 предложения)
+   Какое противоречие разрывает этого человека? Что в нём борется с чем?
+   Например: "Хочет близости, но боится открыться" или "Стремится к свободе, но боится рисковать".
+
+3. 👁️ СЛЕПЫЕ ЗОНЫ (3 пункта с объяснениями)
+   Что человек о себе не замечает?
+   Каждый пункт начинай с "•" и давай короткое объяснение.
+
+4. 🚀 ТОЧКА РОСТА (3-4 предложения)
+   Какой вектор нужно развивать в первую очередь и почему именно он?
+   Как это изменит жизнь человека?
+
+5. 📌 ПЕРВЫЙ ШАГ (максимально конкретно)
+   Что конкретно этот человек может сделать завтра утром?
+   Дай ОДНО простое, конкретное действие, которое займет не больше 15 минут.
+
+ВАЖНО: Пиши так, будто разговариваешь с живым человеком. Никаких шаблонов.""",
+
+    "recommendations_system": """Ты коуч по личностному росту. Твои рекомендации всегда:
+    - Конкретные (что именно сделать)
+    - Малые (занимают 5-15 минут)
+    - Измеримые (как понять, что сделал)
+    - Направленные точно в цель
+    
+    Никаких общих советов вроде "больше верь в себя" или "просто начни".
+    Только конкретные микро-действия.""",
+    
+    "recommendations_user": """Дан профиль человека:
+    
+    {profile_summary}
+    
+    Главное узкое место (то, что больше всего ограничивает): {bottleneck}
+
+    Предложи РОВНО 5 конкретных микро-шагов на ближайшие 7 дней.
+    
+    Шаг 1 — самый простой (можно сделать завтра)
+    Шаг 2 — чуть сложнее
+    Шаг 3 — на взаимодействие с миром
+    Шаг 4 — на закрепление
+    Шаг 5 — на осознание
+    
+    Каждый шаг должен быть:
+    - выполнимым за 5-15 минут
+    - с четким действием (глагол + объект)
+    - направленным именно на узкое место
+    
+    ФОРМАТ: просто список из 5 пунктов, каждый с новой строки, начинается с "•"
+    
+    ПРИМЕР хорошего шага:
+    • Завтра утром напиши 3 варианта, как можно заработать 1000 рублей своими навыками
+    
+    ПРИМЕР плохого шага:
+    • Начни больше зарабатывать""",
+    
+    "dialogue_system": """Ты эмпатичный собеседник, который помогает человеку разобраться в себе.
+    
+    ПРАВИЛА ДИАЛОГА:
+    1. Отвечай коротко (2-4 предложения)
+    2. Задавай уточняющие вопросы
+    3. Опирайся на профиль человека
+    4. Не давай готовых решений — помогай найти свои
+    5. Используй метафоры и примеры из жизни
+    
+    Профиль человека:
+    {profile_context}""",
+    
+    "deep_analysis_system": """Ты исследователь человеческой природы. 
+    Твои анализы используют системный подход: ты видишь, как все элементы личности связаны друг с другом.
+    
+    В каждом анализе ты показываешь:
+    - Как прошлое влияет на настоящее
+    - Как мысли влияют на чувства
+    - Как чувства влияют на действия
+    - Как действия создают реальность
+    - Как реальность подтверждает мысли (петля обратной связи)
+    
+    Пиши глубоко, но доступно. Используй метафоры и аналогии.""",
+    
+    "deep_analysis_user": """Проведи глубинный анализ этого профиля:
+
+ПРОФИЛЬ:
+{profile_data}
+
+Покажи СИСТЕМУ:
+1. ИСТОКИ: откуда могли взяться такие паттерны? (2-3 предложения)
+
+2. ПЕТЛЯ: как эти паттерны самоподдерживаются? 
+   Мысль → Чувство → Действие → Результат → Подтверждение мысли
+   (4-5 предложений)
+
+3. ЦЕНА: что человек теряет, оставаясь в этих паттернах? (2-3 предложения)
+
+4. РЕСУРС: что в этом профиле является силой, а не слабостью? (2-3 предложения)
+
+5. СЦЕНАРИЙ БУДУЩЕГО: два варианта
+   - Если ничего не менять (через 5 лет)
+   - Если начать менять точку роста (через 5 лет)
+   
+Формат: без маркдауна, просто текст с абзацами."""
+}
+
+# ══════════════════════════════════════════════
+#  ДАННЫЕ МАТРИЦЫ (ПОЛНАЯ ВЕРСИЯ)
 # ══════════════════════════════════════════════
 
 VECTORS = {
@@ -64,7 +280,7 @@ VECTORS = {
 }
 
 # ══════════════════════════════════════════════
-#  ВОПРОСЫ ТЕСТА
+#  ВОПРОСЫ ТЕСТА (ПОЛНАЯ ВЕРСИЯ)
 # ══════════════════════════════════════════════
 
 QUESTIONS = {
@@ -343,9 +559,6 @@ LIFE_PATTERNS = {
 #  КОРРЕЛЯЦИИ МЕЖДУ ВЕКТОРАМИ
 # ══════════════════════════════════════════════
 
-# Формат: (вектор1, порог1, вектор2, порог2)
-# "low" = уровень <= 3, "high" = уровень >= 4
-
 CORRELATIONS = [
     {
         "condition": lambda s: s["ТФ"] <= 3 and s["СБ"] <= 3,
@@ -581,6 +794,8 @@ def level(score):
 
 def wrap_text(text, width=60, indent="  "):
     """Форматирует текст с переносом по словам"""
+    if not text:
+        return
     words = text.split()
     line = indent
     for word in words:
@@ -593,7 +808,90 @@ def wrap_text(text, width=60, indent="  "):
         print(line)
 
 # ══════════════════════════════════════════════
-#  ПРОВЕДЕНИЕ ТЕСТА
+#  ФУНКЦИИ ДЛЯ AI-ИНТЕРПРЕТАЦИИ
+# ══════════════════════════════════════════════
+
+def prepare_profile_data(scores):
+    """Подготовка данных профиля для AI"""
+    profile = {}
+    for key in scores:
+        lvl = level(scores[key])
+        profile[f"{key} ({VECTORS[key]['name']})"] = {
+            "уровень": lvl,
+            "тип": VECTORS[key]["levels"][lvl]["name"],
+            "действие": VECTORS[key]["levels"][lvl]["action"],
+            "описание": VECTORS[key]["levels"][lvl]["desc"]
+        }
+    return profile
+
+def prepare_correlations_data(scores):
+    """Подготовка данных о корреляциях для AI"""
+    active = [c for c in CORRELATIONS if c["condition"](scores)]
+    return [{
+        "название": c["title"],
+        "суть": c["explanation"][:150] + "..." if len(c["explanation"]) > 150 else c["explanation"]
+    } for c in active[:5]]  # максимум 5 корреляций
+
+def get_deepseek_analysis(scores):
+    """Получить глубокий анализ от DeepSeek"""
+    
+    profile_data = prepare_profile_data(scores)
+    correlations_data = prepare_correlations_data(scores)
+    
+    # Если нет активных корреляций
+    if not correlations_data:
+        correlations_data = [{"название": "Нет выраженных проблемных связей", 
+                              "суть": "Векторы сбалансированы"}]
+    
+    prompt = DEEPSEEK_PROMPTS["analysis_user"].format(
+        profile_data=json.dumps(profile_data, indent=2, ensure_ascii=False),
+        correlations_data=json.dumps(correlations_data, indent=2, ensure_ascii=False)
+    )
+    
+    return call_deepseek(prompt, DEEPSEEK_PROMPTS["analysis_system"])
+
+def get_deepseek_recommendations(scores, bottleneck):
+    """Получить персонализированные рекомендации"""
+    
+    profile_summary = "\n".join([
+        f"- {key} ({VECTORS[key]['name']}): {level(scores[key])} уровень - {VECTORS[key]['levels'][level(scores[key])]['name']}"
+        for key in scores
+    ])
+    
+    prompt = DEEPSEEK_PROMPTS["recommendations_user"].format(
+        profile_summary=profile_summary,
+        bottleneck=bottleneck
+    )
+    
+    return call_deepseek(prompt, DEEPSEEK_PROMPTS["recommendations_system"], temperature=0.5)
+
+def get_deepseek_dialogue_response(scores, question):
+    """Получить ответ в диалоге"""
+    
+    profile_context = "\n".join([
+        f"{key}: {level(scores[key])} ур. ({VECTORS[key]['levels'][level(scores[key])]['name']})"
+        for key in scores
+    ])
+    
+    system_prompt = DEEPSEEK_PROMPTS["dialogue_system"].format(
+        profile_context=profile_context
+    )
+    
+    return call_deepseek(question, system_prompt, temperature=0.8)
+
+def get_deepseek_deep_analysis(scores):
+    """Углубленный системный анализ"""
+    
+    profile_data = prepare_profile_data(scores)
+    
+    prompt = DEEPSEEK_PROMPTS["deep_analysis_user"].format(
+        profile_data=json.dumps(profile_data, indent=2, ensure_ascii=False)
+    )
+    
+    return call_deepseek(prompt, DEEPSEEK_PROMPTS["deep_analysis_system"])
+
+# ══════════════════════════════════════════════
+#  ФУНКЦИИ ТЕСТА (ИЗ ПРЕДЫДУЩЕЙ ВЕРСИИ)
 # ══════════════════════════════════════════════
 
 def run_test() -> dict:
@@ -647,10 +945,6 @@ def run_test() -> dict:
 
     return {k: round(mean(v), 1) for k, v in raw_scores.items()}
 
-# ══════════════════════════════════════════════
-#  ВЫВОД ПРОФИЛЯ
-# ══════════════════════════════════════════════
-
 def show_profile(scores: dict):
     clear()
     header("ВАШ ПРОФИЛЬ")
@@ -679,17 +973,13 @@ def show_profile(scores: dict):
     sep()
     print(f"\n  Профиль:  СБ-{sb}  ТФ-{tf}  УБ-{ub}  ЧВ-{cv}\n")
 
-# ══════════════════════════════════════════════
-#  ЖИЗНЕННЫЕ ПАТТЕРНЫ
-# ══════════════════════════════════════════════
-
 def show_patterns(scores: dict):
     clear()
     header("ПОЧЕМУ В ВАШЕЙ ЖИЗНИ ПРОИСХОДИТ ТО ЧТО ПРОИСХОДИТ")
 
     found_any = False
 
-    for key in ["ТФ", "СБ", "УБ", "ЧВ"]:  # приоритет: ресурс первый
+    for key in ["ТФ", "СБ", "УБ", "ЧВ"]:
         lvl = level(scores[key])
         patterns = LIFE_PATTERNS.get(key, {})
 
@@ -705,10 +995,6 @@ def show_patterns(scores: dict):
         print("\n  Ваши уровни достаточно высоки.")
         print("  Выраженных деструктивных паттернов не обнаружено.")
         print("  Фокус: интеграция и масштабирование.")
-
-# ══════════════════════════════════════════════
-#  КОРРЕЛЯЦИИ
-# ══════════════════════════════════════════════
 
 def show_correlations(scores: dict):
     clear()
@@ -726,67 +1012,21 @@ def show_correlations(scores: dict):
             wrap_text(c["explanation"], width=58, indent="  ")
             print(f"\n  ➜  {c['solution']}")
 
-    # Дополнительные наблюдения
-    tf = level(scores["ТФ"])
-    sb = level(scores["СБ"])
-    ub = level(scores["УБ"])
-    cv = level(scores["ЧВ"])
-
-    extra = []
-
-    if sb > tf + 2:
-        extra.append(
-            f"  ⚠  СБ-{sb} при ТФ-{tf}: "
-            f"готовность атаковать без ресурсной базы.\n"
-            f"     Это позиция — не стратегия."
-        )
-    if cv > ub + 2:
-        extra.append(
-            f"  ⚠  ЧВ-{cv} при УБ-{ub}: "
-            f"строите отношения не понимая закономерностей.\n"
-            f"     Социальная активность без аналитики = управляемость."
-        )
-    if ub >= 5 and tf <= 2:
-        extra.append(
-            f"  ⚠  УБ-{ub} при ТФ-{tf}: "
-            f"понимаете как устроен мир — но нет ресурсов действовать.\n"
-            f"     Знание без возможности применить истощает."
-        )
-
-    if extra:
-        print()
-        sep()
-        print()
-        for e in extra:
-            print(e)
-            print()
-
-# ══════════════════════════════════════════════
-#  РЕКОМЕНДАЦИИ
-# ══════════════════════════════════════════════
-
 def get_priority_order(scores: dict) -> list:
-    """
-    Логика приоритетов:
-    1. ТФ почти всегда первый если ниже 3
-       (ресурс = фундамент, без него остальное нестабильно)
-    2. Дальше — по возрастанию уровня
-    3. Исключение: если СБ сильно дисбалансирован с ЧВ
-    """
+    """Определяет порядок приоритетов для развития"""
     tf = level(scores["ТФ"])
 
     if tf <= 2:
-        # Ресурс критически низкий — всё остальное подождёт
         rest = sorted(
             [(k, v) for k, v in scores.items() if k != "ТФ"],
             key=lambda x: x[1]
         )
         return ["ТФ"] + [r[0] for r in rest]
     else:
-        # Сортировка по уровню — сначала слабейшие
         return [k for k, _ in sorted(scores.items(), key=lambda x: x[1])]
 
-def show_recommendations(scores: dict):
+def show_standard_recommendations(scores: dict):
+    """Стандартные рекомендации (без AI)"""
     clear()
     header("РЕКОМЕНДАЦИИ — ЧТО МЕНЯТЬ И В КАКОМ ПОРЯДКЕ")
 
@@ -829,11 +1069,8 @@ def show_recommendations(scores: dict):
         else:
             print("      Ваш уровень здесь высокий — поддерживайте.")
 
-# ══════════════════════════════════════════════
-#  СВОДНЫЙ ИТОГ
-# ══════════════════════════════════════════════
-
 def show_summary(scores: dict):
+    """Итоговый вывод"""
     clear()
     header("ИТОГ И ГЛАВНЫЙ ВЫВОД")
 
@@ -848,87 +1085,105 @@ def show_summary(scores: dict):
   Ваш профиль: СБ-{sb} ТФ-{tf} УБ-{ub} ЧВ-{cv} """)
     sep()
 
-    # ── главное наблюдение ──────────────────────
     print("\n  ЧТО СЕЙЧАС ПРОИСХОДИТ В ВАШЕЙ ЖИЗНИ:\n")
 
-    # Режим выживания
     if tf <= 2 and sb <= 2:
         print("  Вы в режиме ВЫЖИВАНИЯ.")
         print("  Энергия уходит на базовую безопасность.")
         print("  Развитие, отношения, смыслы — вторичны.")
-        print("  Это не патология — это рациональный ответ")
-        print("  на объективную нехватку ресурсов.")
-        print()
         print("  Один выход: создать минимальный ресурсный буфер.")
-        print("  Всё остальное — после.")
-
-    # Интеллектуальная фрустрация
     elif ub >= 5 and tf <= 3:
         print("  Вы многое понимаете — но мало можете изменить.")
-        print("  Разрыв между пониманием и возможностями")
-        print("  создаёт хроническое напряжение.")
-        print()
-        print("  Ваш УБ — актив. Используйте его")
-        print("  целенаправленно для роста ТФ.")
+        print("  Разрыв между пониманием и возможностями создаёт напряжение.")
         print("  Знание должно конвертироваться в ресурс.")
-
-    # Социальная ловушка
     elif cv >= 4 and sb <= 2 and tf <= 3:
-        print("  Вы тянетесь к людям — но не защищены внутри")
-        print("  отношений и не имеете ресурсной независимости.")
-        print()
-        print("  Паттерн: нравитесь людям, зависите от них,")
-        print("  не можете отстоять себя, терпите.")
-        print()
-        print("  Два параллельных вектора роста:")
-        print("  ТФ (независимость) + СБ (защита себя в контакте).")
-
-    # Хороший уровень
+        print("  Вы тянетесь к людям — но не защищены внутри отношений.")
+        print("  Паттерн: нравитесь людям, зависите от них, не можете отстоять себя.")
     elif min(tf, sb, ub, cv) >= 4:
         print("  Все векторы на достаточном уровне.")
-        print("  Вы находитесь в фазе ИНТЕГРАЦИИ и МАСШТАБИРОВАНИЯ.")
-        print()
-        print("  Не рост с нуля — а углубление и расширение")
-        print("  уже работающих стратегий.")
-
-    # Общий случай
+        print("  Вы в фазе ИНТЕГРАЦИИ и МАСШТАБИРОВАНИЯ.")
     else:
-        bvec = VECTORS[bottleneck]
-        blvl = level(scores[bottleneck])
-        print(f"  Ваш ограничивающий фактор: {bottleneck} — {bvec['name']}")
-        print(f"  Уровень {blvl}: {bvec['levels'][blvl]['name']}")
-        print()
-        print("  Человек не меняет реакцию напрямую.")
-        print("  Он меняет контекст вокруг неё —")
-        print("  и реакция меняется сама.")
-        print()
-        print(f"  Начните с {bottleneck}.")
-        print("  Остальное подтянется следом.")
+        print(f"  Ваш ограничивающий фактор: {bottleneck}")
+        print(f"  Начните с {bottleneck}. Остальное подтянется следом.")
 
-    # ── первые три конкретных шага ──────────────
     print()
     sep()
-    print("\n  ВАШИ ПЕРВЫЕ ТРИ ШАГА:\n")
-
-    steps = []
-    for key in order[:3]:
-        lvl  = level(scores[key])
-        recs = RECOMMENDATIONS.get(key, {}).get(lvl, [])
-        if recs:
-            steps.append((key, VECTORS[key]["name"], lvl, recs[0]))
-
-    for n, (key, name, lvl, step) in enumerate(steps, 1):
-        wrap_text(f"{n}. [{key}] {step}", width=62, indent="  ")
-        print()
-
-    sep("═")
-    print()
-    print("  Матрица описывает не то кто вы есть.")
+    print("\n  Матрица описывает не то кто вы есть.")
     print("  Она описывает то как вы реагируете сейчас.")
     print("  Реакции меняются. Контекст меняется.")
     print("  Профиль — не приговор. Это точка отсчёта.")
-    print()
-    sep("═")
+
+# ══════════════════════════════════════════════
+#  AI-ФУНКЦИИ ВЫВОДА
+# ══════════════════════════════════════════════
+
+def show_ai_analysis(scores):
+    """Показать AI-анализ"""
+    print("\n  🧠 Анализирую ваш профиль (это займет несколько секунд)...")
+    analysis = get_deepseek_analysis(scores)
+    
+    if analysis:
+        print("\n" + "  " + "═" * 50)
+        print("  🧠 АНАЛИЗ DEEPSEEK")
+        print("  " + "═" * 50 + "\n")
+        wrap_text(analysis, width=58, indent="  ")
+    else:
+        print("\n  ⚠️ Не удалось получить анализ. Проверьте подключение к API.")
+
+def show_ai_recommendations(scores, bottleneck):
+    """Показать AI-рекомендации"""
+    print("\n  💡 Генерирую персональные рекомендации...")
+    recs = get_deepseek_recommendations(scores, bottleneck)
+    
+    if recs:
+        print("\n  " + "─" * 50)
+        print("  📌 ПЕРСОНАЛЬНЫЕ РЕКОМЕНДАЦИИ")
+        print("  " + "─" * 50 + "\n")
+        for line in recs.split('\n'):
+            if line.strip():
+                wrap_text(line.strip(), width=58, indent="  ")
+    else:
+        print("\n  ⚠️ Не удалось получить рекомендации.")
+
+def show_ai_dialogue(scores):
+    """Интерактивный диалог с DeepSeek"""
+    
+    print("\n" + "  " + "═" * 50)
+    print("  🧠 РЕЖИМ ДИАЛОГА С DEEPSEEK")
+    print("  " + "═" * 50)
+    print("\n  Задайте вопрос о своих результатах.")
+    print("  Например: 'Почему я боюсь конфликтов?'")
+    print("  или 'Как мне начать больше зарабатывать?'")
+    print("  (Enter - выход из диалога)\n")
+    
+    while True:
+        print("\n  " + "─" * 40)
+        question = input("  💬 Ваш вопрос: ").strip()
+        
+        if not question:
+            break
+        
+        print("\n  🤔 Думаю...")
+        response = get_deepseek_dialogue_response(scores, question)
+        
+        if response:
+            print("\n  🤖 DeepSeek:")
+            wrap_text(response, width=58, indent="    ")
+        else:
+            print("\n  ⚠️ Не удалось получить ответ")
+
+def show_ai_deep_analysis(scores):
+    """Показать углубленный системный анализ"""
+    print("\n  🔮 Провожу глубинный системный анализ...")
+    analysis = get_deepseek_deep_analysis(scores)
+    
+    if analysis:
+        print("\n" + "  " + "═" * 50)
+        print("  🔮 ГЛУБИННЫЙ АНАЛИЗ")
+        print("  " + "═" * 50 + "\n")
+        wrap_text(analysis, width=58, indent="  ")
+    else:
+        print("\n  ⚠️ Не удалось получить анализ.")
 
 # ══════════════════════════════════════════════
 #  ГЛАВНАЯ ФУНКЦИЯ
@@ -936,34 +1191,77 @@ def show_summary(scores: dict):
 
 def main():
     try:
-        # 1. тест
+        # Настройка AI
+        clear()
+        use_ai = setup_deepseek()
+        
+        # Прохождение теста
         scores = run_test()
-
-        # 2. профиль
+        
+        # Показ профиля
         pause("  → Enter: смотреть профиль...")
         show_profile(scores)
-
-        # 3. паттерны
+        
+        # Показ паттернов
         pause("  → Enter: почему это происходит в вашей жизни...")
         show_patterns(scores)
-
-        # 4. корреляции
+        
+        # Показ корреляций
         pause("  → Enter: связи между векторами...")
         show_correlations(scores)
-
-        # 5. рекомендации
-        pause("  → Enter: что менять и в каком порядке...")
-        show_recommendations(scores)
-
-        # 6. итог
-        pause("  → Enter: итог и первые шаги...")
+        
+        bottleneck = get_priority_order(scores)[0]
+        
+        if use_ai:
+            # Меню AI-функций
+            while True:
+                clear()
+                header("РЕЖИМЫ АНАЛИЗА")
+                print("""
+  1. 🧠 Глубокий анализ профиля (AI)
+  2. 💡 Персональные рекомендации (AI)
+  3. 💬 Диалог с DeepSeek (AI)
+  4. 🔮 Системный анализ (AI)
+  5. 📋 Стандартные рекомендации
+  6. Итог и завершение
+                """)
+                
+                choice = input("  Выберите режим (1-6): ").strip()
+                
+                if choice == "1":
+                    show_ai_analysis(scores)
+                    pause()
+                elif choice == "2":
+                    show_ai_recommendations(scores, bottleneck)
+                    pause()
+                elif choice == "3":
+                    show_ai_dialogue(scores)
+                elif choice == "4":
+                    show_ai_deep_analysis(scores)
+                    pause()
+                elif choice == "5":
+                    show_standard_recommendations(scores)
+                    pause()
+                elif choice == "6":
+                    break
+        else:
+            # Стандартный режим без AI
+            pause("  → Enter: рекомендации...")
+            show_standard_recommendations(scores)
+        
+        # Итог
+        pause("  → Enter: итог...")
         show_summary(scores)
-
-        print()
+        
+        print("\n" + " " * 20 + "Благодарим за прохождение теста!\n")
         input("  → Enter: выйти...")
-
+        
     except KeyboardInterrupt:
         print("\n\n  Тест прерван.")
+    except Exception as e:
+        print(f"\n\n  Ошибка: {e}")
+        import traceback
+        traceback.print_exc()
 
 if __name__ == "__main__":
     main()
