@@ -2337,6 +2337,7 @@ async def show_results(callback: types.CallbackQuery):
         stats.register_completion(user_id, scores)
         user["logged"] = True
     
+    # Формируем текст профиля
     text = f"🧠 *ВАШ ПРОФИЛЬ*\n\n"
     
     for key in STAGE_ORDER:
@@ -2355,12 +2356,32 @@ async def show_results(callback: types.CallbackQuery):
     bottleneck_key = get_priority_order(scores)[0]
     bottleneck_lvl = level(scores[bottleneck_key])
     bottleneck_profile = LEVEL_PROFILES.get(bottleneck_key, {}).get(bottleneck_lvl, {})
+    bottleneck_vec = VECTORS[bottleneck_key]
     
     text += f"──────────────────────\n"
     text += f"🎯 *УЗКОЕ МЕСТО:*\n"
-    text += f"   {VECTORS[bottleneck_key]['name']} ({bottleneck_key}-{bottleneck_lvl})\n"
+    text += f"   {bottleneck_vec['name']} ({bottleneck_key}-{bottleneck_lvl})\n"
     if bottleneck_profile.get('pain_costs'):
         text += f"   {bottleneck_profile['pain_costs'][0]}\n"
+    
+    # ДОБАВЛЯЕМ ПОЛНЫЙ ПРОФИЛЬ УЗКОГО МЕСТА
+    if bottleneck_profile:
+        triggers_text = "\n".join([f"• {t}" for t in bottleneck_profile.get("triggers", [])])
+        costs_text = "\n".join([f"• {c}" for c in bottleneck_profile.get("pain_costs", [])])
+        
+        text += f"\n{bottleneck_vec['emoji']} *{bottleneck_vec['name']}* — уровень {bottleneck_lvl}/6\n"
+        text += f"{'━' * 18}\n\n"
+        text += f"🎭 *{bottleneck_profile.get('archetype', '')}*\n"
+        text += f"_{bottleneck_profile.get('archetype_desc', '')}_\n\n"
+        text += f"💬 {bottleneck_profile.get('quote', '')}\n\n"
+        text += f"*ЭТО ТЫ, ЕСЛИ...*\n"
+        text += f"{triggers_text}\n\n"
+        text += f"*ОТКУДА ЭТО ВЗЯЛОСЬ*\n"
+        text += f"{bottleneck_profile.get('pain_origin', '')}\n\n"
+        text += f"*ЧЕМ ТЫ ПЛАТИШЬ*\n"
+        text += f"{costs_text}\n\n"
+        text += f"*ЧТО ДЕЛАТЬ ПРЯМО СЕЙЧАС*\n"
+        text += f"{bottleneck_profile.get('immediate_tool', '')}"
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="🧠 МЫСЛИ ПСИХОЛОГА", callback_data="ai_analysis")],
@@ -2370,6 +2391,7 @@ async def show_results(callback: types.CallbackQuery):
         [InlineKeyboardButton(text="◀️ В МЕНЮ", callback_data="back_to_menu")]
     ])
     
+    # Разбиваем на части если слишком длинный
     if len(text) > 4000:
         parts = [text[i:i+4000] for i in range(0, len(text), 4000)]
         await callback.message.edit_text(parts[0], parse_mode='Markdown', reply_markup=None)
