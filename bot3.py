@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 ВИРТУАЛЬНЫЙ ПСИХОЛОГ - Матрица Поведений 4×6
-ПОЛНАЯ ВЕРСИЯ с ИНТИМНЫМ ПРОФИЛЕМ и НОВЫМИ ЭКРАНАМИ
+ПОЛНАЯ ВЕРСИЯ с ИНТИМНЫМ ПРОФИЛЕМ и МЫСЛЯМИ ПСИХОЛОГА
 """
 
 import os
@@ -17,6 +17,7 @@ from dotenv import load_dotenv
 from aiogram import Bot, Dispatcher, types
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.filters import Command
+from aiogram.exceptions import TelegramBadRequest
 
 # Загружаем переменные окружения
 load_dotenv()
@@ -1385,6 +1386,7 @@ def get_priority_order(scores: dict) -> list:
     else:
         return [k for k, _ in sorted(scores.items(), key=lambda x: x[1])]
 
+# УЛУЧШЕННАЯ ФУНКЦИЯ call_deepseek с обработкой ошибок
 async def call_deepseek(prompt, system_message="", max_tokens=500, retry_count=3):
     """Асинхронный вызов DeepSeek API с повторными попытками"""
     if not DEEPSEEK_API_KEY:
@@ -1551,7 +1553,11 @@ async def show_stage_details(callback: types.CallbackQuery, stage_key: str):
         [InlineKeyboardButton(text="◀️ Назад к этапу", callback_data=f"stage_intro_{stage_key}")]
     ])
     
-    await callback.message.edit_text(text, reply_markup=keyboard, parse_mode='Markdown')
+    try:
+        await callback.message.edit_text(text, reply_markup=keyboard, parse_mode='Markdown')
+    except TelegramBadRequest as e:
+        if "message is not modified" not in str(e).lower() and "сообщение не изменено" not in str(e).lower():
+            raise
 
 async def show_stage_intro(callback: types.CallbackQuery, stage_key: str):
     """Показывает введение в этап с двумя кнопками"""
@@ -1569,6 +1575,7 @@ async def show_stage_intro(callback: types.CallbackQuery, stage_key: str):
         f"Нет правильных или неправильных._"
     )
     
+    # ГОРИЗОНТАЛЬНЫЕ КНОПКИ (две в ряд)
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [
             InlineKeyboardButton(text=f"Начать этап {stage_num}", callback_data=f"begin_stage_{stage_key}"),
@@ -1576,7 +1583,11 @@ async def show_stage_intro(callback: types.CallbackQuery, stage_key: str):
         ]
     ])
     
-    await callback.message.edit_text(text, reply_markup=keyboard, parse_mode='Markdown')
+    try:
+        await callback.message.edit_text(text, reply_markup=keyboard, parse_mode='Markdown')
+    except TelegramBadRequest as e:
+        if "message is not modified" not in str(e).lower() and "сообщение не изменено" not in str(e).lower():
+            raise
 
 async def show_stage_feedback(callback: types.CallbackQuery, stage_key: str):
     user_id = callback.from_user.id
@@ -1644,10 +1655,15 @@ async def show_stage_feedback(callback: types.CallbackQuery, stage_key: str):
             )]
         ])
     
-    await callback.message.edit_text(text, reply_markup=keyboard, parse_mode='Markdown')
+    try:
+        await callback.message.edit_text(text, reply_markup=keyboard, parse_mode='Markdown')
+    except TelegramBadRequest as e:
+        if "message is not modified" not in str(e).lower() and "сообщение не изменено" not in str(e).lower():
+            raise
 
+# ИСПРАВЛЕННАЯ ФУНКЦИЯ send_next_question с обработкой ошибок
 async def send_next_question(callback: types.CallbackQuery):
-    """Отправляет следующий вопрос с новым дизайном"""
+    """Отправляет следующий вопрос с проверкой на дубликаты"""
     user_id = callback.from_user.id
     user = user_data[user_id]
     
@@ -1678,11 +1694,18 @@ async def send_next_question(callback: types.CallbackQuery):
             f"▸ Вопрос {current_q_idx + 1}/{total_in_stage} • {progress_bar}"
         )
         
-        await callback.message.edit_text(
-            text,
-            reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard),
-            parse_mode='Markdown'
-        )
+        try:
+            await callback.message.edit_text(
+                text,
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard),
+                parse_mode='Markdown'
+            )
+        except TelegramBadRequest as e:
+            if "message is not modified" in str(e).lower() or "сообщение не изменено" in str(e).lower():
+                logger.info(f"Ignored 'message not modified' error for question {current_q_idx}")
+                # Все равно увеличиваем счетчик, так как пользователь уже видел вопрос
+            else:
+                raise
         
         user["current_question"] += 1
     else:
@@ -1695,7 +1718,11 @@ async def show_clarification_intro(callback: types.CallbackQuery, stage_key: str
     keyboard = InlineKeyboardMarkup(inline_keyboard=[[
         InlineKeyboardButton(text="Ответить →", callback_data=f"clarify_show_{stage_key}")
     ]])
-    await callback.message.edit_text(cq["intro"], reply_markup=keyboard, parse_mode='Markdown')
+    try:
+        await callback.message.edit_text(cq["intro"], reply_markup=keyboard, parse_mode='Markdown')
+    except TelegramBadRequest as e:
+        if "message is not modified" not in str(e).lower() and "сообщение не изменено" not in str(e).lower():
+            raise
 
 async def show_clarification_question(callback: types.CallbackQuery, stage_key: str):
     cq = CLARIFICATION_QUESTIONS[stage_key]
@@ -1703,7 +1730,11 @@ async def show_clarification_question(callback: types.CallbackQuery, stage_key: 
         [InlineKeyboardButton(text=text, callback_data=f"clarify_answer_{stage_key}_{val}")]
         for val, text in cq["options"]
     ])
-    await callback.message.edit_text(f"*{cq['text']}*", reply_markup=keyboard, parse_mode='Markdown')
+    try:
+        await callback.message.edit_text(f"*{cq['text']}*", reply_markup=keyboard, parse_mode='Markdown')
+    except TelegramBadRequest as e:
+        if "message is not modified" not in str(e).lower() and "сообщение не изменено" not in str(e).lower():
+            raise
 
 async def handle_clarification_answer(callback: types.CallbackQuery, stage_key: str, answer_val: int):
     user_id = callback.from_user.id
@@ -1720,7 +1751,11 @@ async def handle_clarification_answer(callback: types.CallbackQuery, stage_key: 
     keyboard = InlineKeyboardMarkup(inline_keyboard=[[
         InlineKeyboardButton(text="Продолжить →", callback_data=f"after_clarification_{stage_key}")
     ]])
-    await callback.message.edit_text(cq["result"], reply_markup=keyboard, parse_mode='Markdown')
+    try:
+        await callback.message.edit_text(cq["result"], reply_markup=keyboard, parse_mode='Markdown')
+    except TelegramBadRequest as e:
+        if "message is not modified" not in str(e).lower() and "сообщение не изменено" not in str(e).lower():
+            raise
 
 
 # ─── Функции проверки консистентности ──────────────────────────────────────
@@ -1733,15 +1768,19 @@ async def show_consistency_warning(callback: types.CallbackQuery, stage_key: str
         [InlineKeyboardButton(text="Продолжить как есть →", callback_data=f"force_stage_result_{stage_key}")]
     ])
 
-    await callback.message.edit_text(
-        f"{vec['emoji']} *Этап {stage_num} — нужно уточнение*\n\n"
-        f"Ваши ответы в этом блоке сильно расходятся между собой.\n\n"
-        f"Это нормально — иногда вопросы воспринимаются по-разному.\n\n"
-        f"_Рекомендую пройти этап заново, отвечая на первый импульс "
-        f"не думая долго._",
-        reply_markup=keyboard,
-        parse_mode='Markdown'
-    )
+    try:
+        await callback.message.edit_text(
+            f"{vec['emoji']} *Этап {stage_num} — нужно уточнение*\n\n"
+            f"Ваши ответы в этом блоке сильно расходятся между собой.\n\n"
+            f"Это нормально — иногда вопросы воспринимаются по-разному.\n\n"
+            f"_Рекомендую пройти этап заново, отвечая на первый импульс "
+            f"не думая долго._",
+            reply_markup=keyboard,
+            parse_mode='Markdown'
+        )
+    except TelegramBadRequest as e:
+        if "message is not modified" not in str(e).lower() and "сообщение не изменено" not in str(e).lower():
+            raise
 
 
 # ─── Функция детального профиля уровня ─────────────────────────────────────
@@ -1794,7 +1833,11 @@ async def show_level_detail(callback: types.CallbackQuery, vector_key: str):
                 await callback.message.answer(part, parse_mode='Markdown')
         await callback.message.answer("Выберите действие:", reply_markup=keyboard)
     else:
-        await callback.message.edit_text(text, reply_markup=keyboard, parse_mode='Markdown')
+        try:
+            await callback.message.edit_text(text, reply_markup=keyboard, parse_mode='Markdown')
+        except TelegramBadRequest as e:
+            if "message is not modified" not in str(e).lower() and "сообщение не изменено" not in str(e).lower():
+                raise
 
 
 # ══════════════════════════════════════════════
@@ -1832,12 +1875,17 @@ async def show_about_method(callback: types.CallbackQuery):
         f"три шага, че с этим делать»."
     )
     
+    # ВЕРТИКАЛЬНЫЕ КНОПКИ
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="🔪 Я ВНУТРИ, ВСКРОЙТЕ", callback_data="start_test")],
         [InlineKeyboardButton(text="◀️ НАЗАД", callback_data="back_to_menu")]
     ])
     
-    await callback.message.edit_text(text, reply_markup=keyboard, parse_mode='Markdown')
+    try:
+        await callback.message.edit_text(text, reply_markup=keyboard, parse_mode='Markdown')
+    except TelegramBadRequest as e:
+        if "message is not modified" not in str(e).lower() and "сообщение не изменено" not in str(e).lower():
+            raise
 
 async def show_results_examples(callback: types.CallbackQuery):
     """Показывает примеры результатов"""
@@ -1868,12 +1916,17 @@ async def show_results_examples(callback: types.CallbackQuery):
         f"        но теперь не бесят)."
     )
     
+    # ВЕРТИКАЛЬНЫЕ КНОПКИ
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="🔪 ХОЧУ ТАК ЖЕ", callback_data="start_test")],
         [InlineKeyboardButton(text="◀️ НАЗАД", callback_data="back_to_menu")]
     ])
     
-    await callback.message.edit_text(text, reply_markup=keyboard, parse_mode='Markdown')
+    try:
+        await callback.message.edit_text(text, reply_markup=keyboard, parse_mode='Markdown')
+    except TelegramBadRequest as e:
+        if "message is not modified" not in str(e).lower() and "сообщение не изменено" not in str(e).lower():
+            raise
 
 
 # ══════════════════════════════════════════════
@@ -1967,7 +2020,10 @@ async def show_intimate_profile(callback: types.CallbackQuery):
     system_message = "Ты — психолог-сексолог, автор метода Variatica. Пишешь глубокие, пронзительные, хирургически точные психологические портреты."
     response = await call_deepseek(prompt, system_message, max_tokens=3000)
     
+    # ВЕРТИКАЛЬНЫЕ КНОПКИ
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🧠 МЫСЛИ ПСИХОЛОГА", callback_data="ai_analysis")],
+        [InlineKeyboardButton(text="💡 ЧТО ДЕЛАТЬ", callback_data="ai_recommendations")],
         [InlineKeyboardButton(text="◀️ Назад к профилю", callback_data="show_results")]
     ])
     
@@ -2016,7 +2072,7 @@ async def start_command(message: types.Message):
     # Регистрируем старт в статистике
     stats.register_start(user_id)
     
-    # НОВЫЙ СТАРТОВЫЙ ЭКРАН с юмором и вертикальными кнопками
+    # НОВЫЙ СТАРТОВЫЙ ЭКРАН с юмором и ВЕРТИКАЛЬНЫМИ кнопками
     text = (
         f"🧠 *МАТРИЦА ПОВЕДЕНИЙ 4×6*\n"
         f"_лаборатория психологических профилей_\n\n"
@@ -2084,6 +2140,7 @@ async def apistatus_command(message: types.Message):
             parse_mode='Markdown'
         )
 
+# ИСПРАВЛЕННЫЙ callback_handler с обработкой ошибок
 async def callback_handler(callback: types.CallbackQuery):
     await callback.answer()
     
@@ -2100,178 +2157,185 @@ async def callback_handler(callback: types.CallbackQuery):
             "logged": False
         }
     
-    if data == "start_test":
-        user_data[user_id]["stage"] = "testing"
-        user_data[user_id]["scores"] = {k: [] for k in VECTORS}
-        user_data[user_id]["current_stage"] = STAGE_ORDER[0]
-        user_data[user_id]["current_question"] = 0
-        user_data[user_id]["profile_complete"] = False
-        await show_stage_intro(callback, STAGE_ORDER[0])
-    
-    elif data == "about_method":
-        await show_about_method(callback)
-    
-    elif data == "results_examples":
-        await show_results_examples(callback)
-    
-    elif data == "about":
-        keyboard = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="◀️ Назад", callback_data="back_to_menu")]
-        ])
-        await callback.message.edit_text(
-            "📚 *О МЕТОДИКЕ*\n\n"
-            "Тест основан на модели 4 векторов поведения:\n\n"
-            "🛡 *Реакция на угрозу* — как ведете себя под давлением\n"
-            "💰 *Добыча ресурсов* — как зарабатываете и копите\n"
-            "🔍 *Понимание мира* — как объясняете непонятное\n"
-            "🤝 *Отношения* — как строите связи с людьми\n\n"
-            "Каждый вектор имеет 6 уровней — от базовых реакций до зрелых стратегий.",
-            parse_mode='Markdown',
-            reply_markup=keyboard
-        )
-    
-    elif data == "ai_info":
-        keyboard = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="◀️ Назад", callback_data="back_to_menu")]
-        ])
-        if DEEPSEEK_API_KEY:
-            text = "🤖 *О AI-ПОМОЩНИКЕ*\n\nПосле теста вы сможете:\n\n• Задать вопросы о себе\n• Получить персональные рекомендации\n• Я помню ваш профиль и отвечаю с его учетом\n• Ответы краткие и по делу"
-        else:
-            text = "⚠️ *AI временно недоступен*\n\nДоступен только стандартный анализ."
-        await callback.message.edit_text(text, parse_mode='Markdown', reply_markup=keyboard)
-    
-    elif data == "back_to_menu":
-        # ВЕРТИКАЛЬНЫЕ КНОПКИ В МЕНЮ
-        keyboard = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="🔪 ВСКРЫТИЕ ПОЕХАЛИ", callback_data="start_test")],
-            [InlineKeyboardButton(text="📖 ЧТО ЗА МЕТОД", callback_data="about_method")],
-            [InlineKeyboardButton(text="😱 РЕЗУЛЬТ В ЛИЦАХ", callback_data="results_examples")]
-        ])
-        await callback.message.edit_text(
-            "🧠 *МАТРИЦА ПОВЕДЕНИЙ 4×6*\n\nГотовы к вскрытию?",
-            reply_markup=keyboard,
-            parse_mode='Markdown'
-        )
-    
-    elif data.startswith("stage_details_"):
-        stage_key = data.replace("stage_details_", "")
-        await show_stage_details(callback, stage_key)
-    
-    elif data.startswith("stage_intro_"):
-        stage_key = data.replace("stage_intro_", "")
-        user_data[user_id]["current_stage"] = stage_key
-        user_data[user_id]["current_question"] = 0
-        await show_stage_intro(callback, stage_key)
-    
-    elif data.startswith("begin_stage_"):
-        stage_key = data.replace("begin_stage_", "")
-        user_data[user_id]["current_stage"] = stage_key
-        user_data[user_id]["current_question"] = 0
-        await send_next_question(callback)
-    
-    elif data.startswith("clarify_show_"):
-        stage_key = data.replace("clarify_show_", "")
-        await show_clarification_question(callback, stage_key)
-
-    elif data.startswith("clarify_answer_"):
-        parts = data.split("_")
-        stage_key = parts[2]
-        answer_val = int(parts[3])
-        await handle_clarification_answer(callback, stage_key, answer_val)
-
-    elif data.startswith("after_clarification_"):
-        stage_key = data.replace("after_clarification_", "")
-        await show_stage_feedback(callback, stage_key)
-
-    elif data.startswith("retry_stage_"):
-        stage_key = data.replace("retry_stage_", "")
-        user_data[user_id]["scores"][stage_key] = []
-        user_data[user_id]["current_stage"] = stage_key
-        user_data[user_id]["current_question"] = 0
-        user_data[user_id].pop(f"{stage_key}_clarified", None)
-        user_data[user_id].pop(f"{stage_key}_pending_avg", None)
-        await send_next_question(callback)
-
-    elif data.startswith("force_stage_result_"):
-        stage_key = data.replace("force_stage_result_", "")
-        user_data[user_id][f"{stage_key}_consistency_override"] = True
-        await show_stage_feedback(callback, stage_key)
-    
-    elif data.startswith("answer_"):
-        if user_data[user_id].get("processing", False):
-            await callback.answer()
-            return
-        user_data[user_id]["processing"] = True
-        try:
-            score = int(data.split("_")[1])
-            user = user_data[user_id]
-            current_stage = user["current_stage"]
-            user["scores"][current_stage].append(score)
+    try:
+        if data == "start_test":
+            user_data[user_id]["stage"] = "testing"
+            user_data[user_id]["scores"] = {k: [] for k in VECTORS}
+            user_data[user_id]["current_stage"] = STAGE_ORDER[0]
+            user_data[user_id]["current_question"] = 0
+            user_data[user_id]["profile_complete"] = False
+            await show_stage_intro(callback, STAGE_ORDER[0])
+        
+        elif data == "about_method":
+            await show_about_method(callback)
+        
+        elif data == "results_examples":
+            await show_results_examples(callback)
+        
+        elif data == "about":
+            keyboard = InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="◀️ Назад", callback_data="back_to_menu")]
+            ])
+            await callback.message.edit_text(
+                "📚 *О МЕТОДИКЕ*\n\n"
+                "Тест основан на модели 4 векторов поведения:\n\n"
+                "🛡 *Реакция на угрозу* — как ведете себя под давлением\n"
+                "💰 *Добыча ресурсов* — как зарабатываете и копите\n"
+                "🔍 *Понимание мира* — как объясняете непонятное\n"
+                "🤝 *Отношения* — как строите связи с людьми\n\n"
+                "Каждый вектор имеет 6 уровней — от базовых реакций до зрелых стратегий.",
+                parse_mode='Markdown',
+                reply_markup=keyboard
+            )
+        
+        elif data == "ai_info":
+            keyboard = InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="◀️ Назад", callback_data="back_to_menu")]
+            ])
+            if DEEPSEEK_API_KEY:
+                text = "🤖 *О AI-ПОМОЩНИКЕ*\n\nПосле теста вы сможете:\n\n• Задать вопросы о себе\n• Получить персональные рекомендации\n• Я помню ваш профиль и отвечаю с его учетом\n• Ответы краткие и по делу"
+            else:
+                text = "⚠️ *AI временно недоступен*\n\nДоступен только стандартный анализ."
+            await callback.message.edit_text(text, parse_mode='Markdown', reply_markup=keyboard)
+        
+        elif data == "back_to_menu":
+            # ВЕРТИКАЛЬНЫЕ КНОПКИ В МЕНЮ
+            keyboard = InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="🔪 ВСКРЫТИЕ ПОЕХАЛИ", callback_data="start_test")],
+                [InlineKeyboardButton(text="📖 ЧТО ЗА МЕТОД", callback_data="about_method")],
+                [InlineKeyboardButton(text="😱 РЕЗУЛЬТ В ЛИЦАХ", callback_data="results_examples")]
+            ])
+            await callback.message.edit_text(
+                "🧠 *МАТРИЦА ПОВЕДЕНИЙ 4×6*\n\nГотовы к вскрытию?",
+                reply_markup=keyboard,
+                parse_mode='Markdown'
+            )
+        
+        elif data.startswith("stage_details_"):
+            stage_key = data.replace("stage_details_", "")
+            await show_stage_details(callback, stage_key)
+        
+        elif data.startswith("stage_intro_"):
+            stage_key = data.replace("stage_intro_", "")
+            user_data[user_id]["current_stage"] = stage_key
+            user_data[user_id]["current_question"] = 0
+            await show_stage_intro(callback, stage_key)
+        
+        elif data.startswith("begin_stage_"):
+            stage_key = data.replace("begin_stage_", "")
+            user_data[user_id]["current_stage"] = stage_key
+            user_data[user_id]["current_question"] = 0
             await send_next_question(callback)
-        finally:
-            user_data[user_id]["processing"] = False
+        
+        elif data.startswith("clarify_show_"):
+            stage_key = data.replace("clarify_show_", "")
+            await show_clarification_question(callback, stage_key)
+
+        elif data.startswith("clarify_answer_"):
+            parts = data.split("_")
+            stage_key = parts[2]
+            answer_val = int(parts[3])
+            await handle_clarification_answer(callback, stage_key, answer_val)
+
+        elif data.startswith("after_clarification_"):
+            stage_key = data.replace("after_clarification_", "")
+            await show_stage_feedback(callback, stage_key)
+
+        elif data.startswith("retry_stage_"):
+            stage_key = data.replace("retry_stage_", "")
+            user_data[user_id]["scores"][stage_key] = []
+            user_data[user_id]["current_stage"] = stage_key
+            user_data[user_id]["current_question"] = 0
+            user_data[user_id].pop(f"{stage_key}_clarified", None)
+            user_data[user_id].pop(f"{stage_key}_pending_avg", None)
+            await send_next_question(callback)
+
+        elif data.startswith("force_stage_result_"):
+            stage_key = data.replace("force_stage_result_", "")
+            user_data[user_id][f"{stage_key}_consistency_override"] = True
+            await show_stage_feedback(callback, stage_key)
+        
+        elif data.startswith("answer_"):
+            if user_data[user_id].get("processing", False):
+                await callback.answer()
+                return
+            user_data[user_id]["processing"] = True
+            try:
+                score = int(data.split("_")[1])
+                user = user_data[user_id]
+                current_stage = user["current_stage"]
+                user["scores"][current_stage].append(score)
+                await send_next_question(callback)
+            finally:
+                user_data[user_id]["processing"] = False
+        
+        elif data.startswith("detail_"):
+            vector_key = data.replace("detail_", "")
+            await show_level_detail(callback, vector_key)
+        
+        elif data == "show_results":
+            await show_results(callback)
+        
+        elif data == "standard_analysis":
+            await show_standard_analysis(callback)
+        
+        elif data == "ai_analysis":
+            await show_ai_analysis(callback)
+        
+        elif data == "ai_recommendations":
+            await show_ai_recommendations(callback)
+        
+        elif data == "intimate_profile":
+            await show_intimate_profile(callback)
+        
+        elif data == "smart_questions":
+            await show_smart_questions(callback)
+        
+        elif data == "ask_question":
+            user_data[user_id]["stage"] = "awaiting_question"
+            keyboard = InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="◀️ Назад", callback_data="show_results")]
+            ])
+            await callback.message.edit_text(
+                "✏️ *ЗАДАЙТЕ ВОПРОС*\n\n"
+                "Напишите, что вас беспокоит. Я помню ваш профиль и отвечу коротко и по делу.\n\n"
+                "_Например: «Почему я боюсь начальника?» или «Как мне начать копить деньги?»_",
+                parse_mode='Markdown',
+                reply_markup=keyboard
+            )
+        
+        elif data == "restart_test":
+            user_data[user_id] = {
+                "stage": "menu",
+                "scores": {k: [] for k in VECTORS},
+                "current_stage": None,
+                "current_question": 0,
+                "profile_complete": False,
+                "logged": False
+            }
+            keyboard = InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="🔪 ВСКРЫТИЕ ПОЕХАЛИ", callback_data="start_test")],
+                [InlineKeyboardButton(text="📖 ЧТО ЗА МЕТОД", callback_data="about_method")],
+                [InlineKeyboardButton(text="😱 РЕЗУЛЬТ В ЛИЦАХ", callback_data="results_examples")]
+            ])
+            await callback.message.edit_text(
+                "🧠 *МАТРИЦА ПОВЕДЕНИЙ 4×6*\n\nГотовы к вскрытию?",
+                reply_markup=keyboard,
+                parse_mode='Markdown'
+            )
+        
+        elif data.startswith("ask_"):
+            idx = int(data.split("_")[1]) - 1
+            questions = user_data[user_id].get("smart_questions", [])
+            if 0 <= idx < len(questions):
+                user_data[user_id]["stage"] = "answering_question"
+                await handle_smart_question(callback, questions[idx])
     
-    elif data.startswith("detail_"):
-        vector_key = data.replace("detail_", "")
-        await show_level_detail(callback, vector_key)
-    
-    elif data == "show_results":
-        await show_results(callback)
-    
-    elif data == "standard_analysis":
-        await show_standard_analysis(callback)
-    
-    elif data == "ai_analysis":
-        await show_ai_analysis(callback)
-    
-    elif data == "ai_recommendations":
-        await show_ai_recommendations(callback)
-    
-    elif data == "intimate_profile":
-        await show_intimate_profile(callback)
-    
-    elif data == "smart_questions":
-        await show_smart_questions(callback)
-    
-    elif data == "ask_question":
-        user_data[user_id]["stage"] = "awaiting_question"
-        keyboard = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="◀️ Назад", callback_data="show_results")]
-        ])
-        await callback.message.edit_text(
-            "✏️ *ЗАДАЙТЕ ВОПРОС*\n\n"
-            "Напишите, что вас беспокоит. Я помню ваш профиль и отвечу коротко и по делу.\n\n"
-            "_Например: «Почему я боюсь начальника?» или «Как мне начать копить деньги?»_",
-            parse_mode='Markdown',
-            reply_markup=keyboard
-        )
-    
-    elif data == "restart_test":
-        user_data[user_id] = {
-            "stage": "menu",
-            "scores": {k: [] for k in VECTORS},
-            "current_stage": None,
-            "current_question": 0,
-            "profile_complete": False,
-            "logged": False
-        }
-        keyboard = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="🔪 ВСКРЫТИЕ ПОЕХАЛИ", callback_data="start_test")],
-            [InlineKeyboardButton(text="📖 ЧТО ЗА МЕТОД", callback_data="about_method")],
-            [InlineKeyboardButton(text="😱 РЕЗУЛЬТ В ЛИЦАХ", callback_data="results_examples")]
-        ])
-        await callback.message.edit_text(
-            "🧠 *МАТРИЦА ПОВЕДЕНИЙ 4×6*\n\nГотовы к вскрытию?",
-            reply_markup=keyboard,
-            parse_mode='Markdown'
-        )
-    
-    elif data.startswith("ask_"):
-        idx = int(data.split("_")[1]) - 1
-        questions = user_data[user_id].get("smart_questions", [])
-        if 0 <= idx < len(questions):
-            user_data[user_id]["stage"] = "answering_question"
-            await handle_smart_question(callback, questions[idx])
+    except TelegramBadRequest as e:
+        if "message is not modified" in str(e).lower() or "сообщение не изменено" in str(e).lower():
+            logger.info(f"Ignored 'message not modified' error in callback_handler")
+        else:
+            raise
 
 
 # ══════════════════════════════════════════════
@@ -2323,10 +2387,12 @@ async def show_results(callback: types.CallbackQuery):
     text += f"──────────────────────\n\n"
     text += f"🎯 *УЗКОЕ МЕСТО:*\n"
     text += f"   {VECTORS[bottleneck_key]['name']} ({bottleneck_key}-{bottleneck_lvl})\n"
-    text += f"   {bottleneck_profile.get('pain_costs', [''])[0] if bottleneck_profile.get('pain_costs') else ''}\n"
+    if bottleneck_profile.get('pain_costs'):
+        text += f"   {bottleneck_profile['pain_costs'][0]}\n"
     
-    # НОВЫЕ ВЕРТИКАЛЬНЫЕ КНОПКИ
+    # ВЕРТИКАЛЬНЫЕ КНОПКИ НА ФИНАЛЬНОМ ЭКРАНЕ
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🧠 МЫСЛИ ПСИХОЛОГА", callback_data="ai_analysis")],
         [InlineKeyboardButton(text="🎭 ГЛУБЖЕ ПРОФИЛЬ", callback_data=f"detail_{bottleneck_key}")],
         [InlineKeyboardButton(text="💡 ЧТО ДЕЛАТЬ", callback_data="ai_recommendations")],
         [InlineKeyboardButton(text="❓ ЕЩЁ ВОПРОС", callback_data="smart_questions")],
@@ -2343,7 +2409,11 @@ async def show_results(callback: types.CallbackQuery):
             else:
                 await callback.message.answer(part, parse_mode='Markdown')
     else:
-        await callback.message.edit_text(text, reply_markup=keyboard, parse_mode='Markdown')
+        try:
+            await callback.message.edit_text(text, reply_markup=keyboard, parse_mode='Markdown')
+        except TelegramBadRequest as e:
+            if "message is not modified" not in str(e).lower() and "сообщение не изменено" not in str(e).lower():
+                raise
 
 async def show_standard_analysis(callback: types.CallbackQuery):
     user_id = callback.from_user.id
@@ -2391,7 +2461,11 @@ async def show_standard_analysis(callback: types.CallbackQuery):
                 await callback.message.answer(part, parse_mode='Markdown')
         await callback.message.answer("Выберите действие:", reply_markup=keyboard)
     else:
-        await callback.message.edit_text(text, reply_markup=keyboard, parse_mode='Markdown')
+        try:
+            await callback.message.edit_text(text, reply_markup=keyboard, parse_mode='Markdown')
+        except TelegramBadRequest as e:
+            if "message is not modified" not in str(e).lower() and "сообщение не изменено" not in str(e).lower():
+                raise
 
 
 # Резервные ответы для анализа (когда API недоступен)
@@ -2443,15 +2517,18 @@ async def show_ai_analysis_fallback(callback: types.CallbackQuery):
     text += FALLBACK_ANALYSIS[bottleneck_key][bottleneck_lvl]
     text += f"\n\n_🤖 AI-анализ временно недоступен, но вот персональный совет на основе вашего профиля._"
     
+    # ВЕРТИКАЛЬНЫЕ КНОПКИ
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [
-            InlineKeyboardButton(text="❓ Вопросы", callback_data="smart_questions"),
-            InlineKeyboardButton(text="💡 Рекомендации", callback_data="ai_recommendations")
-        ],
+        [InlineKeyboardButton(text="❓ Вопросы", callback_data="smart_questions")],
+        [InlineKeyboardButton(text="💡 Рекомендации", callback_data="ai_recommendations")],
         [InlineKeyboardButton(text="◀️ Назад", callback_data="show_results")]
     ])
     
-    await callback.message.edit_text(text, parse_mode='Markdown', reply_markup=keyboard)
+    try:
+        await callback.message.edit_text(text, parse_mode='Markdown', reply_markup=keyboard)
+    except TelegramBadRequest as e:
+        if "message is not modified" not in str(e).lower() and "сообщение не изменено" not in str(e).lower():
+            raise
 
 async def show_ai_analysis(callback: types.CallbackQuery):
     """Умный AI-анализ с fallback на локальные ответы"""
@@ -2549,21 +2626,20 @@ async def show_ai_analysis(callback: types.CallbackQuery):
     system_message = "Ты психолог с 20-летним опытом, автор метода Variatica. Твой стиль — метафоры, телесность, конкретные сцены, ирония, парадоксы. Пиши полноценно, не сокращая."
     response = await call_deepseek(prompt, system_message, max_tokens=3000)
     
+    # ВЕРТИКАЛЬНЫЕ КНОПКИ
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="❓ Вопросы", callback_data="smart_questions")],
+        [InlineKeyboardButton(text="💡 Рекомендации", callback_data="ai_recommendations")],
+        [InlineKeyboardButton(text="◀️ Назад", callback_data="show_results")]
+    ])
+    
     if response:
-        keyboard = InlineKeyboardMarkup(inline_keyboard=[
-            [
-                InlineKeyboardButton(text="❓ Вопросы", callback_data="smart_questions"),
-                InlineKeyboardButton(text="💡 Рекомендации", callback_data="ai_recommendations")
-            ],
-            [InlineKeyboardButton(text="◀️ Назад", callback_data="show_results")]
-        ])
-        
         if len(response) > 4000:
             parts = [response[i:i+4000] for i in range(0, len(response), 4000)]
             for i, part in enumerate(parts):
                 if i == 0:
                     await callback.message.edit_text(
-                        f"🧠 *ПЕРСОНАЛЬНЫЙ АНАЛИЗ*\n\n{part}",
+                        f"🧠 *МЫСЛИ ПСИХОЛОГА*\n\n{part}",
                         parse_mode='Markdown',
                         reply_markup=keyboard if i == len(parts)-1 else None
                     )
@@ -2571,7 +2647,7 @@ async def show_ai_analysis(callback: types.CallbackQuery):
                     await callback.message.answer(part, parse_mode='Markdown')
         else:
             await callback.message.edit_text(
-                f"🧠 *ПЕРСОНАЛЬНЫЙ АНАЛИЗ*\n\n{response}",
+                f"🧠 *МЫСЛИ ПСИХОЛОГА*\n\n{response}",
                 parse_mode='Markdown',
                 reply_markup=keyboard
             )
@@ -2613,13 +2689,18 @@ async def show_ai_recommendations(callback: types.CallbackQuery):
         f" систему»."
     )
     
+    # ВЕРТИКАЛЬНЫЕ КНОПКИ
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="❓ ЕЩЁ ВОПРОС", callback_data="smart_questions")],
-        [InlineKeyboardButton(text="🧠 К ПСИХОЛОГУ", callback_data="ai_analysis")],
+        [InlineKeyboardButton(text="🧠 МЫСЛИ ПСИХОЛОГА", callback_data="ai_analysis")],
         [InlineKeyboardButton(text="◀️ НАЗАД К ПРОФИЛЮ", callback_data="show_results")]
     ])
     
-    await callback.message.edit_text(text, parse_mode='Markdown', reply_markup=keyboard)
+    try:
+        await callback.message.edit_text(text, parse_mode='Markdown', reply_markup=keyboard)
+    except TelegramBadRequest as e:
+        if "message is not modified" not in str(e).lower() and "сообщение не изменено" not in str(e).lower():
+            raise
 
 
 async def show_smart_questions(callback: types.CallbackQuery):
@@ -2645,12 +2726,16 @@ async def show_smart_questions(callback: types.CallbackQuery):
         callback_data="show_results"
     )])
     
-    await callback.message.edit_text(
-        "❓ *ЧТО ВАС БЕСПОКОИТ?*\n\n"
-        "Выберите вопрос или задайте свой. Я помню ваш профиль.\n",
-        reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard),
-        parse_mode='Markdown'
-    )
+    try:
+        await callback.message.edit_text(
+            "❓ *ЧТО ВАС БЕСПОКОИТ?*\n\n"
+            "Выберите вопрос или задайте свой. Я помню ваш профиль.\n",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard),
+            parse_mode='Markdown'
+        )
+    except TelegramBadRequest as e:
+        if "message is not modified" not in str(e).lower() and "сообщение не изменено" not in str(e).lower():
+            raise
 
 
 async def handle_smart_question(callback: types.CallbackQuery, question: str):
