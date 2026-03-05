@@ -1388,12 +1388,11 @@ def get_priority_order(scores: dict) -> list:
 
 # УЛУЧШЕННАЯ ФУНКЦИЯ call_deepseek с обработкой ошибок
 async def call_deepseek(prompt, system_message="", max_tokens=500, retry_count=3):
-    """Асинхронный вызов DeepSeek API с диагностикой и увеличенным таймаутом"""
+    """Асинхронный вызов DeepSeek API с диагностикой"""
     if not DEEPSEEK_API_KEY:
-        logger.error("❌ DEEPSEEK_API_KEY не найден в переменных окружения")
+        logger.error("❌ DEEPSEEK_API_KEY не найден")
         return None
 
-    # Диагностика ключа (безопасно, только первые символы)
     logger.info(f"🔑 API ключ (первые 5 символов): {DEEPSEEK_API_KEY[:5]}...")
     logger.info(f"📝 Длина промпта: {len(prompt)} символов")
 
@@ -1414,10 +1413,9 @@ async def call_deepseek(prompt, system_message="", max_tokens=500, retry_count=3
         "max_tokens": max_tokens,
     }
 
-    # Пробуем несколько URL (на случай изменений в API)
     urls = [
         "https://api.deepseek.com/v1/chat/completions",
-        "https://api.deepseek.com/chat/completions",  # запасной вариант
+        "https://api.deepseek.com/chat/completions",
     ]
 
     for attempt in range(retry_count):
@@ -1425,7 +1423,6 @@ async def call_deepseek(prompt, system_message="", max_tokens=500, retry_count=3
             try:
                 logger.info(f"📡 Попытка {attempt + 1}/{retry_count}, URL {url_idx + 1}: {url}")
                 
-                # УВЕЛИЧЕННЫЙ ТАЙМАУТ - 60 секунд вместо 30
                 timeout = aiohttp.ClientTimeout(total=60, connect=30, sock_read=60)
                 
                 async with aiohttp.ClientSession() as session:
@@ -1443,22 +1440,29 @@ async def call_deepseek(prompt, system_message="", max_tokens=500, retry_count=3
                         logger.info(f"⏱ Время ответа: {duration:.2f} сек, статус: {response.status}")
                         
                         if response.status == 200:
-                            result = await response.json()
-                            logger.info("✅ DeepSeek API успешно ответил")
-                            return result["choices"][0]["message"]["content"]
+                            # Читаем JSON с отдельным таймаутом
+                            try:
+                                result = await response.json()
+                                logger.info("✅ DeepSeek API успешно ответил")
+                                return result["choices"][0]["message"]["content"]
+                            except asyncio.TimeoutError:
+                                logger.error("⏰ Таймаут при чтении JSON ответа")
+                                continue
+                            except Exception as e:
+                                logger.error(f"❌ Ошибка парсинга JSON: {e}")
+                                continue
                         else:
                             error_text = await response.text()
                             logger.error(f"❌ Ошибка {response.status}: {error_text}")
                             
                             if response.status == 401:
-                                logger.error("🔑 НЕВЕРНЫЙ API КЛЮЧ! Проверьте DEEPSEEK_API_KEY")
+                                logger.error("🔑 НЕВЕРНЫЙ API КЛЮЧ!")
                                 return None
                             elif response.status == 429:
-                                logger.error("⏳ Превышен лимит запросов DeepSeek")
+                                logger.error("⏳ Превышен лимит запросов")
                                 wait_time = (2 ** attempt) + random.random()
                                 await asyncio.sleep(wait_time)
                             elif response.status >= 500:
-                                logger.error(f"🔧 Серверная ошибка DeepSeek")
                                 wait_time = (2 ** attempt) + random.random()
                                 await asyncio.sleep(wait_time)
                             else:
@@ -1466,7 +1470,6 @@ async def call_deepseek(prompt, system_message="", max_tokens=500, retry_count=3
                             
             except asyncio.TimeoutError:
                 logger.error(f"⏰ ТАЙМАУТ (попытка {attempt + 1}, URL {url_idx + 1})")
-                # Экспоненциальная задержка перед повтором
                 wait_time = (2 ** attempt) + random.random()
                 await asyncio.sleep(wait_time)
                 
@@ -1480,7 +1483,7 @@ async def call_deepseek(prompt, system_message="", max_tokens=500, retry_count=3
                 wait_time = (2 ** attempt) + random.random()
                 await asyncio.sleep(wait_time)
     
-    logger.error("❌ ВСЕ ПОПЫТКИ ВЫЗОВА DeepSeek API НЕ УДАЛИСЬ")
+    logger.error("❌ ВСЕ ПОПЫТКИ НЕ УДАЛИСЬ")
     return None
 
 def generate_smart_questions(scores):
