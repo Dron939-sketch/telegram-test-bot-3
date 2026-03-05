@@ -1388,10 +1388,14 @@ def get_priority_order(scores: dict) -> list:
 
 # УЛУЧШЕННАЯ ФУНКЦИЯ call_deepseek с обработкой ошибок
 async def call_deepseek(prompt, system_message="", max_tokens=500, retry_count=3):
-    """Асинхронный вызов DeepSeek API с повторными попытками"""
+    """Асинхронный вызов DeepSeek API с диагностикой и увеличенным таймаутом"""
     if not DEEPSEEK_API_KEY:
-        logger.error("DEEPSEEK_API_KEY не найден в переменных окружения")
+        logger.error("❌ DEEPSEEK_API_KEY не найден в переменных окружения")
         return None
+
+    # Диагностика ключа (безопасно, только первые символы)
+    logger.info(f"🔑 API ключ (первые 5 символов): {DEEPSEEK_API_KEY[:5]}...")
+    logger.info(f"📝 Длина промпта: {len(prompt)} символов")
 
     headers = {
         "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
@@ -1410,52 +1414,73 @@ async def call_deepseek(prompt, system_message="", max_tokens=500, retry_count=3
         "max_tokens": max_tokens,
     }
 
+    # Пробуем несколько URL (на случай изменений в API)
+    urls = [
+        "https://api.deepseek.com/v1/chat/completions",
+        "https://api.deepseek.com/chat/completions",  # запасной вариант
+    ]
+
     for attempt in range(retry_count):
-        try:
-            logger.info(f"Попытка {attempt + 1}/{retry_count} вызова DeepSeek API")
-            
-            async with aiohttp.ClientSession() as session:
-                async with session.post(
-                    "https://api.deepseek.com/v1/chat/completions",
-                    headers=headers,
-                    json=data,
-                    timeout=aiohttp.ClientTimeout(total=30)
-                ) as response:
+        for url_idx, url in enumerate(urls):
+            try:
+                logger.info(f"📡 Попытка {attempt + 1}/{retry_count}, URL {url_idx + 1}: {url}")
+                
+                # УВЕЛИЧЕННЫЙ ТАЙМАУТ - 60 секунд вместо 30
+                timeout = aiohttp.ClientTimeout(total=60, connect=30, sock_read=60)
+                
+                async with aiohttp.ClientSession() as session:
+                    start_time = datetime.datetime.now()
                     
-                    if response.status == 200:
-                        result = await response.json()
-                        logger.info("DeepSeek API успешно ответил")
-                        return result["choices"][0]["message"]["content"]
-                    else:
-                        error_text = await response.text()
-                        logger.error(f"DeepSeek API ошибка {response.status}: {error_text}")
+                    async with session.post(
+                        url,
+                        headers=headers,
+                        json=data,
+                        timeout=timeout
+                    ) as response:
+                        end_time = datetime.datetime.now()
+                        duration = (end_time - start_time).total_seconds()
                         
-                        if response.status == 401:
-                            logger.error("Неверный API ключ DeepSeek")
-                            return None
-                        elif response.status == 429:
-                            logger.error("Превышен лимит запросов DeepSeek")
-                            wait_time = 2 ** attempt
-                            await asyncio.sleep(wait_time)
-                        elif response.status >= 500:
-                            logger.error(f"Серверная ошибка DeepSeek: {response.status}")
-                            await asyncio.sleep(2 ** attempt)
+                        logger.info(f"⏱ Время ответа: {duration:.2f} сек, статус: {response.status}")
+                        
+                        if response.status == 200:
+                            result = await response.json()
+                            logger.info("✅ DeepSeek API успешно ответил")
+                            return result["choices"][0]["message"]["content"]
                         else:
-                            return None
+                            error_text = await response.text()
+                            logger.error(f"❌ Ошибка {response.status}: {error_text}")
                             
-        except asyncio.TimeoutError:
-            logger.error(f"Таймаут DeepSeek API (попытка {attempt + 1})")
-            await asyncio.sleep(2 ** attempt)
-            
-        except aiohttp.ClientError as e:
-            logger.error(f"Сетевая ошибка DeepSeek API: {e}")
-            await asyncio.sleep(2 ** attempt)
-            
-        except Exception as e:
-            logger.error(f"Неизвестная ошибка DeepSeek API: {e}")
-            await asyncio.sleep(2 ** attempt)
+                            if response.status == 401:
+                                logger.error("🔑 НЕВЕРНЫЙ API КЛЮЧ! Проверьте DEEPSEEK_API_KEY")
+                                return None
+                            elif response.status == 429:
+                                logger.error("⏳ Превышен лимит запросов DeepSeek")
+                                wait_time = (2 ** attempt) + random.random()
+                                await asyncio.sleep(wait_time)
+                            elif response.status >= 500:
+                                logger.error(f"🔧 Серверная ошибка DeepSeek")
+                                wait_time = (2 ** attempt) + random.random()
+                                await asyncio.sleep(wait_time)
+                            else:
+                                return None
+                            
+            except asyncio.TimeoutError:
+                logger.error(f"⏰ ТАЙМАУТ (попытка {attempt + 1}, URL {url_idx + 1})")
+                # Экспоненциальная задержка перед повтором
+                wait_time = (2 ** attempt) + random.random()
+                await asyncio.sleep(wait_time)
+                
+            except aiohttp.ClientError as e:
+                logger.error(f"🌐 Сетевая ошибка: {e}")
+                wait_time = (2 ** attempt) + random.random()
+                await asyncio.sleep(wait_time)
+                
+            except Exception as e:
+                logger.error(f"💥 Неожиданная ошибка: {e}")
+                wait_time = (2 ** attempt) + random.random()
+                await asyncio.sleep(wait_time)
     
-    logger.error(f"Все {retry_count} попыток вызова DeepSeek API не удались")
+    logger.error("❌ ВСЕ ПОПЫТКИ ВЫЗОВА DeepSeek API НЕ УДАЛИСЬ")
     return None
 
 def generate_smart_questions(scores):
