@@ -1400,6 +1400,7 @@ async def call_deepseek(prompt, system_message="", max_tokens=500, retry_count=3
     headers = {
         "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
         "Content-Type": "application/json",
+        "Accept": "application/json",  # Добавлено
         "Accept-Encoding": "gzip, deflate",
     }
 
@@ -1470,8 +1471,12 @@ async def call_deepseek(prompt, system_message="", max_tokens=500, retry_count=3
                                 continue
                         else:
                             # Ошибка - читаем как текст
-                            error_text = await response.text()
-                            logger.error(f"❌ Ошибка {response.status}: {error_text[:500]}")
+                            try:
+                                error_text = await response.text()
+                                logger.error(f"❌ Ошибка {response.status}: {error_text[:500]}")
+                            except:
+                                logger.error(f"❌ Ошибка {response.status}: не удалось прочитать тело ответа")
+                                error_text = ""
                             
                             if response.status == 401:
                                 logger.error("🔑 НЕВЕРНЫЙ API КЛЮЧ!")
@@ -1482,12 +1487,17 @@ async def call_deepseek(prompt, system_message="", max_tokens=500, retry_count=3
                                 await asyncio.sleep(wait_time)
                             elif response.status == 400:
                                 logger.error("🔧 Некорректный запрос - возможно, слишком большой max_tokens или проблема с форматом")
+                                # Пробуем прочитать ответ как текст еще раз для диагностики
+                                if error_text:
+                                    logger.error(f"📄 Тело ответа (первые 500 символов): {error_text[:500]}")
                                 wait_time = (2 ** attempt) + random.random()
                                 await asyncio.sleep(wait_time)
                             elif response.status >= 500:
+                                logger.error(f"🔧 Серверная ошибка DeepSeek")
                                 wait_time = (2 ** attempt) + random.random()
                                 await asyncio.sleep(wait_time)
                             else:
+                                logger.error(f"❌ Необработанная ошибка {response.status}")
                                 return None
                             
             except asyncio.TimeoutError:
