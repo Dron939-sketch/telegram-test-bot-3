@@ -2,13 +2,13 @@
 # -*- coding: utf-8 -*-
 """
 ВИРТУАЛЬНЫЙ ПСИХОЛОГ - Матрица Поведений 4×6
-ПОЛНАЯ ВЕРСИЯ со всеми данными
+ПОЛНАЯ ВЕРСИЯ со всеми исправлениями
 """
 
 import os
 import json
 import logging
-import requests
+import aiohttp  # ✅ добавлен aiohttp
 import random
 import asyncio
 from statistics import mean
@@ -16,7 +16,7 @@ from dotenv import load_dotenv
 from aiogram import Bot, Dispatcher, types
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.filters import Command
-from aiogram import F
+# ✅ from aiogram import F - УДАЛЕН (не используется)
 
 # Загружаем переменные окружения
 load_dotenv()
@@ -243,6 +243,7 @@ QUESTIONS = {
 
 # ══════════════════════════════════════════════
 #  ПАТТЕРНЫ — ЧТО ПРОИСХОДИТ В ЖИЗНИ
+#  ✅ ПОЛНАЯ ВЕРСИЯ СО ВСЕМИ УРОВНЯМИ 1-6
 # ══════════════════════════════════════════════
 
 LIFE_PATTERNS = {
@@ -252,6 +253,7 @@ LIFE_PATTERNS = {
         3: "Вы часто соглашаетесь с тем с чем не согласны. Внешне удобный и гибкий человек — внутри копится напряжение. Периодически оно взрывается в неожиданных местах. Люди не понимают откуда агрессия — вы же всегда были согласны.",
         4: "Вы умеете держать лицо. Но цена высокая: хроническое расщепление между тем что показываете и тем что чувствуете. Люди видят маску и не знают кто за ней. Близость невозможна когда постоянно притворяешься.",
         5: "Ваша реакция уже зрелая — вы не взрываетесь и не замираете. Но есть риск: вы гасите конфликты даже когда их не нужно гасить. Иногда конфликт нужно позволить быть — он расставляет важные точки.",
+        6: "Вы умеете прямо защищать свои интересы — это редкий навык. Риск: атака становится первой реакцией даже там где можно договориться. Прямой конфликт там где он не нужен разрушает то что вы пытаетесь защитить. Работайте над выбором: когда атаковать, а когда достаточно уровня 5.",
     },
     "ТФ": {
         1: "Финансовая зависимость ограничивает все остальные выборы. Невозможно уйти с плохой работы, из токсичных отношений, из неудобного города — потому что нет ресурсного буфера. Каждое важное решение в жизни принимается под финансовым давлением.",
@@ -259,12 +261,15 @@ LIFE_PATTERNS = {
         3: "Есть обмен — но без накопления каждый раз начинаете с нуля. Много активности, много сделок, но ощущение что топчетесь на месте. Нет безопасности которую даёт запас.",
         4: "Вы много работаете и честно зарабатываете. Но есть потолок: время конечно, усилия конечны. Пока работаете — есть доход. Остановились — нет ничего. Вся система завязана на вас лично.",
         5: "У вас есть запас и это даёт реальную свободу. Вы можете отказаться от невыгодного. Риск: накопление становится самоцелью. Следующий шаг — заставить накопленное работать.",
+        6: "Вы выстраиваете системы которые работают без вашего постоянного участия — это высший уровень ресурсной стратегии. Риск: удалённость от реальности. Системы требуют обратной связи снизу — без неё накапливаются сбои которые вы не замечаете пока не становится поздно.",
     },
     "УБ": {
         1: "Непонятные ситуации накапливаются и управляют жизнью. Чего не понимаешь — не можешь изменить. Жизнь ощущается как что-то что с вами происходит, а не то что вы создаёте.",
         2: "Вы отдаёте управление жизнью внешним силам. Когда хорошо — повезло. Когда плохо — судьба, карма, злые люди. Личная ответственность минимальна. Это даёт покой но забирает власть над собственной жизнью.",
         3: "Вы зависите от чужих интерпретаций. Меняется авторитет — меняется ваша картина мира. Вами легко манипулировать через 'экспертное мнение'. Вы не знаете что думаете сами — только что сказали другие.",
         4: "Мир воспринимается как враждебный и непредсказуемый. Хроническое недоверие истощает и изолирует. Вы много думаете и анализируете — но выводы всегда одни: кто-то виноват, кто-то замышляет. Это активная работа ума направленная в ложную сторону.",
+        5: "Вы проверяете факты и делаете выводы сами — это ценный навык. Риск: бесконечная проверка без обобщений. Данные накапливаются — картина не складывается. Следующий шаг: из отдельных наблюдений строить принципы которые работают.",
+        6: "Вы мыслите моделями и видите закономерности там где другие видят случайности. Риск: теория опережает практику. Красивая модель которая не проверена реальностью — это интеллектуальное упражнение а не инструмент. Проверяйте свои модели действиями.",
     },
     "ЧВ": {
         1: "Отношения строятся на страхе потери а не на выборе. Терпите то что не нравится. Не можете быть честными — боитесь отвержения. Чем сильнее привязанность — тем меньше свободы. Другой человек становится вашей тюрьмой.",
@@ -272,6 +277,7 @@ LIFE_PATTERNS = {
         3: "Много поверхностных связей, мало глубоких. Устаёте от постоянной демонстрации. Чувствуете что люди любят образ а не вас. Страх: если перестать производить впечатление — уйдут.",
         4: "Вы хорошо понимаете людей — это ценный навык. Но используете его односторонне. Паттерн: получаете что хотите, но отношения не углубляются. Люди чувствуют что их используют — даже если не могут объяснить как.",
         5: "Ваш уровень зрелый. Вы умеете строить настоящие партнёрства. Риск: малый масштаб. Несколько глубоких связей — но мир больше вашего ближнего круга.",
+        6: "Вы управляете широкой сетью отношений и умеете соединять людей. Риск: поверхностность. Широкая сеть без глубоких опорных точек рассыпается при первом серьёзном испытании. Инвестируйте в 3-5 партнёрств с настоящей глубиной — они держат всю остальную сеть.",
     }
 }
 
@@ -479,11 +485,6 @@ def get_profile_text(scores):
         text += f"`[{bar}]` {lvl}/6 — *{info['name']}*\n"
         text += f"└ {info['desc']}\n\n"
     
-    sb = level(scores["СБ"])
-    tf = level(scores["ТФ"])
-    ub = level(scores["УБ"])
-    cv = level(scores["ЧВ"])
-    
     text += f"═══════════════════════\n"
     
     return text
@@ -498,42 +499,44 @@ def get_priority_order(scores: dict) -> list:
     else:
         return [k for k, _ in sorted(scores.items(), key=lambda x: x[1])]
 
-def call_deepseek(prompt, system_message="", max_tokens=500):
-    """Вызов DeepSeek API с ограничением длины"""
+# ✅ НОВАЯ АСИНХРОННАЯ ФУНКЦИЯ
+async def call_deepseek(prompt, system_message="", max_tokens=500):
+    """Асинхронный вызов DeepSeek API"""
     if not DEEPSEEK_API_KEY:
         return None
-    
+
+    headers = {
+        "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
+        "Content-Type": "application/json"
+    }
+
+    messages = []
+    if system_message:
+        messages.append({"role": "system", "content": system_message})
+    messages.append({"role": "user", "content": prompt})
+
+    data = {
+        "model": "deepseek-chat",
+        "messages": messages,
+        "temperature": 0.7,
+        "max_tokens": max_tokens,
+    }
+
     try:
-        headers = {
-            "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
-            "Content-Type": "application/json"
-        }
-        
-        messages = []
-        if system_message:
-            messages.append({"role": "system", "content": system_message})
-        messages.append({"role": "user", "content": prompt})
-        
-        data = {
-            "model": "deepseek-chat",
-            "messages": messages,
-            "temperature": 0.7,
-            "max_tokens": max_tokens,
-        }
-        
-        response = requests.post(
-            "https://api.deepseek.com/v1/chat/completions",
-            headers=headers,
-            json=data,
-            timeout=30
-        )
-        
-        if response.status_code == 200:
-            return response.json()["choices"][0]["message"]["content"]
-        else:
-            logger.error(f"API Error: {response.status_code}")
-            return None
-            
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                "https://api.deepseek.com/v1/chat/completions",
+                headers=headers,
+                json=data,
+                timeout=aiohttp.ClientTimeout(total=60)
+            ) as response:
+                if response.status == 200:
+                    result = await response.json()
+                    return result["choices"][0]["message"]["content"]
+                else:
+                    logger.error(f"API Error: {response.status}")
+                    return None
+
     except Exception as e:
         logger.error(f"DeepSeek API error: {e}")
         return None
@@ -602,13 +605,13 @@ async def start_command(message: types.Message):
     """Приветствие виртуального психолога"""
     user_id = message.from_user.id
     
+    # ✅ dialogue_history удален
     user_data[user_id] = {
         "stage": "menu",
         "scores": {k: [] for k in VECTORS},
         "current_vector": None,
         "current_question": 0,
-        "questions_order": [],
-        "dialogue_history": []
+        "questions_order": []
     }
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
@@ -636,13 +639,13 @@ async def callback_handler(callback: types.CallbackQuery):
     data = callback.data
     
     if user_id not in user_data:
+        # ✅ dialogue_history удален
         user_data[user_id] = {
             "stage": "menu",
             "scores": {k: [] for k in VECTORS},
             "current_vector": None,
             "current_question": 0,
-            "questions_order": [],
-            "dialogue_history": []
+            "questions_order": []
         }
     
     if data == "start_test":
@@ -700,14 +703,12 @@ async def callback_handler(callback: types.CallbackQuery):
             parse_mode='Markdown'
         )
     
+    # ✅ ИСПРАВЛЕНО: принимаем score напрямую, без +1
     elif data.startswith("answer_"):
-        parts = data.split("_")
-        answer_idx = int(parts[1])
-        
+        score = int(data.split("_")[1])  # ✅ достаём сразу балл
         user = user_data[user_id]
         current_vector = user["current_vector"]
-        
-        user["scores"][current_vector].append(answer_idx + 1)
+        user["scores"][current_vector].append(score)  # ✅ пишем напрямую
         await send_next_question(callback)
     
     elif data == "show_results":
@@ -739,13 +740,13 @@ async def callback_handler(callback: types.CallbackQuery):
         )
     
     elif data == "restart_test":
+        # ✅ dialogue_history удален
         user_data[user_id] = {
             "stage": "menu",
             "scores": {k: [] for k in VECTORS},
             "current_vector": None,
             "current_question": 0,
-            "questions_order": [],
-            "dialogue_history": []
+            "questions_order": []
         }
         keyboard = InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text="🧠 Начать тест", callback_data="start_test")],
@@ -759,7 +760,6 @@ async def callback_handler(callback: types.CallbackQuery):
         )
     
     elif data.startswith("ask_"):
-        # Обработка выбора умного вопроса
         idx = int(data.split("_")[1]) - 1
         questions = user_data[user_id].get("smart_questions", [])
         if 0 <= idx < len(questions):
@@ -786,12 +786,12 @@ async def send_next_question(callback: types.CallbackQuery):
             question = vector_questions[current_q_idx]
             
             keyboard = []
+            # ✅ ИСПРАВЛЕНО: передаём score, не индекс
             for i, (score, option) in enumerate(question["options"]):
-                # Убираем цифры из начала, если есть
                 clean_option = option.split(". ")[-1] if ". " in option else option
                 keyboard.append([InlineKeyboardButton(
                     text=clean_option[:50], 
-                    callback_data=f"answer_{i}"
+                    callback_data=f"answer_{score}"  # ✅ записываем сам балл
                 )])
             
             await callback.message.edit_text(
@@ -854,15 +854,16 @@ async def show_standard_analysis(callback: types.CallbackQuery):
     for key in ["ТФ", "СБ", "УБ", "ЧВ"]:
         lvl = level(scores[key])
         if key in LIFE_PATTERNS and lvl in LIFE_PATTERNS[key]:
-            # Берем только первые 150 символов для краткости
             pattern = LIFE_PATTERNS[key][lvl][:150] + "..."
             text += f"\n• *{VECTORS[key]['name']}*: {pattern}\n"
     
     # Корреляции
-    active = [c for c in CORRELATIONS if c["condition"](scores)]
+    # ✅ ИСПРАВЛЕНО: конвертируем в целые уровни
+    scores_as_levels = {k: level(v) for k, v in scores.items()}
+    active = [c for c in CORRELATIONS if c["condition"](scores_as_levels)]
     if active:
         text += "\n🔗 *СВЯЗИ*\n"
-        for c in active[:2]:  # Только первые 2 корреляции
+        for c in active[:2]:
             text += f"\n⚡ *{c['title']}*\n{c['solution']}\n"
     
     # Рекомендации
@@ -883,7 +884,6 @@ async def show_standard_analysis(callback: types.CallbackQuery):
         [InlineKeyboardButton(text="◀️ Назад", callback_data="show_results")]
     ])
     
-    # Разбиваем на части если текст слишком длинный
     if len(text) > 4000:
         parts = [text[i:i+4000] for i in range(0, len(text), 4000)]
         for i, part in enumerate(parts):
@@ -921,7 +921,8 @@ async def show_ai_analysis(callback: types.CallbackQuery):
 
 Без воды, только суть."""
     
-    response = call_deepseek(prompt, "Ты психолог. Отвечай кратко, 3-4 предложения.", max_tokens=300)
+    # ✅ ДОБАВЛЕН await
+    response = await call_deepseek(prompt, "Ты психолог. Отвечай кратко, 3-4 предложения.", max_tokens=300)
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="❓ Задать вопрос", callback_data="smart_questions")],
@@ -959,7 +960,8 @@ async def show_ai_recommendations(callback: types.CallbackQuery):
 
 Дай 3 КОНКРЕТНЫХ совета, что делать прямо сейчас. Каждый совет - 1 предложение."""
     
-    response = call_deepseek(prompt, "Ты коуч. Только конкретные действия.", max_tokens=300)
+    # ✅ ДОБАВЛЕН await
+    response = await call_deepseek(prompt, "Ты коуч. Только конкретные действия.", max_tokens=300)
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="◀️ Назад", callback_data="show_results")]
@@ -1032,7 +1034,8 @@ async def handle_smart_question(callback: types.CallbackQuery, question: str):
     
     prompt = f"Вопрос: {question}\n\nДай короткий, практичный ответ с учетом моего профиля."
     
-    response = call_deepseek(prompt, system_prompt, max_tokens=300)
+    # ✅ ДОБАВЛЕН await
+    response = await call_deepseek(prompt, system_prompt, max_tokens=300)
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="❓ Еще вопрос", callback_data="smart_questions")],
@@ -1067,22 +1070,18 @@ async def handle_message(message: types.Message):
     
     user = user_data[user_id]
     
-    # Проверяем, ждем ли мы вопрос
     if user.get("stage") != "awaiting_question":
         await message.answer("Используйте кнопки для навигации")
         return
     
-    # Проверяем, есть ли профиль
     if not all(len(v) > 0 for v in user["scores"].values()):
         await message.answer("Сначала пройдите тест через /start")
         return
     
     scores = {k: round(mean(v), 1) for k, v in user["scores"].items()}
     
-    # Показываем, что думаем
     thinking = await message.answer("🤔 *Думаю...*", parse_mode='Markdown')
     
-    # Формируем промпт с учетом профиля
     profile_summary = "\n".join([
         f"{VECTORS[k]['name']}: {level(v)} ур. ({VECTORS[k]['levels'][level(v)]['name']})"
         for k, v in scores.items()
@@ -1100,7 +1099,8 @@ async def handle_message(message: types.Message):
     
     user_prompt = f"Вопрос: {message.text}\n\nДай короткий, практичный ответ с учетом моего профиля."
     
-    response = call_deepseek(user_prompt, system_prompt, max_tokens=300)
+    # ✅ ДОБАВЛЕН await
+    response = await call_deepseek(user_prompt, system_prompt, max_tokens=300)
     
     await thinking.delete()
     
@@ -1121,7 +1121,6 @@ async def handle_message(message: types.Message):
             reply_markup=keyboard
         )
     
-    # Возвращаемся в обычный режим
     user["stage"] = "menu"
 
 # ══════════════════════════════════════════════
