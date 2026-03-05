@@ -2426,7 +2426,7 @@ async def show_results(callback: types.CallbackQuery):
         triggers_text = "\n".join([f"• {t}" for t in bottleneck_profile.get("triggers", [])])
         costs_text = "\n".join([f"• {c}" for c in bottleneck_profile.get("pain_costs", [])])
         
-        text += f"\n{vec['emoji']} *{bottleneck_vec['name']}* — уровень {bottleneck_lvl}/6\n"
+        text += f"\n{VECTORS[bottleneck_key]['emoji']} *{VECTORS[bottleneck_key]['name']}* — уровень {bottleneck_lvl}/6\n"
         text += f"{'━' * 18}\n\n"
         text += f"🎭 *{bottleneck_profile.get('archetype', '')}*\n"
         text += f"_{bottleneck_profile.get('archetype_desc', '')}_\n\n"
