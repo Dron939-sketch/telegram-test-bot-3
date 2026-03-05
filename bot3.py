@@ -2566,7 +2566,7 @@ async def show_ai_analysis_fallback(callback: types.CallbackQuery):
             raise
 
 async def show_ai_analysis(callback: types.CallbackQuery):
-    """Умный AI-анализ с fallback на локальные ответы"""
+    """Умный AI-анализ с улучшенным форматированием"""
     user_id = callback.from_user.id
     user = user_data[user_id]
     
@@ -2613,81 +2613,86 @@ async def show_ai_analysis(callback: types.CallbackQuery):
     active_correlations = [c for c in CORRELATIONS if c["condition"](scores_as_levels)]
     correlations_text = "\n".join([f"- {c['title']}" for c in active_correlations]) if active_correlations else "не обнаружены"
     
-    prompt = f"""ТЫ — ПСИХОЛОГ-АНАЛИТИК, АВТОР МЕТОДА VARIATICA. Твоя задача — написать глубокий, развернутый психологический портрет человека.
+    prompt = f"""ТЫ — ПСИХОЛОГ-АНАЛИТИК, АВТОР МЕТОДА VARIATICA. Твоя задача — написать психологический портрет человека.
 
-СТРУКТУРА АНАЛИЗА:
-1. ЗАГОЛОВОК: "{ticker} \"{bottleneck_profile.get('archetype', '')}\""
+СТРУКТУРА АНАЛИЗА (ОБЯЗАТЕЛЬНО):
+1. ЗАГОЛОВОК: "{ticker} «{bottleneck_profile.get('archetype', '')}»"
 2. АРХЕТИП: "{bottleneck_profile.get('archetype_desc', '')}"
 3. ЦИТАТА: "{bottleneck_profile.get('quote', '')}"
 
-4. БЛОК "ЭТО ТЫ, ЕСЛИ..." (5-6 пунктов с •):
-Используй конкретные сцены из жизни, телесные ощущения.
+4. БЛОК "ЭТО ТЫ, ЕСЛИ..." (6 пунктов с •):
+Используй короткие, конкретные сцены из жизни, телесные ощущения.
 
 5. БЛОК "СУТЬ ПРОБЛЕМЫ: ЧТО ИДЕТ НЕ ТАК":
-- Абзац о пути человека
-- Абзац с ключевой метафорой
-- Подзаголовок "Откуда это взялось" + абзац о происхождении
-- 4 пункта "Цена X." с конкретными потерями
+- Короткий абзац о пути человека
+- Одна ключевая метафора
+- Коротко "Откуда это взялось"
+- 4 пункта "Цена:" с конкретными потерями
 
-6. БЛОК "ПЕРВЫЙ ШАГ / ИНСТРУМЕНТ «...»:" (4 шага)
+6. БЛОК "ПЕРВЫЙ ШАГ / ИНСТРУМЕНТ" (4 четких шага)
 
-7. БЛОК "ЧТО ДАЛЬШЕ?":
-- Вступительный абзац
-- 5 пунктов с •
+7. БЛОК "ЧТО ДАЛЬШЕ?" (5 пунктов с •)
+
+ВАЖНО: Пиши КОРОТКО, без воды. Максимум 2500 символов.
 
 ДАННЫЕ ПОЛЬЗОВАТЕЛЯ:
-
-ГЛАВНЫЙ ПРОФИЛЬ:
 - Тикер: {ticker}
 - Вектор: {bottleneck_vec['name']}
-- Уровень: {bottleneck_lvl}/6
-- Название: {bottleneck_vec['levels'][bottleneck_lvl]['name']}
+- Уровень: {bottleneck_lvl}/6 — {bottleneck_vec['levels'][bottleneck_lvl]['name']}
 - Архетип: {bottleneck_profile.get('archetype', '')}
-- Описание: {bottleneck_profile.get('archetype_desc', '')}
 - Цитата: {bottleneck_profile.get('quote', '')}
-- Триггеры: {chr(10).join(['• ' + t for t in bottleneck_profile.get('triggers', [])])}
-- Откуда взялось: {bottleneck_profile.get('pain_origin', '')}
-- Цена: {chr(10).join(['• ' + c for c in bottleneck_profile.get('pain_costs', [])])}
-- Инструмент: {bottleneck_profile.get('immediate_tool', '')}
-
-ДРУГИЕ ВЕКТОРЫ:
-{''.join(vectors_data)}
-
-ВЗАИМОСВЯЗИ:
-{correlations_text}
-
-ТЕПЕРЬ НАПИШИ ПОЛНЫЙ АНАЛИЗ. НЕ СОКРАЩАЙ. ИСПОЛЬЗУЙ ВСЕ БЛОКИ."""
+- Инструмент: {bottleneck_profile.get('immediate_tool', '')[:200]}..."""
     
-    system_message = "Ты психолог с 20-летним опытом, автор метода Variatica. Твой стиль — метафоры, телесность, конкретные сцены, ирония, парадоксы."
-    response = await call_deepseek(prompt, system_message, max_tokens=3000)
+    system_message = "Ты психолог. Пиши коротко, метафорично, с эмодзи в заголовках."
+    response = await call_deepseek(prompt, system_message, max_tokens=2000)
     
-    # ВЕРТИКАЛЬНЫЕ КНОПКИ
+    # КНОПКИ (горизонтальные + вертикальные)
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="❓ Вопросы", callback_data="smart_questions")],
-        [InlineKeyboardButton(text="💡 Рекомендации", callback_data="ai_recommendations")],
-        [InlineKeyboardButton(text="◀️ Назад", callback_data="show_results")]
+        [
+            InlineKeyboardButton(text="❓ ВОПРОСЫ", callback_data="smart_questions"),
+            InlineKeyboardButton(text="💡 ЧТО ДЕЛАТЬ", callback_data="ai_recommendations")
+        ],
+        [
+            InlineKeyboardButton(text="🔞 ИНТИМНЫЙ ПРОФИЛЬ", callback_data="intimate_profile"),
+            InlineKeyboardButton(text="◀️ НАЗАД", callback_data="show_results")
+        ]
     ])
     
     if response:
-        if len(response) > 4000:
-            parts = [response[i:i+4000] for i in range(0, len(response), 4000)]
-            for i, part in enumerate(parts):
-                if i == 0:
-                    await callback.message.edit_text(
-                        f"🧠 *МЫСЛИ ПСИХОЛОГА*\n\n{part}",
-                        parse_mode='Markdown',
-                        reply_markup=keyboard if i == len(parts)-1 else None
-                    )
-                else:
-                    await callback.message.answer(part, parse_mode='Markdown')
-        else:
-            await callback.message.edit_text(
-                f"🧠 *МЫСЛИ ПСИХОЛОГА*\n\n{response}",
-                parse_mode='Markdown',
-                reply_markup=keyboard
-            )
+        # Добавляем эмодзи к заголовкам если их нет
+        formatted_response = response
+        formatted_response = formatted_response.replace("### ЭТО ТЫ, ЕСЛИ...", "### 🔍 *ЭТО ТЫ, ЕСЛИ...*")
+        formatted_response = formatted_response.replace("### СУТЬ ПРОБЛЕМЫ:", "### ⚠️ *СУТЬ ПРОБЛЕМЫ:*")
+        formatted_response = formatted_response.replace("### ПЕРВЫЙ ШАГ", "### 🛠 *ПЕРВЫЙ ШАГ*")
+        formatted_response = formatted_response.replace("### ЧТО ДАЛЬШЕ?", "### 🔮 *ЧТО ДАЛЬШЕ?*")
+        
+        await callback.message.edit_text(
+            f"🧠 *МЫСЛИ ПСИХОЛОГА*\n\n{formatted_response}",
+            parse_mode='Markdown',
+            reply_markup=keyboard
+        )
     else:
-        await show_ai_analysis_fallback(callback)
+        # Fallback с форматированием
+        fallback_text = FALLBACK_ANALYSIS[bottleneck_key][bottleneck_lvl]
+        
+        # Добавляем эмодзи к заголовкам
+        fallback_with_emoji = f"""
+### 🎭 *{bottleneck_key}-{bottleneck_lvl} {bottleneck_profile.get('archetype', '')}*
+
+{fallback_text}
+
+### 🔮 *ЧТО ДАЛЬШЕ?*
+
+• 🌱 *Работай над собой* — каждый день маленький шаг
+• 📈 *Отслеживай прогресс* — записывай изменения
+• 🤝 *Делись опытом* — с теми, кому доверяешь
+"""
+        
+        await callback.message.edit_text(
+            f"🧠 *МЫСЛИ ПСИХОЛОГА*\n\n{fallback_with_emoji}",
+            parse_mode='Markdown',
+            reply_markup=keyboard
+        )
 
 
 async def show_ai_recommendations(callback: types.CallbackQuery):
