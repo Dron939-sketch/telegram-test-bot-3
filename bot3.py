@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 ВИРТУАЛЬНЫЙ ПСИХОЛОГ - Матрица Поведений 4×6
-ПОЛНАЯ ВЕРСИЯ с живыми профилями уровней
+ПОЛНАЯ ВЕРСИЯ с живыми профилями уровней и НОВЫМ ДИЗАЙНОМ ЭКРАНОВ
 """
 
 import os
@@ -39,42 +39,54 @@ CLARIFICATION_ZONES = [1.49, 2.00, 2.50, 3.00, 3.50]
 CLARIFICATION_MARGIN = 0.12
 
 # ══════════════════════════════════════════════
-#  КОНСТАНТЫ ЭТАПОВ
+#  КОНСТАНТЫ ЭТАПОВ (ОБНОВЛЕНО: добавлены новые поля)
 # ══════════════════════════════════════════════
 
 STAGE_ORDER = ["СБ", "ТФ", "УБ", "ЧВ"]
 
 STAGE_INTROS = {
     "СБ": {
-        "title": "ЭТАП 1 из 4 — РЕАКЦИЯ НА УГРОЗУ",
+        "title": "ЭТАП 1 — РЕАКЦИЯ НА УГРОЗУ",
         "emoji": "🛡",
         "what": "Сейчас я исследую как вы реагируете когда на вас давят, угрожают или нарушают ваши границы.",
-        "why": "Это одна из самых базовых программ. Она запускается автоматически — вы часто не замечаете что уже среагировали.",
+        "why": "Эта реакция определяет ваши отношения с начальством, партнёрами и миром в целом. Вы либо отстаиваете себя, либо терпите, либо уходите от конфликтов.",
         "what_you_learn": "Узнаете свой автоматизм под давлением и поймёте насколько он вам помогает или мешает.",
+        "life_impact": "Эта реакция определяет ваши отношения с начальством, партнёрами и миром в целом. Вы либо отстаиваете себя, либо терпите, либо уходите от конфликтов.",
+        "strategy_impact": "Ваш способ реагировать на давление становится вашей жизненной стратегией. Если вы замираете — вы упускаете возможности. Если атакуете — создаёте конфликты там где их можно избежать.",
+        "trajectory": "От автоматических реакций (стопор, бегство) к осознанным (диалог, защита). Каждый следующий уровень даёт больше свободы выбора.",
         "questions_count": 8,
     },
     "ТФ": {
-        "title": "ЭТАП 2 из 4 — ДОБЫЧА РЕСУРСОВ",
+        "title": "ЭТАП 2 — ДОБЫЧА РЕСУРСОВ",
         "emoji": "💰",
         "what": "Сейчас я исследую как вы добываете деньги и материальные блага — вашу ресурсную стратегию.",
         "why": "Эта стратегия определяет не только доход, но и вашу реальную свободу. Нет ресурсов — нет выборов.",
         "what_you_learn": "Узнаете на каком уровне ваша стратегия и почему деньги ведут себя именно так.",
+        "life_impact": "Ваша ресурсная стратегия определяет не только доход, но и вашу реальную свободу. Нет ресурсов — нет выборов.",
+        "strategy_impact": "То как вы добываете ресурсы формирует всю вашу жизнь: от места жительства до отношений. Это базовая программа выживания.",
+        "trajectory": "От зависимости и собирательства к управлению системами и созданию капитала.",
         "questions_count": 8,
     },
     "УБ": {
-        "title": "ЭТАП 3 из 4 — ПОНИМАНИЕ МИРА",
+        "title": "ЭТАП 3 — ПОНИМАНИЕ МИРА",
         "emoji": "🔍",
         "what": "Сейчас я исследую как вы объясняете себе непонятное — кризисы, странное поведение людей, неудачи.",
         "why": "То как вы объясняете мир определяет что вы будете с ним делать. Разные объяснения — разные действия.",
         "what_you_learn": "Узнаете какая картина мира у вас в голове и даёт ли она вам контроль над ситуацией.",
+        "life_impact": "Ваша картина мира определяет все ваши решения. Если мир враждебен — вы защищаетесь. Если мир случаен — вы ждёте.",
+        "strategy_impact": "Объяснения становятся действиями. То как вы понимаете происходящее напрямую влияет на то, что вы делаете.",
+        "trajectory": "От отрицания и магии к системному мышлению и построению моделей.",
         "questions_count": 8,
     },
     "ЧВ": {
-        "title": "ЭТАП 4 из 4 — ОТНОШЕНИЯ С ЛЮДЬМИ",
+        "title": "ЭТАП 4 — ОТНОШЕНИЯ С ЛЮДЬМИ",
         "emoji": "🤝",
         "what": "Последний этап. Исследую вашу стратегию в отношениях — как строите связи, просите, влияете.",
         "why": "Все ваши цели достигаются через людей или с людьми. Стратегия здесь решает многое.",
         "what_you_learn": "Узнаете ваш паттерн в отношениях и почему они складываются именно так.",
+        "life_impact": "Все ваши цели достигаются через людей или с людьми. Отношения — это среда в которой вы живёте.",
+        "strategy_impact": "Ваш способ строить связи определяет глубину отношений, ваше влияние и поддержку в трудные моменты.",
+        "trajectory": "От зависимости и копирования к партнёрству и созданию сетей.",
         "questions_count": 8,
     },
 }
@@ -120,7 +132,7 @@ STAGE_FEEDBACKS = {
 
 VECTORS = {
     "СБ": {
-        "name": "РЕАКЦИЯ НА УГРОЗУ",
+        "name": "Реакция на угрозу",
         "emoji": "🛡",
         "stimulus": "реакция когда на вас давят или угрожают",
         "levels": {
@@ -133,7 +145,7 @@ VECTORS = {
         }
     },
     "ТФ": {
-        "name": "ДОБЫЧА РЕСУРСОВ",
+        "name": "Добыча ресурсов",
         "emoji": "💰",
         "stimulus": "стратегия когда нужны деньги или материальные блага",
         "levels": {
@@ -146,7 +158,7 @@ VECTORS = {
         }
     },
     "УБ": {
-        "name": "ПОНИМАНИЕ МИРА",
+        "name": "Понимание мира",
         "emoji": "🔍",
         "stimulus": "ответ когда непонятно что происходит",
         "levels": {
@@ -159,7 +171,7 @@ VECTORS = {
         }
     },
     "ЧВ": {
-        "name": "ОТНОШЕНИЯ С ЛЮДЬМИ",
+        "name": "Отношения с людьми",
         "emoji": "🤝",
         "stimulus": "стратегия в отношении других людей",
         "levels": {
@@ -557,7 +569,7 @@ CORRELATIONS = [
         "condition": lambda s: s["УБ"] >= 4 and s["ТФ"] <= 2,
         "title": "Понимаю как устроен мир → Не могу реализовать",
         "explanation": "Высокое понимание при низких ресурсах — мучительная конфигурация. Видите как должно быть. Понимаете почему не так. Но нет ресурсов чтобы изменить. Паттерн: умный советчик который сам живёт плохо.",
-        "solution": "Используйте понимание как инструмент для роста ТФ — это ваше реальное преимущество."
+        "solution": "Используйте понимание как инструмент для роста ТФ — это ваше реальное преимущество.",
     },
 ]
 
@@ -1435,8 +1447,9 @@ def level(score):
     else:
         return 6
 
+# НОВАЯ ФУНКЦИЯ: текст профиля без баров и цифр
 def get_profile_text(scores):
-    """Формирует текст профиля с эмодзи"""
+    """Формирует текст профиля без баров и цифр (НОВЫЙ ДИЗАЙН)"""
     text = "📊 *ВАШ ПРОФИЛЬ*\n\n"
     
     for key, score in scores.items():
@@ -1444,15 +1457,9 @@ def get_profile_text(scores):
         lvl = level(score)
         info = vec["levels"][lvl]
         
-        filled = "█" * lvl
-        empty = "░" * (6 - lvl)
-        bar = filled + empty
-        
-        text += f"{vec['emoji']} *{vec['name']}*\n"
-        text += f"`[{bar}]` {lvl}/6 — *{info['name']}*\n"
+        text += f"{vec['emoji']} *{vec['name']}* — *{info['name']}*\n"
         text += f"└ {info['desc']}\n\n"
     
-    text += f"═══════════════════════\n"
     return text
 
 def get_priority_order(scores: dict) -> list:
@@ -1577,33 +1584,57 @@ def check_consistency(scores_list: list) -> bool:
 #  ФУНКЦИИ ЭТАПОВ
 # ══════════════════════════════════════════════
 
-async def show_stage_intro(callback: types.CallbackQuery, stage_key: str):
+# НОВАЯ ФУНКЦИЯ: экран деталей этапа
+async def show_stage_details(callback: types.CallbackQuery, stage_key: str):
+    """Показывает детальную информацию об этапе"""
     intro = STAGE_INTROS[stage_key]
-    stage_num = STAGE_ORDER.index(stage_key) + 1
+    vec = VECTORS[stage_key]
     
     text = (
-        f"{intro['emoji']} *{intro['title']}*\n"
+        f"{vec['emoji']} *{intro['title']}*\n"
         f"{'━' * 25}\n\n"
-        f"*Что я исследую:*\n"
+        f"🔍 *Что я исследую:*\n"
         f"{intro['what']}\n\n"
-        f"*Почему это важно:*\n"
-        f"{intro['why']}\n\n"
-        f"*Что вы узнаете:*\n"
-        f"{intro['what_you_learn']}\n\n"
-        f"📝 *{intro['questions_count']} вопросов*\n\n"
-        f"_Выбирайте первый ответ который приходит в голову.\n"
-        f"Нет правильных или неправильных._"
+        f"💫 *Как это влияет на жизнь:*\n"
+        f"{intro['life_impact']}\n\n"
+        f"🎯 *Влияние на стратегию:*\n"
+        f"{intro['strategy_impact']}\n\n"
+        f"📈 *Траектория развития:*\n"
+        f"{intro['trajectory']}"
     )
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(
-            text=f"Начать этап {stage_num} →",
-            callback_data=f"begin_stage_{stage_key}"
-        )]
+        [InlineKeyboardButton(text="◀️ Назад", callback_data=f"stage_intro_{stage_key}")]
     ])
     
     await callback.message.edit_text(text, reply_markup=keyboard, parse_mode='Markdown')
 
+# ОБНОВЛЕННАЯ ФУНКЦИЯ: экран введения в этап с двумя кнопками
+async def show_stage_intro(callback: types.CallbackQuery, stage_key: str):
+    """Показывает введение в этап с кнопками Начать и Детали"""
+    intro = STAGE_INTROS[stage_key]
+    vec = VECTORS[stage_key]
+    stage_num = STAGE_ORDER.index(stage_key) + 1
+    
+    text = (
+        f"{vec['emoji']} *{intro['title']}*\n"
+        f"{'━' * 25}\n\n"
+        f"🔍 *Что я исследую:*\n"
+        f"{intro['what']}\n\n"
+        f"📝 *{intro['questions_count']} вопросов*\n\n"
+        f"💭 _Выбирайте первый ответ который приходит в голову.\n"
+        f"Нет правильных или неправильных._"
+    )
+    
+    # ДВЕ КНОПКИ В РЯД
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(text=f"Начать этап {stage_num}", callback_data=f"begin_stage_{stage_key}"),
+            InlineKeyboardButton(text="🔍 Детали", callback_data=f"stage_details_{stage_key}")
+        ]
+    ])
+    
+    await callback.message.edit_text(text, reply_markup=keyboard, parse_mode='Markdown')
 
 async def show_stage_feedback(callback: types.CallbackQuery, stage_key: str):
     user_id = callback.from_user.id
@@ -1630,7 +1661,7 @@ async def show_stage_feedback(callback: types.CallbackQuery, stage_key: str):
     level_info = vec["levels"][lvl]
     feedback = STAGE_FEEDBACKS[stage_key].get(lvl, "Анализирую ваши ответы...")
     
-    # ── НОВОЕ: получаем профиль уровня ──────────────────────────────────────
+    # Получаем профиль уровня
     profile = LEVEL_PROFILES.get(stage_key, {}).get(lvl, {})
     archetype_block = ""
     if profile:
@@ -1639,7 +1670,6 @@ async def show_stage_feedback(callback: types.CallbackQuery, stage_key: str):
             f"_{profile['archetype_desc']}_\n\n"
             f"💬 {profile['quote']}\n"
         )
-    # ────────────────────────────────────────────────────────────────────────
     
     stage_num = STAGE_ORDER.index(stage_key) + 1
     stages_done = "✅ " * stage_num + "⬜ " * (4 - stage_num)
@@ -1677,22 +1707,22 @@ async def show_stage_feedback(callback: types.CallbackQuery, stage_key: str):
     
     await callback.message.edit_text(text, reply_markup=keyboard, parse_mode='Markdown')
 
-
+# ОБНОВЛЕННАЯ ФУНКЦИЯ: экран вопроса с новым дизайном
 async def send_next_question(callback: types.CallbackQuery):
+    """Отправляет следующий вопрос с новым дизайном"""
     user_id = callback.from_user.id
     user = user_data[user_id]
     
     current_stage = user["current_stage"]
     current_q_idx = user["current_question"]
     stage_questions = QUESTIONS[current_stage]
-    stage_num = STAGE_ORDER.index(current_stage) + 1
-    
     total_in_stage = len(stage_questions)
     
-    progress = int((current_q_idx / total_in_stage) * 8)
-    progress_bar = "█" * progress + "░" * (8 - progress)
+    # Прогресс-бар из 8 символов
+    progress = current_q_idx
+    progress_bar = "█" * progress + "░" * (total_in_stage - progress)
     
-    stages_done = "✅ " * (stage_num - 1) + "🔵 " + "⬜ " * (4 - stage_num)
+    vec = VECTORS[current_stage]
     
     if current_q_idx < total_in_stage:
         question = stage_questions[current_q_idx]
@@ -1704,13 +1734,12 @@ async def send_next_question(callback: types.CallbackQuery):
                 callback_data=f"answer_{score}"
             )])
         
-        vec = VECTORS[current_stage]
-        
+        # НОВЫЙ ДИЗАЙН: только название вектора, вопрос, разделитель и прогресс внизу
         text = (
-            f"{stages_done}\n"
-            f"{vec['emoji']} Этап {stage_num}/4 — *{vec['name']}*\n"
-            f"`[{progress_bar}]` вопрос {current_q_idx + 1}/{total_in_stage}\n\n"
-            f"*{question['text']}*"
+            f"{vec['emoji']} *{vec['name'].upper()}*\n\n"
+            f"{question['text']}\n\n"
+            f"{'━' * 25}\n"
+            f"▸ Вопрос {current_q_idx + 1}/{total_in_stage} • {progress_bar}"
         )
         
         await callback.message.edit_text(
@@ -1836,6 +1865,7 @@ async def show_level_detail(callback: types.CallbackQuery, vector_key: str):
 #  ОБРАБОТЧИКИ TELEGRAM
 # ══════════════════════════════════════════════
 
+# ОБНОВЛЕННАЯ ФУНКЦИЯ: стартовое сообщение с новым дизайном
 async def start_command(message: types.Message):
     user_id = message.from_user.id
     
@@ -1847,17 +1877,20 @@ async def start_command(message: types.Message):
         "profile_complete": False,
     }
     
+    # НОВЫЙ ДИЗАЙН: две кнопки в ряд
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🧠 Начать тест", callback_data="start_test")],
-        [InlineKeyboardButton(text="ℹ️ О методе", callback_data="about")],
-        [InlineKeyboardButton(text="🤖 О AI", callback_data="ai_info")]
+        [
+            InlineKeyboardButton(text="🧠 Начать тест", callback_data="start_test"),
+            InlineKeyboardButton(text="📖 Подробнее", callback_data="about")
+        ]
     ])
     
     user_name = message.from_user.first_name or "Пользователь"
     
+    # НОВЫЙ ТЕКСТ ПРИВЕТСТВИЯ
     await message.answer(
         f"🧠 *ВИРТУАЛЬНЫЙ ПСИХОЛОГ*\n\n"
-        f"{user_name}, привет.\n\n"
+        f"{user_name}, привет! 👋\n\n"
         f"Я исследую четыре области вашей психики:\n\n"
         f"🛡 *Реакция на угрозу* — что происходит под давлением\n"
         f"💰 *Добыча ресурсов* — как вы взаимодействуете с деньгами\n"
@@ -1866,9 +1899,7 @@ async def start_command(message: types.Message):
         f"{'━' * 25}\n\n"
         f"📋 *32 вопроса* — 4 этапа по 8\n"
         f"⏱ *12–15 минут*\n"
-        f"🔒 *Всё конфиденциально*\n\n"
-        f"_Перед каждым этапом я объясню что исследую\n"
-        f"и почему это важно._",
+        f"🔒 *Всё конфиденциально*",
         reply_markup=keyboard,
         parse_mode='Markdown'
     )
@@ -1924,15 +1955,21 @@ async def callback_handler(callback: types.CallbackQuery):
     
     elif data == "back_to_menu":
         keyboard = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="🧠 Начать тест", callback_data="start_test")],
-            [InlineKeyboardButton(text="ℹ️ О методе", callback_data="about")],
-            [InlineKeyboardButton(text="🤖 О AI", callback_data="ai_info")]
+            [
+                InlineKeyboardButton(text="🧠 Начать тест", callback_data="start_test"),
+                InlineKeyboardButton(text="📖 Подробнее", callback_data="about")
+            ]
         ])
         await callback.message.edit_text(
             "🧠 *ВИРТУАЛЬНЫЙ ПСИХОЛОГ*\n\nГотовы начать?",
             reply_markup=keyboard,
             parse_mode='Markdown'
         )
+    
+    # НОВАЯ ВЕТКА: детали этапа
+    elif data.startswith("stage_details_"):
+        stage_key = data.replace("stage_details_", "")
+        await show_stage_details(callback, stage_key)
     
     elif data.startswith("stage_intro_"):
         stage_key = data.replace("stage_intro_", "")
@@ -2029,9 +2066,10 @@ async def callback_handler(callback: types.CallbackQuery):
             "profile_complete": False,
         }
         keyboard = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="🧠 Начать тест", callback_data="start_test")],
-            [InlineKeyboardButton(text="ℹ️ О методе", callback_data="about")],
-            [InlineKeyboardButton(text="🤖 О AI", callback_data="ai_info")]
+            [
+                InlineKeyboardButton(text="🧠 Начать тест", callback_data="start_test"),
+                InlineKeyboardButton(text="📖 Подробнее", callback_data="about")
+            ]
         ])
         await callback.message.edit_text(
             "🧠 *ВИРТУАЛЬНЫЙ ПСИХОЛОГ*\n\nГотовы начать?",
@@ -2051,6 +2089,7 @@ async def callback_handler(callback: types.CallbackQuery):
 #  ФУНКЦИИ РЕЗУЛЬТАТОВ
 # ══════════════════════════════════════════════
 
+# ОБНОВЛЕННАЯ ФУНКЦИЯ: показ результатов с новым дизайном
 async def show_results(callback: types.CallbackQuery):
     user_id = callback.from_user.id
     user = user_data[user_id]
@@ -2058,34 +2097,22 @@ async def show_results(callback: types.CallbackQuery):
     scores = {k: round(mean(v), 1) for k, v in user["scores"].items()}
     text = get_profile_text(scores)
     
-    bottleneck = get_priority_order(scores)[0]
-    text += f"🎯 *УЗКОЕ МЕСТО:* {VECTORS[bottleneck]['emoji']} {VECTORS[bottleneck]['name']}\n\n"
+    bottleneck_key = get_priority_order(scores)[0]
+    text += f"🎯 *УЗКОЕ МЕСТО:* {VECTORS[bottleneck_key]['name']}\n\n"
     
+    # НОВЫЙ ДИЗАЙН: 4 кнопки внизу
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [
-            InlineKeyboardButton(text=f"🛡 Подробнее", callback_data="detail_СБ"),
-            InlineKeyboardButton(text=f"💰 Подробнее", callback_data="detail_ТФ"),
-        ],
-        [
-            InlineKeyboardButton(text=f"🔍 Подробнее", callback_data="detail_УБ"),
-            InlineKeyboardButton(text=f"🤝 Подробнее", callback_data="detail_ЧВ"),
-        ],
         [
             InlineKeyboardButton(text="🧠 Анализ", callback_data="ai_analysis"),
             InlineKeyboardButton(text="❓ Вопросы", callback_data="smart_questions")
         ],
         [
             InlineKeyboardButton(text="💡 Рекомендации", callback_data="ai_recommendations"),
-            InlineKeyboardButton(text="📋 Подробно", callback_data="standard_analysis")
-        ],
-        [
-            InlineKeyboardButton(text="🔄 Заново", callback_data="restart_test"),
-            InlineKeyboardButton(text="🏠 Меню", callback_data="back_to_menu")
+            InlineKeyboardButton(text="◀️ Назад", callback_data="back_to_menu")
         ]
     ])
     
     await callback.message.edit_text(text, reply_markup=keyboard, parse_mode='Markdown')
-
 
 async def show_standard_analysis(callback: types.CallbackQuery):
     user_id = callback.from_user.id
@@ -2110,13 +2137,13 @@ async def show_standard_analysis(callback: types.CallbackQuery):
     order = get_priority_order(scores)
     text += "\n📋 *РЕКОМЕНДАЦИИ*\n"
     
-    icons = ["🔴", "🟡", "🟢", "⚪"]
+    icons = ["●", "○", "○", "○"]
     labels = ["НАЧАТЬ ЗДЕСЬ", "СЛЕДУЮЩИЙ ШАГ", "РАЗВИВАТЬ", "ПОДДЕРЖИВАТЬ"]
     
     for i, key in enumerate(order):
         lvl = level(scores[key])
         if key in RECOMMENDATIONS and lvl in RECOMMENDATIONS[key]:
-            text += f"\n{icons[i] if i < len(icons) else '⚪'} *{VECTORS[key]['name']}* — {labels[i] if i < len(labels) else 'ПОДДЕРЖИВАТЬ'}\n"
+            text += f"\n{icons[i] if i < len(icons) else '○'} *{VECTORS[key]['name']}* — {labels[i] if i < len(labels) else 'ПОДДЕРЖИВАТЬ'}\n"
             for rec in RECOMMENDATIONS[key][lvl][:2]:
                 text += f"  • {rec}\n"
     
@@ -2136,87 +2163,132 @@ async def show_standard_analysis(callback: types.CallbackQuery):
         await callback.message.edit_text(text, reply_markup=keyboard, parse_mode='Markdown')
 
 
+# ОБНОВЛЕННАЯ ФУНКЦИЯ: AI-анализ с улучшенным промптом
 async def show_ai_analysis(callback: types.CallbackQuery):
+    """Персонализированный AI-анализ в стиле Variatica"""
     user_id = callback.from_user.id
     scores = {k: round(mean(v), 1) for k, v in user_data[user_id]["scores"].items()}
     
-    await callback.message.edit_text("🧠 *Думаю...*", parse_mode='Markdown')
+    await callback.message.edit_text("🧠 *Анализирую ваш профиль...*", parse_mode='Markdown')
     
-    # Узкое место
+    # Определяем узкое место
     bottleneck_key = get_priority_order(scores)[0]
     bottleneck_lvl = level(scores[bottleneck_key])
-    bn_profile = LEVEL_PROFILES.get(bottleneck_key, {}).get(bottleneck_lvl, {})
+    bottleneck_profile = LEVEL_PROFILES.get(bottleneck_key, {}).get(bottleneck_lvl, {})
+    bottleneck_vec = VECTORS[bottleneck_key]
     
-    # Профиль с полным контекстом
-    profile_lines = []
-    for k, v in scores.items():
-        lvl = level(v)
-        p = LEVEL_PROFILES.get(k, {}).get(lvl, {})
-        archetype = p.get("archetype", "")
-        profile_lines.append(
-            f"{VECTORS[k]['emoji']} {VECTORS[k]['name']}: "
-            f"уровень {lvl}/6 — {VECTORS[k]['levels'][lvl]['name']}"
-            + (f" ({archetype})" if archetype else "")
-        )
-    profile_summary = "\n".join(profile_lines)
+    # Формируем тикер
+    ticker = f"{bottleneck_key}-{bottleneck_lvl}"
+    
+    # Собираем данные по всем векторам
+    vectors_data = []
+    for key in STAGE_ORDER:
+        lvl = level(scores[key])
+        profile = LEVEL_PROFILES.get(key, {}).get(lvl, {})
+        vec = VECTORS[key]
+        vectors_data.append(f"""
+{key} ({vec['name']}):
+- Уровень: {lvl}/6
+- Название: {vec['levels'][lvl]['name']}
+- Архетип: {profile.get('archetype', 'не определен')}
+- Описание: {profile.get('archetype_desc', '')}
+- Цитата: {profile.get('quote', '')}
+""")
     
     # Активные корреляции
     scores_as_levels = {k: level(v) for k, v in scores.items()}
     active_correlations = [c for c in CORRELATIONS if c["condition"](scores_as_levels)]
-    correlation_text = (
-        "\n".join([f"— {c['title']}" for c in active_correlations])
-        if active_correlations else "не обнаружены"
-    )
+    correlations_text = "\n".join([f"- {c['title']}" for c in active_correlations]) if active_correlations else "не обнаружены"
     
-    # Контекст узкого места
-    bn_context = ""
-    if bn_profile:
-        bn_context = (
-            f"Архетип: {bn_profile.get('archetype', '')}\n"
-            f"Что происходит: {bn_profile.get('pain_origin', '')}\n"
-            f"Что теряет: {'; '.join(bn_profile.get('pain_costs', []))}"
-        )
+    # УЛУЧШЕННЫЙ ПРОМПТ
+    prompt = f"""ТЫ — ПСИХОЛОГ-АНАЛИТИК, АВТОР МЕТОДА VARIATICA. Твоя задача — написать глубокий, развернутый психологический портрет человека.
+
+СТРУКТУРА АНАЛИЗА:
+1. ЗАГОЛОВОК: "{ticker} \"{bottleneck_profile.get('archetype', '')}\""
+2. АРХЕТИП: "{bottleneck_profile.get('archetype_desc', '')}"
+3. ЦИТАТА: "{bottleneck_profile.get('quote', '')}"
+
+4. БЛОК "ЭТО ТЫ, ЕСЛИ..." (5-6 пунктов с •):
+Используй конкретные сцены из жизни, телесные ощущения. Примеры:
+• "Ты можешь с ходу назвать свою рыночную стоимость..."
+• "Утром за кофе ты первым делом листаешь сайты..."
+
+5. БЛОК "СУТЬ ПРОБЛЕМЫ: ЧТО ИДЕТ НЕ ТАК":
+- Абзац о пути человека: "Ты прошел путь. Был этап... Потом этап... Ты дошел до..."
+- Абзац с ключевой метафорой: "Твой мозг — это..."
+- Подзаголовок "Откуда это взялось" + абзац о происхождении
+- 4 пункта "Цена X." с конкретными потерями (каждый 2-3 предложения)
+
+6. БЛОК "ПЕРВЫЙ ШАГ / ИНСТРУМЕНТ «...»:" (4 шага)
+- Вступительный абзац с иронией
+- Шаг 1. ... (конкретное действие)
+- Шаг 2. ... (конкретное действие)
+- Шаг 3. ... (конкретное действие)
+- Шаг 4. ... (конкретное действие)
+- Заключительный абзац
+
+7. БЛОК "ЧТО ДАЛЬШЕ?":
+- Вступительный абзац
+- 5 пунктов с •, жирные заголовки
+
+ДАННЫЕ ПОЛЬЗОВАТЕЛЯ:
+
+ГЛАВНЫЙ ПРОФИЛЬ:
+- Тикер: {ticker}
+- Вектор: {bottleneck_vec['name']}
+- Уровень: {bottleneck_lvl}/6
+- Название: {bottleneck_vec['levels'][bottleneck_lvl]['name']}
+- Архетип: {bottleneck_profile.get('archetype', '')}
+- Описание: {bottleneck_profile.get('archetype_desc', '')}
+- Цитата: {bottleneck_profile.get('quote', '')}
+- Триггеры: {chr(10).join(['• ' + t for t in bottleneck_profile.get('triggers', [])])}
+- Откуда взялось: {bottleneck_profile.get('pain_origin', '')}
+- Цена: {chr(10).join(['• ' + c for c in bottleneck_profile.get('pain_costs', [])])}
+- Инструмент: {bottleneck_profile.get('immediate_tool', '')}
+
+ДРУГИЕ ВЕКТОРЫ:
+{''.join(vectors_data)}
+
+ВЗАИМОСВЯЗИ:
+{correlations_text}
+
+ТЕПЕРЬ НАПИШИ ПОЛНЫЙ АНАЛИЗ В ТОЧНОСТИ КАК В ПРИМЕРЕ. НЕ СОКРАЩАЙ. ИСПОЛЬЗУЙ ВСЕ БЛОКИ."""
     
-    prompt = f"""Профиль человека:
-{profile_summary}
-
-Главное узкое место: {VECTORS[bottleneck_key]['name']} (уровень {bottleneck_lvl}/6)
-{bn_context}
-
-Взаимосвязи между векторами:
-{correlation_text}
-
-Напиши анализ ровно 3-4 предложения. Структура:
-1. Ключевая особенность этого конкретного профиля
-2. Что из этого следует в реальной жизни прямо сейчас
-3. Первый конкретный шаг
-
-Обращайся на "вы". Говори про этого конкретного человека — не общие слова про уровни."""
-
-    system_message = (
-        "Ты психолог-аналитик. Ты видишь конкретный профиль конкретного человека. "
-        "Не объясняй методику — говори про человека. "
-        "Не используй вводные обороты типа 'Ваш профиль показывает' или 'Исходя из результатов'. "
-        "Максимум 4 предложения. На русском."
-    )
-    
-    response = await call_deepseek(prompt, system_message, max_tokens=350)
+    system_message = "Ты психолог с 20-летним опытом, автор метода Variatica. Твой стиль — метафоры, телесность, конкретные сцены, ирония, парадоксы. Пиши полноценно, не сокращая."
+    response = await call_deepseek(prompt, system_message, max_tokens=3000)
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="❓ Вопросы", callback_data="smart_questions")],
+        [
+            InlineKeyboardButton(text="❓ Вопросы", callback_data="smart_questions"),
+            InlineKeyboardButton(text="💡 Рекомендации", callback_data="ai_recommendations")
+        ],
         [InlineKeyboardButton(text="◀️ Назад", callback_data="show_results")]
     ])
     
     if response:
-        await callback.message.edit_text(
-            f"🧠 *АНАЛИЗ*\n\n{response}",
-            parse_mode='Markdown',
-            reply_markup=keyboard
-        )
+        if len(response) > 4000:
+            parts = [response[i:i+4000] for i in range(0, len(response), 4000)]
+            for i, part in enumerate(parts):
+                if i == 0:
+                    await callback.message.edit_text(
+                        f"🧠 *ПЕРСОНАЛЬНЫЙ АНАЛИЗ*\n\n{part}",
+                        parse_mode='Markdown',
+                        reply_markup=keyboard if i == len(parts)-1 else None
+                    )
+                else:
+                    await callback.message.answer(part, parse_mode='Markdown')
+        else:
+            await callback.message.edit_text(
+                f"🧠 *ПЕРСОНАЛЬНЫЙ АНАЛИЗ*\n\n{response}",
+                parse_mode='Markdown',
+                reply_markup=keyboard
+            )
     else:
         await callback.message.edit_text(
-            "⚠️ Временно недоступно. Попробуйте позже.",
-            reply_markup=keyboard
+            "⚠️ Не удалось получить анализ. Попробуйте позже.",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="◀️ Назад", callback_data="show_results")]
+            ])
         )
 
 
@@ -2230,47 +2302,30 @@ async def show_ai_recommendations(callback: types.CallbackQuery):
     bottleneck_lvl = level(scores[bottleneck_key])
     bn_profile = LEVEL_PROFILES.get(bottleneck_key, {}).get(bottleneck_lvl, {})
     
-    # Профиль
     profile_summary = "\n".join([
-        f"{VECTORS[k]['emoji']} {VECTORS[k]['name']}: "
-        f"уровень {level(v)}/6 — {VECTORS[k]['levels'][level(v)]['name']}"
+        f"{VECTORS[k]['emoji']} {VECTORS[k]['name']}: уровень {level(v)}/6 — {VECTORS[k]['levels'][level(v)]['name']}"
         for k, v in scores.items()
     ])
     
-    # Готовый инструмент из профиля
     immediate_tool = bn_profile.get("immediate_tool", "")
-    
-    # Готовые рекомендации из кода
-    existing_recs = RECOMMENDATIONS.get(bottleneck_key, {}).get(bottleneck_lvl, [])
-    recs_text = "\n".join([f"— {r}" for r in existing_recs]) if existing_recs else ""
     
     prompt = f"""Профиль человека:
 {profile_summary}
 
 Главное узкое место: {VECTORS[bottleneck_key]['name']} (уровень {bottleneck_lvl}/6)
-Что теряет человек на этом уровне: {'; '.join(bn_profile.get('pain_costs', []))}
+Что теряет человек: {'; '.join(bn_profile.get('pain_costs', []))}
 
-Уже готовый инструмент для этого уровня:
+Инструмент для этого уровня:
 {immediate_tool}
-
-Базовые рекомендации для контекста:
-{recs_text}
 
 Задача: дай 3 конкретных действия.
 Первое — можно сделать сегодня (5-10 минут).
 Второе — на этой неделе.
 Третье — в ближайший месяц.
 
-Учитывай весь профиль а не только узкое место.
 Обращайся на "вы". Каждое действие — конкретный глагол + что именно + зачем."""
-
-    system_message = (
-        "Ты коуч. Только конкретные действия — "
-        "не 'работайте над собой' а 'сделайте X в ситуации Y'. "
-        "Каждое действие выполнимо реальным человеком на этой неделе. "
-        "На русском."
-    )
     
+    system_message = "Ты коуч. Только конкретные действия — не 'работайте над собой' а 'сделайте X в ситуации Y'. На русском."
     response = await call_deepseek(prompt, system_message, max_tokens=400)
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
@@ -2324,33 +2379,28 @@ async def handle_smart_question(callback: types.CallbackQuery, question: str):
     
     await callback.message.edit_text("🤔 *Думаю...*", parse_mode='Markdown')
     
-    # Полный профиль с паттернами и архетипами
     profile_lines = []
     for k, v in scores.items():
         lvl = level(v)
         p = LEVEL_PROFILES.get(k, {}).get(lvl, {})
         archetype = p.get("archetype", "")
-        origin = p.get("pain_origin", "")[:100]
         profile_lines.append(
-            f"{VECTORS[k]['emoji']} {VECTORS[k]['name']}: "
-            f"уровень {lvl}/6 — {VECTORS[k]['levels'][lvl]['name']}"
-            + (f"\n   Архетип: {archetype}" if archetype else "")
-            + (f"\n   Контекст: {origin}" if origin else "")
+            f"{VECTORS[k]['name']}: {lvl}/6 — {VECTORS[k]['levels'][lvl]['name']}"
+            + (f" ({archetype})" if archetype else "")
         )
-    profile_summary = "\n\n".join(profile_lines)
+    profile_summary = "\n".join(profile_lines)
     
-    system_prompt = f"""Ты психолог. Отвечаешь конкретному человеку с конкретным профилем.
+    system_prompt = f"""Ты психолог. Учитывай профиль человека:
 
 {profile_summary}
 
-Правила ответа:
-— 2-3 предложения
-— Конкретно про этого человека с его уровнями и архетипами
-— Без вводных слов и объяснения методики
-— На русском"""
+Отвечай:
+• Коротко (2-4 предложения)
+• По делу, без воды
+• Конкретно
+• На русском"""
     
-    prompt = question
-    
+    prompt = f"Вопрос: {question}\n\nДай короткий, практичный ответ с учетом моего профиля."
     response = await call_deepseek(prompt, system_prompt, max_tokens=300)
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
@@ -2465,7 +2515,7 @@ async def main():
         logger.warning("DeepSeek API ключ не найден, AI-функции отключены")
     
     logger.info("Бот запущен...")
-    print("🚀 Виртуальный психолог запущен!")
+    print("🚀 Виртуальный психолог запущен с НОВЫМ ДИЗАЙНОМ!")
     
     await dp.start_polling(bot, drop_pending_updates=True)
 
