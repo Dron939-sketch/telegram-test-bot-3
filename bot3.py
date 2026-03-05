@@ -819,47 +819,52 @@ async def show_standard_analysis(callback: types.CallbackQuery):
         )
 
 async def show_ai_analysis(callback: types.CallbackQuery):
-    """Показывает AI-анализ"""
+    """Показывает AI-анализ с диагностикой"""
     user_id = callback.from_user.id
-    scores = {k: round(mean(v), 1) for k, v in user_data[user_id]["scores"].items()}
+    print(f"\n🔥 AI АНАЛИЗ ВЫЗВАН для user {user_id}")
     
-    await callback.message.edit_text("🤔 *Анализирую ваш профиль...*\nЭто займет несколько секунд", parse_mode='Markdown')
-    
-    profile_data = {}
-    for key in scores:
-        lvl = level(scores[key])
-        profile_data[f"{key} ({VECTORS[key]['name']})"] = {
-            "уровень": lvl,
-            "тип": VECTORS[key]["levels"][lvl]["name"],
-            "описание": VECTORS[key]["levels"][lvl]["desc"]
-        }
-    
-    prompt = f"""Проанализируй этот профиль:
-
-{json.dumps(profile_data, indent=2, ensure_ascii=False)}
-
-Напиши анализ из 3 частей как в консольной версии:
-1. ПОРТРЕТ: как человек воспринимает мир
-2. КЛЮЧЕВОЙ КОНФЛИКТ: главное противоречие
-3. ТОЧКА РОСТА: с чего начать изменения"""
-    
-    response = call_deepseek(prompt, "Ты психолог. Отвечай подробно, на русском.")
-    
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="◀️ К результатам", callback_data="show_results")]
-    ])
-    
-    if response:
-        await callback.message.edit_text(
-            f"🧠 *AI-АНАЛИЗ*\n\n{response}",
-            parse_mode='Markdown',
-            reply_markup=keyboard
-        )
-    else:
-        await callback.message.edit_text(
-            "⚠️ Не удалось получить ответ от AI. Попробуйте позже.",
-            reply_markup=keyboard
-        )
+    try:
+        # Получаем результаты
+        scores = {k: round(mean(v), 1) for k, v in user_data[user_id]["scores"].items()}
+        print(f"📊 Scores: {scores}")
+        
+        await callback.message.edit_text("🤔 *Анализирую ваш профиль...*\nЭто займет несколько секунд", parse_mode='Markdown')
+        
+        # Формируем промпт
+        profile_text = f"Профиль пользователя:\n"
+        for key, score in scores.items():
+            lvl = level(score)
+            profile_text += f"- {key} ({VECTORS[key]['name']}): уровень {lvl} - {VECTORS[key]['levels'][lvl]['name']}\n"
+        
+        prompt = f"{profile_text}\n\nПроанализируй этот профиль. Напиши краткий анализ из 3 частей: портрет, конфликт, точка роста."
+        print(f"📝 Промпт отправлен в API")
+        
+        # Вызов API
+        response = call_deepseek(prompt, "Ты психолог. Отвечай кратко, на русском.")
+        print(f"✅ Ответ получен: {bool(response)}")
+        
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="◀️ К результатам", callback_data="show_results")]
+        ])
+        
+        if response:
+            print(f"📨 Отправляем ответ пользователю")
+            await callback.message.edit_text(
+                f"🧠 *AI-АНАЛИЗ*\n\n{response}",
+                parse_mode='Markdown',
+                reply_markup=keyboard
+            )
+        else:
+            print(f"❌ Пустой ответ от API")
+            await callback.message.edit_text(
+                "⚠️ Не удалось получить ответ от AI. Попробуйте позже.",
+                reply_markup=keyboard
+            )
+            
+    except Exception as e:
+        print(f"❌ ОШИБКА: {e}")
+        import traceback
+        traceback.print_exc()
 
 async def show_ai_recommendations(callback: types.CallbackQuery):
     """Показывает AI-рекомендации"""
