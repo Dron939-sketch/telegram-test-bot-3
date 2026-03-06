@@ -2037,8 +2037,8 @@ async def show_intimate_profile(callback: types.CallbackQuery):
                 [InlineKeyboardButton(text="◀️ Назад", callback_data="show_results")]
             ])
         )
-    
-   async def show_saved_intimate_profile(callback: types.CallbackQuery, profile_text: str):
+
+async def show_saved_intimate_profile(callback: types.CallbackQuery, profile_text: str):
     """Показывает сохраненный интимный профиль с правильным форматированием"""
     
     def escape_markdown(text):
