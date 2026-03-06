@@ -2030,54 +2030,42 @@ async def show_intimate_profile(callback: types.CallbackQuery):
         )
 
 async def show_saved_intimate_profile(callback: types.CallbackQuery, profile_text: str):
-    """Показывает сохраненный интимный профиль"""
+    """Показывает сохраненный интимный профиль с правильным форматированием"""
     
-   def escape_markdown(text):
-    """Экранирует только опасные символы, сохраняя форматирование жирным шрифтом"""
-    # Убраны: . - (точка и дефис) - они НЕ экранируются
-    # Оставлены только символы, которые реально ломают Markdown
-    dangerous = '_*[]()~`>#+=|{}!'
+    def escape_markdown(text):
+        """Экранирует только опасные символы, сохраняя жирный шрифт"""
+        # Сохраняем двойные звездочки для жирного шрифта
+        text = text.replace('**', '‼BOLD‼')
+        
+        # Опасные символы (точка и дефис УБРАНЫ)
+        dangerous = '_*[]()~`>#+=|{}!'
+        
+        for char in dangerous:
+            text = text.replace(char, f'\\{char}')
+        
+        # Возвращаем двойные звездочки
+        text = text.replace('‼BOLD‼', '**')
+        return text
     
-    for char in dangerous:
-        text = text.replace(char, f'\\{char}')
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🧠 МЫСЛИ ПСИХОЛОГА", callback_data="ai_analysis")],
+        [InlineKeyboardButton(text="💡 ЧТО ДЕЛАТЬ", callback_data="ai_recommendations")],
+        [InlineKeyboardButton(text="◀️ Назад к профилю", callback_data="show_results")]
+    ])
     
-    return text
-
-# Функция для восстановления жирного форматирования после экранирования
-def restore_bold(text):
-    """Восстанавливает двойные звездочки для жирного шрифта"""
-    # Заменяем экранированные двойные звездочки обратно
-    text = text.replace(r'\*\*', '**')
-    return text
-
-# В функции show_saved_intimate_profile:
-keyboard = InlineKeyboardMarkup(inline_keyboard=[
-    [InlineKeyboardButton(text="🧠 МЫСЛИ ПСИХОЛОГА", callback_data="ai_analysis")],
-    [InlineKeyboardButton(text="💡 ЧТО ДЕЛАТЬ", callback_data="ai_recommendations")],
-    [InlineKeyboardButton(text="◀️ Назад к профилю", callback_data="show_results")]
-])
-
-# Сначала экранируем опасные символы
-safe_text = escape_markdown(profile_text)
-# Потом восстанавливаем жирный шрифт
-safe_text = restore_bold(safe_text)
-
-if len(safe_text) > 3500:
-    parts = [safe_text[i:i+3500] for i in range(0, len(safe_text), 3500)]
-    await callback.message.edit_text(
-        f"🔞 *ИНТИМНЫЙ ПРОФИЛЬ*\n\n{parts[0]}",
-        parse_mode='Markdown',
-        reply_markup=None
-    )
-    for part in parts[1:-1]:
-        await callback.message.answer(part, parse_mode='Markdown')
-    await callback.message.answer(parts[-1], parse_mode='Markdown', reply_markup=keyboard)
-else:
-    await callback.message.edit_text(
-        f"🔞 *ИНТИМНЫЙ ПРОФИЛЬ*\n\n{safe_text}",
-        parse_mode='Markdown',
-        reply_markup=keyboard
-    )
+    # Применяем экранирование
+    safe_text = escape_markdown(profile_text)
+    full_text = f"🔞 *ИНТИМНЫЙ ПРОФИЛЬ*\n\n{safe_text}"
+    
+    # Отправляем с Markdown
+    if len(full_text) > 4000:
+        parts = [full_text[i:i+4000] for i in range(0, len(full_text), 4000)]
+        await callback.message.edit_text(parts[0], parse_mode='Markdown', reply_markup=None)
+        for part in parts[1:-1]:
+            await callback.message.answer(part, parse_mode='Markdown')
+        await callback.message.answer(parts[-1], parse_mode='Markdown', reply_markup=keyboard)
+    else:
+        await callback.message.edit_text(full_text, parse_mode='Markdown', reply_markup=keyboard)
 
 # ══════════════════════════════════════════════
 #  ОБРАБОТЧИКИ TELEGRAM
