@@ -35,7 +35,7 @@ TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN", "")
 DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY", "")
 
 # ID администраторов (замените на свой Telegram ID)
-ADMIN_IDS = [532205848]  # ⚠️ ВАЖНО: УКАЖИТЕ СВОЙ TELEGRAM ID
+ADMIN_IDS = [532205848]
 
 # Хранилище данных пользователей
 user_data = {}
@@ -2034,7 +2034,7 @@ async def show_saved_intimate_profile(callback: types.CallbackQuery, profile_tex
     
     def escape_markdown(text):
         """Экранирует только опасные символы, сохраняя жирный шрифт"""
-        # Сохраняем двойные звездочки для жирного шрифта
+        # Сохраняем двойные звездочки
         text = text.replace('**', '‼BOLD‼')
         
         # Опасные символы (точка и дефис УБРАНЫ)
@@ -2047,6 +2047,22 @@ async def show_saved_intimate_profile(callback: types.CallbackQuery, profile_tex
         text = text.replace('‼BOLD‼', '**')
         return text
     
+    # ДОБАВЛЯЕМ ФОРМАТИРОВАНИЕ ЗАГОЛОВКОВ
+    formatted_text = profile_text
+    
+    # Делаем заголовки блоков жирными
+    formatted_text = formatted_text.replace("1. ЗАГОЛОВОК:", "**1. ЗАГОЛОВОК:**")
+    formatted_text = formatted_text.replace("2. КТО ТЫ В ПОСТЕЛИ", "**2. КТО ТЫ В ПОСТЕЛИ**")
+    formatted_text = formatted_text.replace("3. ЧТО ТЕБЯ ЗАВОДИТ", "**3. ЧТО ТЕБЯ ЗАВОДИТ**")
+    formatted_text = formatted_text.replace("4. ЧТО ВЫКЛЮЧАЕТ", "**4. ЧТО ВЫКЛЮЧАЕТ**")
+    formatted_text = formatted_text.replace("5. ТВОЁ ГЛАВНОЕ", "**5. ТВОЁ ГЛАВНОЕ**")
+    
+    # Делаем подзаголовки в списках жирными
+    formatted_text = formatted_text.replace("*   Сцены:", "**Сцены:**")
+    formatted_text = formatted_text.replace("*   Запахи:", "**Запахи:**")
+    formatted_text = formatted_text.replace("*   Звуки:", "**Звуки:**")
+    formatted_text = formatted_text.replace("*   Телесные реакции:", "**Телесные реакции:**")
+    
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="🧠 МЫСЛИ ПСИХОЛОГА", callback_data="ai_analysis")],
         [InlineKeyboardButton(text="💡 ЧТО ДЕЛАТЬ", callback_data="ai_recommendations")],
@@ -2054,7 +2070,7 @@ async def show_saved_intimate_profile(callback: types.CallbackQuery, profile_tex
     ])
     
     # Применяем экранирование
-    safe_text = escape_markdown(profile_text)
+    safe_text = escape_markdown(formatted_text)
     full_text = f"🔞 *ИНТИМНЫЙ ПРОФИЛЬ*\n\n{safe_text}"
     
     # Отправляем с Markdown
@@ -2561,6 +2577,141 @@ async def show_saved_ai_analysis(callback: types.CallbackQuery, analysis_text: s
         await callback.message.answer(parts[-1], parse_mode='Markdown', reply_markup=keyboard)
     else:
         await callback.message.edit_text(full_text, parse_mode='Markdown', reply_markup=keyboard)
+
+# ══════════════════════════════════════════════
+#  НОВЫЕ ФУНКЦИИ (ДОБАВЛЕНЫ)
+# ══════════════════════════════════════════════
+
+async def show_ai_recommendations(callback: types.CallbackQuery):
+    """Показывает рекомендации на основе профиля"""
+    user_id = callback.from_user.id
+    user = user_data[user_id]
+    
+    # Проверяем, пройден ли тест
+    test_completed = all(len(user["scores"][stage]) >= 8 for stage in STAGE_ORDER)
+    
+    if not test_completed:
+        await callback.message.edit_text(
+            "⚠️ Сначала завершите все этапы теста!",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="◀️ К тесту", callback_data="start_test")]
+            ])
+        )
+        return
+    
+    scores = {k: round(mean(v), 1) for k, v in user["scores"].items()}
+    bottleneck_key = get_priority_order(scores)[0]
+    bottleneck_lvl = level(scores[bottleneck_key])
+    
+    # Персонализированные рекомендации на основе узкого места
+    recommendations = {
+        "СБ": {
+            1: "• Замечайте момент заморозки и делайте паузу\n• Практикуйте «стоп-слова» в безопасной обстановке\n• Начните с малого: говорите «нет» в мелочах",
+            2: "• Оставайтесь в конфликте на 2 минуты дольше\n• Не уходите физически, уходите мысленно\n• Создайте ресурсный буфер для смелости",
+            3: "• Вместо «да» говорите «мне нужно подумать»\n• Записывайте ситуации, где вы не согласны\n• Практикуйте микро-несогласия",
+            4: "• Снимите маску перед одним человеком\n• Говорите о чувствах, а не о мнениях\n• Разрешите себе быть «неудобным»",
+            5: "• Не гасите конфликты сразу\n• Позвольте другим спорить без вас\n• Добавьте свою позицию в диалог",
+            6: "• Перед атакой спросите: «Какова цель?»\n• Практикуйте дипломатию как равную опцию\n• Выбирайте бои осознанно"
+        },
+        "ТФ": {
+            1: "• Найдите один навык для продажи\n• Сделайте одно действие сегодня\n• Отделите свои действия от чужих решений",
+            2: "• Найдите повторяющийся заработок\n• Откройте счёт «Подушка»\n• Переводите 10% от каждого дохода",
+            3: "• Создайте систему, а не ищите случай\n• Накопление важнее обмена\n• Автоматизируйте 10% в резерв",
+            4: "• Напишите инструкцию для своей задачи\n• Делегируйте одну задачу\n• Посчитайте стоимость своего часа",
+            5: "• Разделите накопления на 3 части\n• Инвестируйте 10% резерва\n• Найдите ментора по инвестициям",
+            6: "• Проверяйте обратную связь снизу\n• Диверсифицируйте системы\n• Создайте план Б для каждой системы"
+        },
+        "УБ": {
+            1: "• Выберите одну тему для изучения\n• Уделите ей 10 минут в день\n• Задавайте вопрос «почему?»",
+            2: "• Ищите причинно-следственные связи\n• Объясняйте события без мистики\n• Берите ответственность на себя",
+            3: "• Проверяйте утверждения экспертов\n• Ищите контраргументы\n• Формируйте собственное мнение",
+            4: "• Ищите объяснения без заговора\n• Фокусируйтесь на решениях\n• Спросите: «Что я могу сделать?»",
+            5: "• Обобщайте наблюдения в принципы\n• Ищите паттерны, а не факты\n• Проверяйте теории на практике",
+            6: "• Проверяйте модели действиями\n• Ищите обратную связь\n• Делитесь теориями для проверки"
+        },
+        "ЧВ": {
+            1: "• Сделайте одно дело самостоятельно\n• Расширьте круг общения\n• Найдите новое хобби без других",
+            2: "• Выскажите своё мнение\n• Будьте собой, не подстраивайтесь\n• Найдите свои уникальные черты",
+            3: "• Снимите маску с близким\n• Говорите о чувствах, а не образе\n• Ищите глубину, а не яркость",
+            4: "• Просите прямо, без манипуляций\n• Будьте честны в желаниях\n• Уважайте право выбора другого",
+            5: "• Расширяйте круг контактов\n• Ищите партнёров в новых сферах\n• Инвестируйте в глубину связей",
+            6: "• Углубляйте 3-5 ключевых связей\n• Создавайте ценность для сети\n• Ищите опору в близких"
+        }
+    }
+    
+    # Базовый текст с персонализацией
+    base_text = f"💡 *ЧТО ДЕЛАТЬ*\n\n"
+    base_text += f"*На основе вашего узкого места:*\n"
+    base_text += f"*{VECTORS[bottleneck_key]['name']}* (уровень {bottleneck_lvl}/6)\n\n"
+    base_text += recommendations.get(bottleneck_key, {}).get(bottleneck_lvl, "• Работайте над собой каждый день\n• Отслеживайте прогресс\n• Делитесь опытом с близкими")
+    
+    base_text += f"\n\n*СЕГОДНЯ:*\n"
+    base_text += f"• Напишите инструкцию для одной задачи\n• Отдайте её кому-то. Не контролируйте\n\n"
+    base_text += f"*НА ЭТОЙ НЕДЕЛЕ:*\n"
+    base_text += f"• Выберите задачу, которую ненавидите\n• Наймите человека. Заплатите. Не проверяйте\n\n"
+    base_text += f"*В ЭТОМ МЕСЯЦЕ:*\n"
+    base_text += f"• Создайте «подушку» — 3 ваших зарплаты\n• Это даст право сказать «нет»\n\n"
+    base_text += f"*ЦИТАТА ДНЯ:*\n"
+    base_text += f"«Если ты такой умный, почему такой бедный?\nА, понятно. Ты вкалываешь, а не строишь систему»."
+    
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="❓ ЕЩЁ ВОПРОС", callback_data="smart_questions")],
+        [InlineKeyboardButton(text="🧠 МЫСЛИ ПСИХОЛОГА", callback_data="ai_analysis")],
+        [InlineKeyboardButton(text="◀️ НАЗАД", callback_data="show_results")]
+    ])
+    
+    try:
+        await callback.message.edit_text(base_text, parse_mode='Markdown', reply_markup=keyboard)
+    except TelegramBadRequest as e:
+        if "message is not modified" not in str(e).lower():
+            raise
+
+async def show_smart_questions(callback: types.CallbackQuery):
+    """Показывает умные вопросы на основе профиля"""
+    user_id = callback.from_user.id
+    user = user_data[user_id]
+    
+    test_completed = all(len(user["scores"][stage]) >= 8 for stage in STAGE_ORDER)
+    
+    if not test_completed:
+        await callback.message.edit_text(
+            "⚠️ Сначала завершите все этапы теста!",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="◀️ К тесту", callback_data="start_test")]
+            ])
+        )
+        return
+    
+    scores = {k: round(mean(v), 1) for k, v in user["scores"].items()}
+    
+    # Генерируем вопросы
+    questions = generate_smart_questions(scores)
+    user["smart_questions"] = questions
+    
+    # Создаем кнопки с вопросами
+    keyboard = []
+    for i, q in enumerate(questions, 1):
+        q_short = q[:40] + "..." if len(q) > 40 else q
+        keyboard.append([InlineKeyboardButton(
+            text=f"{i}️⃣ {q_short}", 
+            callback_data=f"ask_{i}"
+        )])
+    
+    keyboard.append([InlineKeyboardButton(
+        text="✏️ Спросить самому", 
+        callback_data="ask_question"
+    )])
+    keyboard.append([InlineKeyboardButton(
+        text="◀️ Назад к профилю", 
+        callback_data="show_results"
+    )])
+    
+    await callback.message.edit_text(
+        "❓ *ЧТО ВАС БЕСПОКОИТ?*\n\n"
+        "Выберите вопрос или задайте свой. Я помню ваш профиль.\n",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard),
+        parse_mode='Markdown'
+    )
 
 async def handle_smart_question(callback: types.CallbackQuery, question: str):
     user_id = callback.from_user.id
