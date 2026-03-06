@@ -2508,11 +2508,22 @@ async def show_ai_analysis(callback: types.CallbackQuery):
         )
 
 async def show_saved_ai_analysis(callback: types.CallbackQuery, analysis_text: str):
-    """Показывает сохраненный анализ"""
+    """Показывает сохраненный анализ с правильным форматированием"""
     
     def escape_markdown(text):
-        escape_chars = r'_*[]()~`>#+-=|{}.!'
-        return re.sub(f'([{re.escape(escape_chars)}])', r'\\\1', text)
+        """Экранирует только опасные символы, сохраняя жирный шрифт"""
+        # Сохраняем двойные звездочки
+        text = text.replace('**', '‼BOLD‼')
+        
+        # Опасные символы (без точки и дефиса)
+        dangerous = '_*[]()~`>#+=|{}!'
+        
+        for char in dangerous:
+            text = text.replace(char, f'\\{char}')
+        
+        # Возвращаем двойные звездочки
+        text = text.replace('‼BOLD‼', '**')
+        return text
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="❓ ВОПРОСЫ", callback_data="smart_questions")],
@@ -2521,9 +2532,11 @@ async def show_saved_ai_analysis(callback: types.CallbackQuery, analysis_text: s
         [InlineKeyboardButton(text="◀️ НАЗАД", callback_data="show_results")]
     ])
     
+    # Применяем экранирование
     safe_text = escape_markdown(analysis_text)
     full_text = f"🧠 *МЫСЛИ ПСИХОЛОГА*\n\n{safe_text}"
     
+    # Отправляем с Markdown
     if len(full_text) > 4000:
         parts = [full_text[i:i+4000] for i in range(0, len(full_text), 4000)]
         await callback.message.edit_text(parts[0], parse_mode='Markdown', reply_markup=None)
@@ -2532,44 +2545,6 @@ async def show_saved_ai_analysis(callback: types.CallbackQuery, analysis_text: s
         await callback.message.answer(parts[-1], parse_mode='Markdown', reply_markup=keyboard)
     else:
         await callback.message.edit_text(full_text, parse_mode='Markdown', reply_markup=keyboard)
-
-async def show_ai_recommendations(callback: types.CallbackQuery):
-    user_id = callback.from_user.id
-    scores = {k: round(mean(v), 1) for k, v in user_data[user_id]["scores"].items()}
-    
-    await callback.message.edit_text("💡 *Думаю...*", parse_mode='Markdown')
-    
-    bottleneck_key = get_priority_order(scores)[0]
-    
-    text = (
-        f"💡 *ЧТО ДЕЛАТЬ*\n\n"
-        f"*СЕГОДНЯ:*\n"
-        f"Напишите инструкцию, как мыть кофеварку.\n"
-        f"Отдайте коллеге. Не дышите в спину.\n\n"
-        f"*НА ЭТОЙ НЕДЕЛЕ:*\n"
-        f"Выберите одну задачу, которую ненавидите.\n"
-        f"Наймите человека. Заплатите. Не проверяйте.\n\n"
-        f"*В ЭТОМ МЕСЯЦЕ:*\n"
-        f"Создайте «подушку» — 3 ваших зарплаты.\n"
-        f"Это даст право сказать «нет» начальнику.\n\n"
-        f"*ЦИТАТА ДНЯ:*\n"
-        f"«Если ты такой умный, почему такой бедный?\n"
-        f" А, понятно. Ты вкалываешь, а не строишь\n"
-        f" систему»."
-    )
-    
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="❓ ЕЩЁ ВОПРОС", callback_data="smart_questions")],
-        [InlineKeyboardButton(text="🧠 МЫСЛИ ПСИХОЛОГА", callback_data="ai_analysis")],
-        [InlineKeyboardButton(text="◀️ НАЗАД", callback_data="show_results")]
-    ])
-    
-    try:
-        await callback.message.edit_text(text, parse_mode='Markdown', reply_markup=keyboard)
-    except TelegramBadRequest as e:
-        if "message is not modified" not in str(e).lower() and "сообщение не изменено" not in str(e).lower():
-            raise
-
 async def show_smart_questions(callback: types.CallbackQuery):
     user_id = callback.from_user.id
     scores = {k: round(mean(v), 1) for k, v in user_data[user_id]["scores"].items()}
