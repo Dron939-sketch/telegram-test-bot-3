@@ -1714,9 +1714,10 @@ async def send_next_question(callback: types.CallbackQuery):
                 callback_data=f"answer_{score}"
             )])
         
+        # ТЕКСТ С ЖИРНЫМ ВОПРОСОМ
         text = (
             f"{vec['emoji']} *{vec['name'].upper()}*\n\n"
-            f"{question['text']}\n"
+            f"*{question['text']}*\n"  # ← вопрос жирным
             f"{'━' * 18}\n"
             f"▸ Вопрос {current_q_idx + 1}/{total_in_stage} • {progress_bar}"
         )
@@ -1736,7 +1737,6 @@ async def send_next_question(callback: types.CallbackQuery):
         user["current_question"] += 1
     else:
         await show_stage_feedback(callback, current_stage)
-
 # ─── Функции уточняющих вопросов ───────────────────────────────────────────
 async def show_clarification_intro(callback: types.CallbackQuery, stage_key: str):
     cq = CLARIFICATION_QUESTIONS[stage_key]
