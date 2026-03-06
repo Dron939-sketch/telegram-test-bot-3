@@ -2852,7 +2852,8 @@ async def show_smart_questions(callback: types.CallbackQuery):
 async def show_more_info(callback: types.CallbackQuery):
     """Показывает информацию о версии и планах развития"""
     
-    text = (
+    # Разбиваем текст на две части
+    text_part1 = (
         f"🧠 *ВАРИАТИКА 2.8*\n"
         f"_код Мейстера А.Ю._\n\n"
         
@@ -2887,8 +2888,10 @@ async def show_more_info(callback: types.CallbackQuery):
         f"🧠 **Самоощущение**\n"
         f"• «Не знаю, чего вообще хочу» — серия провокативных вопросов, которые вытащат из тебя правду\n"
         f"• «Чувствую себя самозванцем» — протокол работы с синдромом + факты против страха\n"
-        f"• «Все бесит, ничего не хочется» — диагностика выгорания + план восстановления по дням\n\n"
-        
+        f"• «Все бесит, ничего не хочется» — диагностика выгорания + план восстановления по дням"
+    )
+    
+    text_part2 = (
         f"⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯\n\n"
         
         f"🧠 **ЗНАНИЯ — ТВОЯ НЕЙРОАРХИТЕКТУРА**\n"
@@ -2964,7 +2967,12 @@ async def show_more_info(callback: types.CallbackQuery):
     ])
     
     try:
-        await callback.message.edit_text(text, reply_markup=keyboard, parse_mode='Markdown')
+        # Отправляем первую часть без кнопок
+        await callback.message.edit_text(text_part1, parse_mode='Markdown', reply_markup=None)
+        
+        # Отправляем вторую часть с кнопками
+        await callback.message.answer(text_part2, parse_mode='Markdown', reply_markup=keyboard)
+        
     except TelegramBadRequest as e:
         if "message is not modified" not in str(e).lower() and "сообщение не изменено" not in str(e).lower():
             raise
