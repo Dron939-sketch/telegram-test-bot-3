@@ -2041,16 +2041,21 @@ async def show_intimate_profile(callback: types.CallbackQuery):
 async def show_saved_intimate_profile(callback: types.CallbackQuery, profile_text: str):
     """Показывает сохраненный интимный профиль с правильным форматированием"""
     
+   async def show_saved_intimate_profile(callback: types.CallbackQuery, profile_text: str):
+    """Показывает сохраненный интимный профиль с правильным форматированием"""
+    
     def escape_markdown(text):
-        """Экранирует только опасные символы, сохраняя жирный шрифт"""
-        # Сохраняем двойные звездочки
+        """Экранирует только опасные символы, НО сохраняет двойные звездочки для жирного шрифта"""
+        # Сначала защищаем двойные звездочки
         text = text.replace('**', '‼BOLD‼')
         
-        # Опасные символы (точка и дефис УБРАНЫ)
-        dangerous = '_*[]()~`>#+=|{}!'
-        
+        # Экранируем опасные символы (точка и дефис УБРАНЫ, одиночные звездочки тоже)
+        dangerous = '_[]()~`>#+=|{}!'
         for char in dangerous:
             text = text.replace(char, f'\\{char}')
+        
+        # Экранируем одиночные звездочки (но не тронем двойные, они уже заменены)
+        text = text.replace('*', '\\*')
         
         # Возвращаем двойные звездочки
         text = text.replace('‼BOLD‼', '**')
@@ -2078,7 +2083,7 @@ async def show_saved_intimate_profile(callback: types.CallbackQuery, profile_tex
         [InlineKeyboardButton(text="◀️ Назад к профилю", callback_data="show_results")]
     ])
     
-    # Применяем экранирование
+    # ПРИМЕНЯЕМ ЭКРАНИРОВАНИЕ
     safe_text = escape_markdown(formatted_text)
     full_text = f"🔞 *ИНТИМНЫЙ ПРОФИЛЬ*\n\n{safe_text}"
     
@@ -2091,7 +2096,6 @@ async def show_saved_intimate_profile(callback: types.CallbackQuery, profile_tex
         await callback.message.answer(parts[-1], parse_mode='Markdown', reply_markup=keyboard)
     else:
         await callback.message.edit_text(full_text, parse_mode='Markdown', reply_markup=keyboard)
-
 # ══════════════════════════════════════════════
 #  ОБРАБОТЧИКИ TELEGRAM
 # ══════════════════════════════════════════════
