@@ -2947,6 +2947,10 @@ async def show_more_info(callback: types.CallbackQuery):
         
         f"⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯\n\n"
         
+        f"🔗 *ПОПРОБУЙ ПРЕДЫДУЩУЮ ВЕРСИЮ*\n"
+        f"@Testing_Lichnosti_bot — первый прототип, с которого всё начиналось.\n"
+        f"Меньше функций, но уже можно было наступить на первые грабли.\n\n"
+        
         f"🔗 *ПОДЕЛИСЬ С ДРУГОМ*\n"
         f"Отправь ссылку тому, кто тоже ходит по граблям.\n"
         f"Пусть знает, что он не один в своем безумии."
@@ -2954,6 +2958,7 @@ async def show_more_info(callback: types.CallbackQuery):
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="👤 СВЯЗАТЬСЯ С ПСИХОЛОГОМ", url="https://t.me/meysternlp")],
+        [InlineKeyboardButton(text="🤖 ПРЕДЫДУЩАЯ ВЕРСИЯ", url="https://t.me/Testing_Lichnosti_bot")],
         [InlineKeyboardButton(text="🔗 ПОДЕЛИТЬСЯ ССЫЛКОЙ", url="https://t.me/share/url?url=https://t.me/Nanotech_varik_bot&text=Зацени%20этот%20психологический%20скальпель%20—%20матрица%20поведений%204×6")],
         [InlineKeyboardButton(text="◀️ НАЗАД", callback_data="show_results")]
     ])
