@@ -2509,7 +2509,11 @@ async def show_ai_analysis(callback: types.CallbackQuery):
         await show_saved_ai_analysis(callback, user["ai_analysis"])
         return
     
-    await callback.message.edit_text("🧠 *Анализирую ваш профиль...*", parse_mode='Markdown')
+    await callback.message.edit_text(
+        "🧠 *Анализирую ваш профиль...*\n\n"
+        "_Это займёт около 20 секунд_",
+        parse_mode='Markdown'
+    )
     
     scores = {k: round(mean(v), 1) for k, v in user["scores"].items()}
     bottleneck_key = get_priority_order(scores)[0]
