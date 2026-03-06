@@ -2393,7 +2393,7 @@ async def show_results(callback: types.CallbackQuery):
     bottleneck_profile = LEVEL_PROFILES.get(bottleneck_key, {}).get(bottleneck_lvl, {})
     bottleneck_vec = VECTORS[bottleneck_key]
     
-    text += f"──────────────────────\n"
+    text += f"⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯\n"
     text += f"🎯 **УЗКОЕ МЕСТО:**\n"
     text += f"   {bottleneck_vec['name']} ({bottleneck_key}-{bottleneck_lvl})\n"
     if bottleneck_profile.get('pain_costs'):
