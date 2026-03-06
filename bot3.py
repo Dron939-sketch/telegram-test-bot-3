@@ -1622,6 +1622,20 @@ async def show_stage_feedback(callback: types.CallbackQuery, stage_key: str):
     user = user_data[user_id]
 
     scores_list = user["scores"][stage_key]
+    
+    # ✅ ПРОВЕРКА: если нет ответов, показываем сообщение об ошибке
+    if not scores_list:
+        await callback.message.edit_text(
+            f"{VECTORS[stage_key]['emoji']} *Этап не пройден*\n\n"
+            f"Похоже, вы не ответили ни на один вопрос. Попробуйте начать этап заново.",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="🔄 Начать заново", callback_data=f"begin_stage_{stage_key}")],
+                [InlineKeyboardButton(text="◀️ В меню", callback_data="back_to_menu")]
+            ]),
+            parse_mode='Markdown'
+        )
+        return
+
     avg = round(mean(scores_list), 2)
 
     consistency_override = user.get(f"{stage_key}_consistency_override", False)
