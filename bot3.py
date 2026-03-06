@@ -1710,7 +1710,7 @@ async def send_next_question(callback: types.CallbackQuery):
         keyboard = []
         for score, option_text in question["options"]:
             keyboard.append([InlineKeyboardButton(
-                text=option_text[:55],
+                text=option_text[:65],
                 callback_data=f"answer_{score}"
             )])
         
