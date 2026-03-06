@@ -2793,7 +2793,11 @@ async def handle_smart_question(callback: types.CallbackQuery, question: str):
     user_id = callback.from_user.id
     scores = {k: round(mean(v), 1) for k, v in user_data[user_id]["scores"].items()}
     
-    await callback.message.edit_text("🤔 *Думаю...*", parse_mode='Markdown')
+    await callback.message.edit_text(
+        "🤔 *Думаю над ответом...*\n\n"
+        "_Это займёт около 10-15 секунд_",  # ← ДОБАВИТЬ
+        parse_mode='Markdown'
+    )
     
     profile_lines = []
     for k, v in scores.items():
@@ -2853,7 +2857,11 @@ async def handle_message(message: types.Message):
         return
     
     scores = {k: round(mean(v), 1) for k, v in user["scores"].items()}
-    thinking = await message.answer("🤔 *Думаю...*", parse_mode='Markdown')
+    thinking = await message.answer(
+        "🤔 *Думаю над ответом...*\n\n"
+        "_Это займёт около 10-15 секунд_",  # ← ДОБАВИТЬ
+        parse_mode='Markdown'
+    )
     
     profile_lines = []
     for k, v in scores.items():
