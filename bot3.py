@@ -2599,7 +2599,7 @@ async def show_saved_ai_analysis(callback: types.CallbackQuery, analysis_text: s
     formatted_text = formatted_text.replace("ЦИТАТА:", "**ЦИТАТА:**")
     formatted_text = formatted_text.replace("ЭТО ТЫ, ЕСЛИ...", "\n❓ **ЭТО ТЫ, ЕСЛИ...**\n")
     formatted_text = formatted_text.replace("СУТЬ ПРОБЛЕМЫ", "\n⚠️ **СУТЬ ПРОБЛЕМЫ**\n")
-    formatted_text = formatted_text.replace("ПЕРВЫЙ ШАГ:", "\n🛠 **ПЕРВЫЙ ШАГ:**")
+    formatted_text = formatted_text.replace("ПЕРВЫЙ ШАГ:", "\n🛠 **ПЕРВЫЙ ШАГ:**\n")
     formatted_text = formatted_text.replace("ЧТО ДАЛЬШЕ?", "\n🔮 **ЧТО ДАЛЬШЕ?**\n")
     
     # Убираем лишние переносы в начале
