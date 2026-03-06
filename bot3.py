@@ -2369,7 +2369,7 @@ async def show_results(callback: types.CallbackQuery):
         stats.register_completion(user_id, scores)
         user["logged"] = True
     
-    # Формируем текст профиля
+    # Формируем текст профиля (код без изменений)
     text = f"🧠 *ВАШ ПРОФИЛЬ*\n\n"
     
     for key in STAGE_ORDER:
@@ -2427,11 +2427,17 @@ async def show_results(callback: types.CallbackQuery):
             else:
                 text += f"\n{step}\n"
     
+    # ✅ ИЗМЕНЕННЫЙ ПОРЯДОК КНОПОК:
+    # 1. Мысли психолога
+    # 2. Интимный профиль
+    # 3. Ещё вопрос
+    # 4. Что делать
+    # 5. В меню
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="🧠 МЫСЛИ ПСИХОЛОГА", callback_data="ai_analysis")],
-        [InlineKeyboardButton(text="💡 ЧТО ДЕЛАТЬ", callback_data="ai_recommendations")],
-        [InlineKeyboardButton(text="❓ ЕЩЁ ВОПРОС", callback_data="smart_questions")],
         [InlineKeyboardButton(text="🔞 ИНТИМНЫЙ ПРОФИЛЬ", callback_data="intimate_profile")],
+        [InlineKeyboardButton(text="❓ ЕЩЁ ВОПРОС", callback_data="smart_questions")],
+        [InlineKeyboardButton(text="💡 ЧТО ДЕЛАТЬ", callback_data="ai_recommendations")],
         [InlineKeyboardButton(text="◀️ В МЕНЮ", callback_data="back_to_menu")]
     ])
     
