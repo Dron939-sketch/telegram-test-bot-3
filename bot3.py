@@ -2593,45 +2593,8 @@ async def show_saved_ai_analysis(callback: types.CallbackQuery, analysis_text: s
     formatted_text = formatted_text.replace("ЦИТАТА:", "**ЦИТАТА:**")
     formatted_text = formatted_text.replace("ЭТО ТЫ, ЕСЛИ...", "\n❓ **ЭТО ТЫ, ЕСЛИ...**\n")
     formatted_text = formatted_text.replace("СУТЬ ПРОБЛЕМЫ", "\n⚠️ **СУТЬ ПРОБЛЕМЫ**\n")
-    formatted_text = formatted_text.replace("ПЕРВЫЙ ШАГ:", "\n🛠 **ПЕРВЫЙ ШАГ:")
+    formatted_text = formatted_text.replace("ПЕРВЫЙ ШАГ:", "\n🛠 **ПЕРВЫЙ ШАГ:**")
     formatted_text = formatted_text.replace("ЧТО ДАЛЬШЕ?", "\n🔮 **ЧТО ДАЛЬШЕ?**\n")
-    
-    # Добавляем эмодзи-нумерацию для шагов (❶ ❷ ❸ ❹)
-    step_emojis = ['❶', '❷', '❸', '❹', '❺', '❻']
-    step_count = 0
-    
-    def replace_step(match):
-        nonlocal step_count
-        if step_count < len(step_emojis):
-            emoji = step_emojis[step_count]
-            step_count += 1
-            return f"{emoji} **{match.group(1)}.**"
-        return match.group(0)
-    
-    # Заменяем "1.", "2.", "3.", "4." в блоке ПЕРВЫЙ ШАГ
-    # Но только если они идут после "ПЕРВЫЙ ШАГ"
-    parts = formatted_text.split("🛠 **ПЕРВЫЙ ШАГ:")
-    if len(parts) > 1:
-        before = parts[0]
-        after = parts[1]
-        
-        # Находим блок до следующего заголовка
-        next_heading = after.find("\n**")
-        if next_heading != -1:
-            steps_block = after[:next_heading]
-            rest = after[next_heading:]
-            
-            # Заменяем нумерацию в шагах
-            for i in range(1, 5):
-                steps_block = steps_block.replace(f"{i}.", f"{step_emojis[i-1]} **{i}.**")
-            
-            after = steps_block + rest
-        else:
-            # Если нет следующего заголовка, обрабатываем весь остаток
-            for i in range(1, 5):
-                after = after.replace(f"{i}.", f"{step_emojis[i-1]} **{i}.**")
-        
-        formatted_text = before + "🛠 **ПЕРВЫЙ ШАГ:" + after
     
     # Убираем лишние переносы в начале
     formatted_text = formatted_text.lstrip('\n')
