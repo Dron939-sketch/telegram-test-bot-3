@@ -2451,7 +2451,10 @@ async def show_ai_analysis(callback: types.CallbackQuery):
     user_id = callback.from_user.id
     user = user_data[user_id]
     
-    if not all(len(user["scores"][stage]) >= 8 for stage in STAGE_ORDER):
+    # СНАЧАЛА проверяем, пройден ли тест
+    test_completed = all(len(user["scores"][stage]) >= 8 for stage in STAGE_ORDER)
+    
+    if not test_completed:
         await callback.message.edit_text(
             "⚠️ Сначала завершите все этапы теста!",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
@@ -2460,6 +2463,7 @@ async def show_ai_analysis(callback: types.CallbackQuery):
         )
         return
     
+    # ПОТОМ проверяем сохраненный анализ
     if user.get("ai_analysis"):
         await show_saved_ai_analysis(callback, user["ai_analysis"])
         return
@@ -2497,6 +2501,7 @@ async def show_ai_analysis(callback: types.CallbackQuery):
     ])
     
     if response:
+        # СОХРАНЯЕМ результат
         user["ai_analysis"] = response
         await show_saved_ai_analysis(callback, response)
     else:
@@ -2511,19 +2516,32 @@ async def show_saved_ai_analysis(callback: types.CallbackQuery, analysis_text: s
     """Показывает сохраненный анализ с правильным форматированием"""
     
     def escape_markdown(text):
-        """Экранирует только опасные символы, сохраняя жирный шрифт"""
         # Сохраняем двойные звездочки
         text = text.replace('**', '‼BOLD‼')
         
         # Опасные символы (без точки и дефиса)
         dangerous = '_*[]()~`>#+=|{}!'
-        
         for char in dangerous:
             text = text.replace(char, f'\\{char}')
         
         # Возвращаем двойные звездочки
         text = text.replace('‼BOLD‼', '**')
         return text
+    
+    # Добавляем форматирование к заголовкам
+    formatted_text = analysis_text
+    
+    # Делаем основные заголовки жирными
+    formatted_text = formatted_text.replace("АРХЕТИП:", "**АРХЕТИП:**")
+    formatted_text = formatted_text.replace("ЦИТАТА:", "**ЦИТАТА:**")
+    formatted_text = formatted_text.replace("ЭТО ТЫ, ЕСЛИ...", "**🔍 ЭТО ТЫ, ЕСЛИ...**")
+    formatted_text = formatted_text.replace("СУТЬ ПРОБЛЕМЫ", "**⚠️ СУТЬ ПРОБЛЕМЫ**")
+    formatted_text = formatted_text.replace("ПЕРВЫЙ ШАГ", "**🛠 ПЕРВЫЙ ШАГ**")
+    formatted_text = formatted_text.replace("ЧТО ДАЛЬШЕ?", "**🔮 ЧТО ДАЛЬШЕ?**")
+    
+    # Добавляем жирный шрифт для нумерованных заголовков (1., 2., 3. и т.д.)
+    import re
+    formatted_text = re.sub(r'^(\d+\.\s*\*\*?[^*]+)', r'**\1**', formatted_text, flags=re.MULTILINE)
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="❓ ВОПРОСЫ", callback_data="smart_questions")],
@@ -2532,11 +2550,9 @@ async def show_saved_ai_analysis(callback: types.CallbackQuery, analysis_text: s
         [InlineKeyboardButton(text="◀️ НАЗАД", callback_data="show_results")]
     ])
     
-    # Применяем экранирование
-    safe_text = escape_markdown(analysis_text)
+    safe_text = escape_markdown(formatted_text)
     full_text = f"🧠 *МЫСЛИ ПСИХОЛОГА*\n\n{safe_text}"
     
-    # Отправляем с Markdown
     if len(full_text) > 4000:
         parts = [full_text[i:i+4000] for i in range(0, len(full_text), 4000)]
         await callback.message.edit_text(parts[0], parse_mode='Markdown', reply_markup=None)
@@ -2545,33 +2561,6 @@ async def show_saved_ai_analysis(callback: types.CallbackQuery, analysis_text: s
         await callback.message.answer(parts[-1], parse_mode='Markdown', reply_markup=keyboard)
     else:
         await callback.message.edit_text(full_text, parse_mode='Markdown', reply_markup=keyboard)
-async def show_smart_questions(callback: types.CallbackQuery):
-    user_id = callback.from_user.id
-    scores = {k: round(mean(v), 1) for k, v in user_data[user_id]["scores"].items()}
-    
-    questions = generate_smart_questions(scores)
-    user_data[user_id]["smart_questions"] = questions
-    
-    keyboard = []
-    for i, q in enumerate(questions, 1):
-        keyboard.append([InlineKeyboardButton(
-            text=f"{i}️⃣ {q[:40]}", 
-            callback_data=f"ask_{i}"
-        )])
-    
-    keyboard.append([InlineKeyboardButton(text="✏️ Спросить самому", callback_data="ask_question")])
-    keyboard.append([InlineKeyboardButton(text="◀️ Назад", callback_data="show_results")])
-    
-    try:
-        await callback.message.edit_text(
-            "❓ *ЧТО ВАС БЕСПОКОИТ?*\n\n"
-            "Выберите вопрос или задайте свой. Я помню ваш профиль.\n",
-            reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard),
-            parse_mode='Markdown'
-        )
-    except TelegramBadRequest as e:
-        if "message is not modified" not in str(e).lower() and "сообщение не изменено" not in str(e).lower():
-            raise
 
 async def handle_smart_question(callback: types.CallbackQuery, question: str):
     user_id = callback.from_user.id
