@@ -2760,12 +2760,12 @@ async def show_smart_questions(callback: types.CallbackQuery):
     questions = generate_smart_questions(scores)
     user["smart_questions"] = questions
     
-    # Создаем кнопки с вопросами
+    # Создаем кнопки с вопросами (БЕЗ НУМЕРАЦИИ)
     keyboard = []
     for i, q in enumerate(questions, 1):
         q_short = q[:40] + "..." if len(q) > 40 else q
         keyboard.append([InlineKeyboardButton(
-            text=f"{i}️⃣ {q_short}", 
+            text=f"{q_short}",  # ← убрали {i}️⃣ 
             callback_data=f"ask_{i}"
         )])
     
@@ -2779,7 +2779,7 @@ async def show_smart_questions(callback: types.CallbackQuery):
     )])
     
     await callback.message.edit_text(
-        "❓ *ЧТО ВАС БЕСПОКОИТ?*\n\n"
+        "❓ *ЧТО ВАС БЕСПОКОИТ*\n\n"  # ← убрали один знак, было "ЧТО ВАС БЕСПОКОИТ?"
         "Выберите вопрос или задайте свой. Я помню ваш профиль.\n",
         reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard),
         parse_mode='Markdown'
