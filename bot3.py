@@ -2037,45 +2037,43 @@ async def show_intimate_profile(callback: types.CallbackQuery):
                 [InlineKeyboardButton(text="◀️ Назад", callback_data="show_results")]
             ])
         )
-
-async def show_saved_intimate_profile(callback: types.CallbackQuery, profile_text: str):
-    """Показывает сохраненный интимный профиль с правильным форматированием"""
     
    async def show_saved_intimate_profile(callback: types.CallbackQuery, profile_text: str):
     """Показывает сохраненный интимный профиль с правильным форматированием"""
     
     def escape_markdown(text):
-        """Экранирует только опасные символы, НО сохраняет двойные звездочки для жирного шрифта"""
-        # Сначала защищаем двойные звездочки
+        """Экранирует только опасные символы, сохраняя жирный шрифт"""
+        # Сохраняем двойные звездочки
         text = text.replace('**', '‼BOLD‼')
         
-        # Экранируем опасные символы (точка и дефис УБРАНЫ, одиночные звездочки тоже)
+        # Опасные символы (точка и дефис УБРАНЫ)
         dangerous = '_[]()~`>#+=|{}!'
+        
         for char in dangerous:
             text = text.replace(char, f'\\{char}')
         
-        # Экранируем одиночные звездочки (но не тронем двойные, они уже заменены)
+        # Экранируем одиночные звездочки
         text = text.replace('*', '\\*')
         
         # Возвращаем двойные звездочки
         text = text.replace('‼BOLD‼', '**')
         return text
     
-    # ДОБАВЛЯЕМ ФОРМАТИРОВАНИЕ ЗАГОЛОВКОВ
+    # ДОБАВЛЯЕМ ФОРМАТИРОВАНИЕ С ЭМОДЗИ
     formatted_text = profile_text
     
-    # Делаем заголовки блоков жирными
-    formatted_text = formatted_text.replace("1. ЗАГОЛОВОК:", "**1. ЗАГОЛОВОК:**")
-    formatted_text = formatted_text.replace("2. КТО ТЫ В ПОСТЕЛИ", "**2. КТО ТЫ В ПОСТЕЛИ**")
-    formatted_text = formatted_text.replace("3. ЧТО ТЕБЯ ЗАВОДИТ", "**3. ЧТО ТЕБЯ ЗАВОДИТ**")
-    formatted_text = formatted_text.replace("4. ЧТО ВЫКЛЮЧАЕТ", "**4. ЧТО ВЫКЛЮЧАЕТ**")
-    formatted_text = formatted_text.replace("5. ТВОЁ ГЛАВНОЕ", "**5. ТВОЁ ГЛАВНОЕ**")
+    # Убираем нумерацию и слово "ЗАГОЛОВОК", добавляем эмодзи
+    formatted_text = formatted_text.replace("1. ЗАГОЛОВОК:", "**✨ Суть:**")
+    formatted_text = formatted_text.replace("2. КТО ТЫ В ПОСТЕЛИ", "**🔥 Кто ты в постели**")
+    formatted_text = formatted_text.replace("3. ЧТО ТЕБЯ ЗАВОДИТ", "**⚡ Что тебя заводит**")
+    formatted_text = formatted_text.replace("4. ЧТО ВЫКЛЮЧАЕТ", "**❄️ Что выключает**")
+    formatted_text = formatted_text.replace("5. ТВОЁ ГЛАВНОЕ", "**💫 Твоё главное**")
     
     # Делаем подзаголовки в списках жирными
-    formatted_text = formatted_text.replace("*   Сцены:", "**Сцены:**")
-    formatted_text = formatted_text.replace("*   Запахи:", "**Запахи:**")
-    formatted_text = formatted_text.replace("*   Звуки:", "**Звуки:**")
-    formatted_text = formatted_text.replace("*   Телесные реакции:", "**Телесные реакции:**")
+    formatted_text = formatted_text.replace("*   Сцены:", "**📍 Сцены:**")
+    formatted_text = formatted_text.replace("*   Запахи:", "**👃 Запахи:**")
+    formatted_text = formatted_text.replace("*   Звуки:", "**👂 Звуки:**")
+    formatted_text = formatted_text.replace("*   Телесные реакции:", "**💓 Телесные реакции:**")
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="🧠 МЫСЛИ ПСИХОЛОГА", callback_data="ai_analysis")],
@@ -2083,7 +2081,7 @@ async def show_saved_intimate_profile(callback: types.CallbackQuery, profile_tex
         [InlineKeyboardButton(text="◀️ Назад к профилю", callback_data="show_results")]
     ])
     
-    # ПРИМЕНЯЕМ ЭКРАНИРОВАНИЕ
+    # Применяем экранирование
     safe_text = escape_markdown(formatted_text)
     full_text = f"🔞 *ИНТИМНЫЙ ПРОФИЛЬ*\n\n{safe_text}"
     
@@ -2096,6 +2094,7 @@ async def show_saved_intimate_profile(callback: types.CallbackQuery, profile_tex
         await callback.message.answer(parts[-1], parse_mode='Markdown', reply_markup=keyboard)
     else:
         await callback.message.edit_text(full_text, parse_mode='Markdown', reply_markup=keyboard)
+        
 # ══════════════════════════════════════════════
 #  ОБРАБОТЧИКИ TELEGRAM
 # ══════════════════════════════════════════════
