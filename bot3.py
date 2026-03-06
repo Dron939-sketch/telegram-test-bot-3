@@ -1827,21 +1827,30 @@ async def show_level_detail(callback: types.CallbackQuery, vector_key: str):
     triggers_text = "\n".join([f"• {t}" for t in profile.get("triggers", [])])
     costs_text = "\n".join([f"• {c}" for c in profile.get("pain_costs", [])])
     
-    text = (
-        f"{vec['emoji']} *{vec['name']}* — уровень {lvl}/6\n"
-        f"{'━' * 18}\n\n"
-        f"🎭 *{profile.get('archetype', '')}*\n"
-        f"_{profile.get('archetype_desc', '')}_\n\n"
-        f"💬 {profile.get('quote', '')}\n\n"
-        f"*ЭТО ТЫ, ЕСЛИ...*\n"
-        f"{triggers_text}\n\n"
-        f"*ОТКУДА ЭТО ВЗЯЛОСЬ*\n"
-        f"{profile.get('pain_origin', '')}\n\n"
-        f"*ЧЕМ ТЫ ПЛАТИШЬ*\n"
-        f"{costs_text}\n\n"
-        f"*ЧТО ДЕЛАТЬ ПРЯМО СЕЙЧАС*\n"
-        f"{profile.get('immediate_tool', '')}"
-    )
+    text = f"{vec['emoji']} **{vec['name']}** — уровень {lvl}/6\n\n"
+    text += f"🎭 **{profile.get('archetype', '')}**\n"
+    text += f"{profile.get('archetype_desc', '')}\n\n"
+    text += f"💬 {profile.get('quote', '')}\n\n"
+    text += f"**🔍 ЭТО ТЫ, ЕСЛИ...**\n"
+    text += f"{triggers_text}\n\n"
+    text += f"**⚠️ ОТКУДА ЭТО ВЗЯЛОСЬ**\n"
+    text += f"{profile.get('pain_origin', '')}\n\n"
+    text += f"**ЧЕМ ТЫ ПЛАТИШЬ**\n"
+    text += f"{costs_text}\n\n"
+    text += f"**🛠 ЧТО ДЕЛАТЬ ПРЯМО СЕЙЧАС**\n"
+    
+    # Разбиваем immediate_tool на шаги
+    tool_text = profile.get('immediate_tool', '')
+    steps = tool_text.split('\n\n')
+    for step in steps:
+        if step.startswith('Шаг'):
+            step_parts = step.split('.', 1)
+            if len(step_parts) > 1:
+                text += f"\n**{step_parts[0]}.**{step_parts[1]}\n"
+            else:
+                text += f"\n{step}\n"
+        else:
+            text += f"\n{step}\n"
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="◀️ Назад к профилю", callback_data="show_results")]
@@ -1861,7 +1870,7 @@ async def show_level_detail(callback: types.CallbackQuery, vector_key: str):
         except TelegramBadRequest as e:
             if "message is not modified" not in str(e).lower() and "сообщение не изменено" not in str(e).lower():
                 raise
-
+                
 # ══════════════════════════════════════════════
 #  ФУНКЦИИ ЭКРАНОВ
 # ══════════════════════════════════════════════
@@ -2369,7 +2378,7 @@ async def show_results(callback: types.CallbackQuery):
         info = vec["levels"][lvl]
         profile = LEVEL_PROFILES.get(key, {}).get(lvl, {})
         
-        text += f"{vec['emoji']} *{vec['name']}* — *{info['name']}* ({key}-{lvl})\n"
+        text += f"{vec['emoji']} **{vec['name']}** — *{info['name']}* ({key}-{lvl})\n"
         if profile.get('quote'):
             text += f"   {profile['quote']}\n"
         else:
@@ -2382,7 +2391,7 @@ async def show_results(callback: types.CallbackQuery):
     bottleneck_vec = VECTORS[bottleneck_key]
     
     text += f"──────────────────────\n"
-    text += f"🎯 *УЗКОЕ МЕСТО:*\n"
+    text += f"🎯 **УЗКОЕ МЕСТО:**\n"
     text += f"   {bottleneck_vec['name']} ({bottleneck_key}-{bottleneck_lvl})\n"
     if bottleneck_profile.get('pain_costs'):
         text += f"   {bottleneck_profile['pain_costs'][0]}\n"
@@ -2392,19 +2401,31 @@ async def show_results(callback: types.CallbackQuery):
         triggers_text = "\n".join([f"• {t}" for t in bottleneck_profile.get("triggers", [])])
         costs_text = "\n".join([f"• {c}" for c in bottleneck_profile.get("pain_costs", [])])
         
-        text += f"\n{bottleneck_vec['emoji']} *{bottleneck_vec['name']}* — уровень {bottleneck_lvl}/6\n"
-        text += f"{'━' * 18}\n\n"
-        text += f"🎭 *{bottleneck_profile.get('archetype', '')}*\n"
-        text += f"_{bottleneck_profile.get('archetype_desc', '')}_\n\n"
+        text += f"\n⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯\n\n"
+        text += f"{bottleneck_vec['emoji']} **{bottleneck_vec['name']}** — уровень {bottleneck_lvl}/6\n\n"
+        text += f"🎭 **{bottleneck_profile.get('archetype', '')}**\n"
+        text += f"{bottleneck_profile.get('archetype_desc', '')}\n\n"
         text += f"💬 {bottleneck_profile.get('quote', '')}\n\n"
-        text += f"*ЭТО ТЫ, ЕСЛИ...*\n"
+        text += f"**🔍 ЭТО ТЫ, ЕСЛИ...**\n"
         text += f"{triggers_text}\n\n"
-        text += f"*ОТКУДА ЭТО ВЗЯЛОСЬ*\n"
+        text += f"**⚠️ ОТКУДА ЭТО ВЗЯЛОСЬ**\n"
         text += f"{bottleneck_profile.get('pain_origin', '')}\n\n"
-        text += f"*ЧЕМ ТЫ ПЛАТИШЬ*\n"
+        text += f"**ЧЕМ ТЫ ПЛАТИШЬ**\n"
         text += f"{costs_text}\n\n"
-        text += f"*ЧТО ДЕЛАТЬ ПРЯМО СЕЙЧАС*\n"
-        text += f"{bottleneck_profile.get('immediate_tool', '')}"
+        text += f"**🛠 ЧТО ДЕЛАТЬ ПРЯМО СЕЙЧАС**\n"
+        
+        # Разбиваем immediate_tool на шаги
+        tool_text = bottleneck_profile.get('immediate_tool', '')
+        steps = tool_text.split('\n\n')
+        for step in steps:
+            if step.startswith('Шаг'):
+                step_parts = step.split('.', 1)
+                if len(step_parts) > 1:
+                    text += f"\n**{step_parts[0]}.**{step_parts[1]}\n"
+                else:
+                    text += f"\n{step}\n"
+            else:
+                text += f"\n{step}\n"
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="🧠 МЫСЛИ ПСИХОЛОГА", callback_data="ai_analysis")],
