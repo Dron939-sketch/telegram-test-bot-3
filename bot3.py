@@ -1595,7 +1595,8 @@ async def test_yandex_command(message: types.Message):
     audio = await text_to_speech(test_text)
     
     if audio:
-        audio_file = BufferedInputFile(audio, filename="test.opus")
+        # Используем .raw для LPCM или .wav для WAV
+        audio_file = BufferedInputFile(audio, filename="test.raw")
         await message.answer_voice(
             audio_file,
             caption="✅ Yandex SpeechKit работает! Голос: Оксана"
