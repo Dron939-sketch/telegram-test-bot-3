@@ -1522,8 +1522,7 @@ async def text_to_speech(text: str) -> bytes:
         "voice": "oksana",  # Русский женский голос
         "emotion": "neutral",
         "speed": 1.0,
-        "format": "wav",  # Используем WAV формат для лучшей совместимости
-        "sampleRateHertz": 48000,
+        "format": "oggopus",  # Меняем wav на oggopus (OGG Opus)
     }
     
     try:
@@ -1541,11 +1540,31 @@ async def text_to_speech(text: str) -> bytes:
                 
                 if response.status == 200:
                     audio_data = await response.read()
-                    logger.info(f"✅ Аудио от Yandex получено: {len(audio_data)} байт (формат WAV)")
+                    logger.info(f"✅ Аудио от Yandex получено: {len(audio_data)} байт (формат OGG Opus)")
                     return audio_data
                 else:
                     error_text = await response.text()
                     logger.error(f"❌ Ошибка Yandex TTS {response.status}: {error_text}")
+                    
+                    # Пробуем альтернативный формат
+                    if "format" in error_text or response.status == 400:
+                        logger.info("🔄 Пробую формат lpcm...")
+                        data["format"] = "lpcm"
+                        
+                        async with session.post(
+                            url,
+                            headers=headers,
+                            data=data,
+                            timeout=timeout
+                        ) as retry_response:
+                            if retry_response.status == 200:
+                                audio_data = await retry_response.read()
+                                logger.info(f"✅ Аудио от Yandex получено (lpcm): {len(audio_data)} байт")
+                                return audio_data
+                            else:
+                                error_text = await retry_response.text()
+                                logger.error(f"❌ Ошибка Yandex TTS (lpcm) {retry_response.status}: {error_text}")
+                    
                     return None
                     
     except asyncio.TimeoutError:
@@ -2461,7 +2480,7 @@ async def handle_voice_message(message: types.Message):
         audio_data = await text_to_speech(response)
         
         if audio_data:
-            audio_file = BufferedInputFile(audio_data, filename="response.wav")
+            audio_file = BufferedInputFile(audio_data, filename="response.ogg")
             await message.answer_voice(
                 audio_file,
                 caption="🎙 *Голосовой ответ*",
@@ -3369,7 +3388,7 @@ async def handle_smart_question(callback: types.CallbackQuery, question: str):
         audio_data = await text_to_speech(response)
         
         if audio_data:
-            audio_file = BufferedInputFile(audio_data, filename="response.wav")
+            audio_file = BufferedInputFile(audio_data, filename="response.ogg")
             await callback.message.answer_voice(
                 audio_file,
                 caption=f"🎙 *Голосовой ответ*",
@@ -3469,7 +3488,7 @@ async def handle_message(message: types.Message):
         audio_data = await text_to_speech(response)
         
         if audio_data:
-            audio_file = BufferedInputFile(audio_data, filename="response.wav")
+            audio_file = BufferedInputFile(audio_data, filename="response.ogg")
             await message.answer_voice(
                 audio_file,
                 caption=f"🎙 *Голосовой ответ*",
