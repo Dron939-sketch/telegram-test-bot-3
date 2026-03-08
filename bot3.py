@@ -1593,7 +1593,7 @@ async def test_yandex_command(message: types.Message):
     audio = await text_to_speech(test_text)
     
     if audio:
-        audio_file = BufferedInputFile(audio, filename="test.wav")
+        audio_file = BufferedInputFile(audio, filename="test.ogg")
         await message.answer_voice(
             audio_file,
             caption="✅ Yandex SpeechKit работает! Голос: Оксана"
