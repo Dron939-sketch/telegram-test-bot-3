@@ -3,7 +3,7 @@
 """
 ВИРТУАЛЬНЫЙ ПСИХОЛОГ - Матрица Поведений 4×6
 ПОЛНАЯ ВЕРСИЯ с ИНТИМНЫМ ПРОФИЛЕМ, МЫСЛЯМИ ПСИХОЛОГА и ГОЛОСОВЫМИ ФУНКЦИЯМИ
-ИНТЕГРАЦИЯ С DEEPGRAM VOICE AGENT API (WebSocket)
+ИНТЕГРАЦИЯ С YANDEX SPEECHKIT (TTS) И DEEPGRAM (STT)
 ГОЛОСОВЫЕ ФУНКЦИИ ДОСТУПНЫ ТОЛЬКО ПОСЛЕ ЗАВЕРШЕНИЯ ТЕСТА
 """
 
@@ -14,7 +14,11 @@ import aiohttp
 import asyncio
 import datetime
 import tempfile
-import random  # добавьте это, если его нет
+import random
+import re
+import io
+import struct
+import wave
 from typing import Optional, Dict, List, Any
 from statistics import mean
 from dotenv import load_dotenv
@@ -22,12 +26,6 @@ from aiogram import Bot, Dispatcher, types
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, BufferedInputFile
 from aiogram.filters import Command
 from aiogram.exceptions import TelegramBadRequest
-import websockets
-from websockets.exceptions import WebSocketException
-
-# Для WebSocket
-import websockets
-from websockets.exceptions import WebSocketException
 
 # Загружаем переменные окружения
 load_dotenv()
@@ -46,15 +44,13 @@ logger = logging.getLogger(__name__)
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN", "")
 DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY", "")
 DEEPGRAM_API_KEY = os.environ.get("DEEPGRAM_API_KEY", "")
+YANDEX_API_KEY = os.environ.get("YANDEX_API_KEY", "")
 
 # ID администраторов
 ADMIN_IDS = [532205848]
 
 # Хранилище данных пользователей
 user_data: Dict[int, Dict[str, Any]] = {}
-
-# Константы для Voice Agent
-DEEPGRAM_WS_URL = "wss://agent.deepgram.com?agent=agent"
 
 # ─── Система уточняющих вопросов ───────────────────────────────────────────
 CLARIFICATION_ZONES = [1.49, 2.00, 2.50, 3.00, 3.50]
@@ -720,7 +716,7 @@ RECOMMENDATIONS = {
         ],
         5: [
             "Ваш уровень зрелый. Развивайте масштаб.",
-            "Переход 5→6: думайте не только о глубине но и о ширине связей.",
+            "Переход 5→6: думайте не только о глубине но и о широте связей.",
             "Один новый контакт в неделю из сферы отличной от вашей.",
         ],
         6: [
@@ -1404,18 +1400,12 @@ def get_priority_order(scores: dict) -> list:
         return [k for k, _ in sorted(scores.items(), key=lambda x: x[1])]
 
 # ══════════════════════════════════════════════
-#  ФУНКЦИИ РАБОТЫ С DEEPGRAM API
+#  ФУНКЦИИ РАБОТЫ С DEEPGRAM API (только для распознавания речи)
 # ══════════════════════════════════════════════
 
 async def speech_to_text(voice_file_path: str) -> str:
     """
     Преобразует голосовое сообщение в текст через Deepgram STT API
-    
-    Args:
-        voice_file_path (str): путь к временному файлу с голосовым сообщением
-        
-    Returns:
-        str: распознанный текст или пустая строка при ошибке
     """
     if not DEEPGRAM_API_KEY:
         logger.error("❌ DEEPGRAM_API_KEY не найден")
@@ -1498,468 +1488,107 @@ async def speech_to_text(voice_file_path: str) -> str:
         logger.error(f"💥 Неожиданная ошибка Deepgram STT: {e}")
         return ""
 
+# ══════════════════════════════════════════════
+#  ФУНКЦИИ РАБОТЫ С YANDEX SPEECHKIT (только для синтеза речи)
+# ══════════════════════════════════════════════
+
 async def text_to_speech(text: str) -> bytes:
     """
-    Преобразует текст в голос через Deepgram TTS API
-    
-    Args:
-        text (str): текст для озвучивания
-        
-    Returns:
-        bytes: аудиоданные в формате MP3 или None при ошибке
+    Преобразует текст в голос через Yandex SpeechKit
     """
-    if not DEEPGRAM_API_KEY:
-        logger.error("❌ DEEPGRAM_API_KEY не найден")
+    YANDEX_API_KEY = os.environ.get("YANDEX_API_KEY", "")
+    
+    if not YANDEX_API_KEY:
+        logger.error("❌ YANDEX_API_KEY не найден")
         return None
     
+    # Ограничиваем длину текста
     if len(text) > 1000:
         text = text[:1000] + "..."
     
-    url = "https://api.deepgram.com/v1/speak"
-    
-    models_to_try = [
-        "aura-asteria-ru",
-        "aura-orion-ru",
-        "aura-helios-ru",
-        "aura-athena-en",
-    ]
+    # URL для Yandex SpeechKit
+    url = "https://tts.api.cloud.yandex.net/speech/v1/tts:synthesize"
     
     headers = {
-        "Authorization": f"Token {DEEPGRAM_API_KEY}",
-        "Content-Type": "application/json"
+        "Authorization": f"Api-Key {YANDEX_API_KEY}",
     }
     
-    data = {"text": text}
+    # Доступные русские голоса:
+    # oksana - женский, нейтральный
+    # alena - женский, живой
+    # filipp - мужской
+    # ermil - мужской
+    data = {
+        "text": text,
+        "voice": "oksana",  # Русский женский голос
+        "emotion": "neutral",
+        "speed": 1.0,
+        "format": "opus",
+        "sampleRateHertz": 48000,
+    }
     
-    for model in models_to_try:
-        params = {"model": model}
+    try:
+        logger.info(f"🎧 Отправка текста в Yandex TTS: {len(text)} символов")
         
-        try:
-            logger.info(f"🎧 Пробуем модель TTS: {model}")
-            
-            timeout = aiohttp.ClientTimeout(total=30)
-            
-            async with aiohttp.ClientSession() as session:
-                async with session.post(
-                    url,
-                    params=params,
-                    headers=headers,
-                    json=data,
-                    timeout=timeout
-                ) as response:
-                    
-                    if response.status == 200:
-                        audio_data = await response.read()
-                        logger.info(f"✅ Успех с моделью {model}: {len(audio_data)} байт")
-                        return audio_data
-                    else:
-                        error_text = await response.text()
-                        logger.warning(f"⚠️ Модель {model} не сработала: {response.status}")
-                        continue
-                        
-        except Exception as e:
-            logger.warning(f"⚠️ Ошибка с моделью {model}: {e}")
-            continue
-    
-    logger.error("❌ Все попытки Deepgram TTS не удались")
-    return None
-
-# ══════════════════════════════════════════════
-#  DEEPGRAM VOICE AGENT КЛАСС (WebSocket)
-# ══════════════════════════════════════════════
-
-class DeepgramVoiceAgent:
-    """Клиент для Deepgram Voice Agent API через WebSocket"""
-    
-    def __init__(self, api_key: str, user_profile: dict, history: list = None):
-        self.api_key = api_key
-        self.user_profile = user_profile
-        self.history = history or []
-        self.ws = None
-        self.audio_buffer = bytearray()
-        self.processing_complete = False
-        self.response_audio = None
-        self.current_audio_response = None
+        timeout = aiohttp.ClientTimeout(total=30)
         
-    def _create_system_prompt(self) -> str:
-        """Создает системный промпт на основе профиля пользователя (на русском)"""
-        scores = self.user_profile.get("scores", {})
-        bottleneck_key = get_priority_order(scores)[0]
-        bottleneck_lvl = level(scores[bottleneck_key])
-        bottleneck_profile = LEVEL_PROFILES.get(bottleneck_key, {}).get(bottleneck_lvl, {})
-        
-        profile_lines = []
-        for k, v in scores.items():
-            lvl = level(v)
-            p = LEVEL_PROFILES.get(k, {}).get(lvl, {})
-            archetype = p.get("archetype", "")
-            profile_lines.append(f"{VECTORS[k]['name']}: {lvl}/6 — {VECTORS[k]['levels'][lvl]['name']}" + (f" ({archetype})" if archetype else ""))
-        
-        profile_summary = "\n".join(profile_lines)
-        
-        history_text = ""
-        if self.history:
-            recent_history = self.history[-5:]
-            history_lines = []
-            for entry in recent_history:
-                role = "Клиент" if entry["role"] == "user" else "Психолог"
-                history_lines.append(f"{role}: {entry['text']}")
-            if history_lines:
-                history_text = "\n\nИСТОРИЯ ДИАЛОГА:\n" + "\n".join(history_lines)
-        
-        prompt = f"""ТЫ — РУССКОЯЗЫЧНЫЙ ПСИХОЛОГ. ОТВЕЧАЙ ТОЛЬКО НА РУССКОМ ЯЗЫКЕ.
-
-Вот профиль человека, с которым ты общаешься:
-
-{profile_summary}
-
-Узкое место: {bottleneck_key}-{bottleneck_lvl} ({bottleneck_profile.get('archetype', '')})
-{bottleneck_profile.get('archetype_desc', '')}
-
-{bottleneck_profile.get('pain_origin', '')}{history_text}
-
-ВАЖНЫЕ ПРАВИЛА:
-1. Отвечай ТОЛЬКО на русском языке
-2. Используй местоимение "ты"
-3. Отвечай коротко, 2-4 предложения
-4. Будь эмпатичным, но конкретным
-5. Учитывай профиль человека в ответах"""
-        
-        return prompt
-    
-    def _create_agent_settings(self) -> dict:
-        """Создает настройки для Voice Agent с русским языком и DeepSeek"""
-        return {
-            "type": "Settings",
-            "audio": {
-                "input": {
-                    "encoding": "linear16",
-                    "sample_rate": 24000
-                },
-                "output": {
-                    "encoding": "linear16",
-                    "sample_rate": 24000,
-                    "container": "wav"
-                }
-            },
-            "agent": {
-                "language": "ru",  # Явно указываем русский язык
-                "listen": {
-                    "provider": {
-                        "type": "deepgram",
-                        "model": "nova-3"  # Для распознавания русской речи
-                    }
-                },
-                "think": {
-                    "provider": {
-                        "type": "open_ai",  # DeepSeek совместим с OpenAI API
-                        "model": "deepseek-chat",
-                        "base_url": "https://api.deepseek.com/v1"  # URL DeepSeek API
-                    },
-                    "prompt": self._create_system_prompt()  # Промпт на русском
-                },
-                "speak": {
-                    "provider": {
-                        "type": "deepgram",
-                        "model": "aura-asteria-ru"  # Русский голос
-                    }
-                },
-                "greeting": "Здравствуйте! Я готов ответить на ваши вопросы с учетом вашего психологического профиля."
-            }
-        }
-    
-    def _convert_ogg_to_pcm(self, ogg_data: bytes) -> bytes:
-        """
-        Конвертирует OGG аудио из Telegram в PCM формат для Deepgram
-        """
-        # В реальном приложении здесь нужно использовать библиотеку типа pydub или ffmpeg
-        # Для простоты возвращаем как есть, Deepgram сам конвертирует
-        return ogg_data
-    
-    def _create_wav_header(self, data_size: int, sample_rate: int = 24000, bits_per_sample: int = 16, channels: int = 1) -> bytes:
-        """Создает WAV заголовок для аудио"""
-        byte_rate = sample_rate * channels * (bits_per_sample // 8)
-        block_align = channels * (bits_per_sample // 8)
-        
-        header = bytearray(44)
-        # RIFF header
-        header[0:4] = b'RIFF'
-        header[4:8] = (36 + data_size).to_bytes(4, 'little')
-        header[8:12] = b'WAVE'
-        # fmt chunk
-        header[12:16] = b'fmt '
-        header[16:20] = (16).to_bytes(4, 'little')
-        header[20:22] = (1).to_bytes(2, 'little')
-        header[22:24] = channels.to_bytes(2, 'little')
-        header[24:28] = sample_rate.to_bytes(4, 'little')
-        header[28:32] = byte_rate.to_bytes(4, 'little')
-        header[32:34] = block_align.to_bytes(2, 'little')
-        header[34:36] = bits_per_sample.to_bytes(2, 'little')
-        # data chunk
-        header[36:40] = b'data'
-        header[40:44] = data_size.to_bytes(4, 'little')
-        
-        return bytes(header)
-    
-    async def process_audio_stream(self, audio_data: bytes) -> Optional[bytes]:
-        """
-        Отправляет аудио в Voice Agent через WebSocket и получает ответ
-        
-        Args:
-            audio_data: аудиоданные в формате OGG от Telegram
-            
-        Returns:
-            bytes: аудиоответ в формате WAV или None при ошибке
-        """
-        if not self.api_key:
-            logger.error("❌ DEEPGRAM_API_KEY не найден")
-            return None
-        
-        # Конвертируем аудио в PCM если нужно
-        pcm_data = self._convert_ogg_to_pcm(audio_data)
-        
-        # Подготавливаем буфер для ответа
-        self.audio_buffer = bytearray()
-        self.processing_complete = False
-        
-        try:
-            # Создаем WebSocket соединение
-            headers = {
-                "Authorization": f"Token {self.api_key}"
-            }
-            
-            async with websockets.connect(
-                DEEPGRAM_WS_URL,
-                extra_headers=headers,
-                ping_interval=20,
-                ping_timeout=60
-            ) as websocket:
-                self.ws = websocket
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                url,
+                headers=headers,
+                data=data,
+                timeout=timeout
+            ) as response:
                 
-                # Отправляем настройки агента
-                settings = self._create_agent_settings()
-                await websocket.send(json.dumps(settings))
-                logger.info("✅ Настройки агента отправлены")
-                
-                # Отправляем аудио фрагментами
-                chunk_size = 8192
-                for i in range(0, len(pcm_data), chunk_size):
-                    chunk = pcm_data[i:i+chunk_size]
-                    await websocket.send(chunk)
-                    await asyncio.sleep(0.01)  # Небольшая задержка
-                
-                logger.info(f"📤 Отправлено {len(pcm_data)} байт аудио")
-                
-                # Ждем и собираем ответ
-                timeout = 30
-                start_time = asyncio.get_event_loop().time()
-                
-                while not self.processing_complete:
-                    try:
-                        message = await asyncio.wait_for(
-                            websocket.recv(),
-                            timeout=5
-                        )
-                        
-                        # Обрабатываем сообщение
-                        if isinstance(message, bytes):
-                            # Это аудио данные
-                            self.audio_buffer.extend(message)
-                            logger.debug(f"🎵 Получено {len(message)} байт аудио")
-                        else:
-                            # Это JSON сообщение
-                            try:
-                                msg_data = json.loads(message)
-                                msg_type = msg_data.get("type", "")
-                                
-                                if msg_type == "Welcome":
-                                    logger.info("👋 Получено Welcome сообщение")
-                                elif msg_type == "SettingsApplied":
-                                    logger.info("⚙️ Настройки применены")
-                                elif msg_type == "ConversationText":
-                                    logger.info(f"💬 {msg_data}")
-                                elif msg_type == "UserStartedSpeaking":
-                                    logger.info("🗣️ Пользователь начал говорить")
-                                elif msg_type == "AgentThinking":
-                                    logger.info("🤔 Агент думает...")
-                                elif msg_type == "AgentStartedSpeaking":
-                                    logger.info("🎙️ Агент начал говорить")
-                                    self.audio_buffer = bytearray()
-                                elif msg_type == "AgentAudioDone":
-                                    logger.info("✅ Агент закончил говорить")
-                                    self.processing_complete = True
-                                    
-                            except json.JSONDecodeError:
-                                logger.warning(f"⚠️ Получено не-JSON сообщение: {message[:100]}")
-                                
-                    except asyncio.TimeoutError:
-                        # Проверяем таймаут
-                        elapsed = asyncio.get_event_loop().time() - start_time
-                        if elapsed > timeout:
-                            logger.warning("⏰ Таймаут ожидания ответа")
-                            break
-                        continue
-                
-                # Закрываем соединение
-                await websocket.close()
-                
-                if len(self.audio_buffer) > 0:
-                    # Добавляем WAV заголовок
-                    wav_header = self._create_wav_header(len(self.audio_buffer))
-                    full_audio = wav_header + bytes(self.audio_buffer)
-                    logger.info(f"✅ Получено {len(full_audio)} байт аудиоответа")
-                    return full_audio
+                if response.status == 200:
+                    audio_data = await response.read()
+                    logger.info(f"✅ Аудио от Yandex получено: {len(audio_data)} байт")
+                    return audio_data
                 else:
-                    logger.warning("⚠️ Пустой аудиоответ")
+                    error_text = await response.text()
+                    logger.error(f"❌ Ошибка Yandex TTS {response.status}: {error_text}")
                     return None
                     
-        except websockets.exceptions.WebSocketException as e:
-            logger.error(f"❌ Ошибка WebSocket: {e}")
-            return None
-        except Exception as e:
-            logger.error(f"💥 Неожиданная ошибка: {e}")
-            return None
-    
-    async def process_audio_simple(self, audio_data: bytes) -> Optional[bytes]:
-        """
-        Упрощенная обработка через отдельные STT и TTS
-        Используется как fallback если Voice Agent не работает
-        """
-        # Сохраняем во временный файл
-        with tempfile.NamedTemporaryFile(delete=False, suffix='.ogg') as tmp:
-            tmp.write(audio_data)
-            temp_file = tmp.name
-        
-        try:
-            # STT
-            text = await speech_to_text(temp_file)
-            if not text:
-                return None
-            
-            # Получаем ответ от DeepSeek
-            scores = self.user_profile.get("scores", {})
-            profile_lines = []
-            for k, v in scores.items():
-                lvl = level(v)
-                p = LEVEL_PROFILES.get(k, {}).get(lvl, {})
-                archetype = p.get("archetype", "")
-                profile_lines.append(f"{VECTORS[k]['name']}: {lvl}/6 — {VECTORS[k]['levels'][lvl]['name']}" + (f" ({archetype})" if archetype else ""))
-            profile_summary = "\n".join(profile_lines)
-            
-            history_text = ""
-            if self.history:
-                recent_history = self.history[-5:]
-                history_lines = []
-                for entry in recent_history:
-                    role = "Клиент" if entry["role"] == "user" else "Психолог"
-                    history_lines.append(f"{role}: {entry['text']}")
-                if history_lines:
-                    history_text = "ИСТОРИЯ ДИАЛОГА:\n" + "\n".join(history_lines) + "\n\n"
-            
-            system_prompt = f"""Ты психолог. Учитывай профиль человека:
-
-{profile_summary}
-
-{history_text}Отвечай коротко, 2-4 предложения, по делу. Используй местоимение "ты"."""
-            
-            response = await call_deepseek(text, system_prompt, max_tokens=300)
-            
-            if not response:
-                bottleneck_key = get_priority_order(scores)[0]
-                bottleneck_lvl = level(scores[bottleneck_key])
-                response = FALLBACK_ANALYSIS[bottleneck_key][bottleneck_lvl]
-            
-            # TTS
-            audio_response = await text_to_speech(response)
-            
-            # Сохраняем в историю
-            self.history.append({"role": "user", "text": text, "timestamp": datetime.datetime.now().isoformat()})
-            self.history.append({"role": "assistant", "text": response, "timestamp": datetime.datetime.now().isoformat()})
-            
-            return audio_response
-            
-        finally:
-            try:
-                os.unlink(temp_file)
-            except:
-                pass
+    except asyncio.TimeoutError:
+        logger.error("⏰ Таймаут при обращении к Yandex TTS")
+        return None
+    except aiohttp.ClientError as e:
+        logger.error(f"🌐 Сетевая ошибка Yandex TTS: {e}")
+        return None
+    except Exception as e:
+        logger.error(f"💥 Неожиданная ошибка Yandex TTS: {e}")
+        return None
 
 # ══════════════════════════════════════════════
 #  ФУНКЦИИ ДЛЯ ТЕСТИРОВАНИЯ
 # ══════════════════════════════════════════════
 
-async def test_tts_command(message: types.Message):
-    """Тестирует TTS с разными моделями"""
+async def test_yandex_command(message: types.Message):
+    """Тестирует Yandex TTS"""
     if message.from_user.id not in ADMIN_IDS:
         await message.answer("⛔ Только для администраторов")
         return
     
-    test_text = "Привет, это тестовое голосовое сообщение."
-    status = await message.answer("🎧 Тестирую TTS...")
+    test_text = "Привет! Это тестовое голосовое сообщение от Яндекс SpeechKit. Я буду отвечать на русском языке."
+    status = await message.answer("🎧 Тестирую Yandex TTS...")
     
-    models_to_test = [
-        "aura-asteria-ru",
-        "aura-orion-ru",
-        "aura-helios-ru",
-        "aura-athena-en",
-    ]
+    audio = await text_to_speech(test_text)
     
-    results = []
-    for model in models_to_test:
-        try:
-            url = "https://api.deepgram.com/v1/speak"
-            params = {"model": model}
-            headers = {
-                "Authorization": f"Token {DEEPGRAM_API_KEY}",
-                "Content-Type": "application/json"
-            }
-            data = {"text": test_text}
-            
-            async with aiohttp.ClientSession() as session:
-                async with session.post(
-                    url,
-                    params=params,
-                    headers=headers,
-                    json=data,
-                    timeout=aiohttp.ClientTimeout(total=10)
-                ) as response:
-                    if response.status == 200:
-                        audio_data = await response.read()
-                        results.append(f"✅ {model}: успешно, {len(audio_data)} байт")
-                    else:
-                        error = await response.text()
-                        results.append(f"❌ {model}: {response.status} - {error[:100]}")
-        except Exception as e:
-            results.append(f"⚠️ {model}: ошибка - {str(e)[:50]}")
-    
-    result_text = "📊 **Результаты тестирования TTS:**\n\n" + "\n".join(results)
-    await status.edit_text(result_text, parse_mode='Markdown')
-
-async def test_agent_command(message: types.Message):
-    """Тестирует Voice Agent API"""
-    if message.from_user.id not in ADMIN_IDS:
-        await message.answer("⛔ Только для администраторов")
-        return
-    
-    # Создаем тестовый профиль
-    test_profile = {
-        "scores": {
-            "СБ": 2.5,
-            "ТФ": 3.2,
-            "УБ": 2.8,
-            "ЧВ": 3.5
-        }
-    }
-    
-    agent = DeepgramVoiceAgent(DEEPGRAM_API_KEY, test_profile)
-    settings = agent._create_agent_settings()
-    prompt = agent._create_system_prompt()
-    
-    text = f"✅ **Voice Agent API готов к использованию**\n\n"
-    text += f"**Системный промпт:**\n```\n{prompt[:500]}...\n```\n\n"
-    text += f"**Настройки:**\n```json\n{json.dumps(settings, indent=2, ensure_ascii=False)[:500]}...\n```"
-    
-    await message.answer(text, parse_mode='Markdown')
+    if audio:
+        audio_file = BufferedInputFile(audio, filename="test.opus")
+        await message.answer_voice(
+            audio_file,
+            caption="✅ Yandex SpeechKit работает! Голос: Оксана"
+        )
+        await status.delete()
+    else:
+        await status.edit_text(
+            "❌ Yandex SpeechKit не работает.\n"
+            "Проверьте:\n"
+            "1. Правильно ли указан YANDEX_API_KEY в .env\n"
+            "2. Есть ли средства на аккаунте Яндекс Облака\n"
+            "3. Подключена ли служба SpeechKit"
+        )
 
 # ══════════════════════════════════════════════
 #  ФУНКЦИЯ call_deepseek
@@ -2737,7 +2366,7 @@ async def toggle_voice_mode(callback: types.CallbackQuery):
 async def handle_voice_message(message: types.Message):
     """
     Обработчик голосовых сообщений - работает ТОЛЬКО после завершения теста
-    Использует Deepgram Voice Agent API через WebSocket
+    Использует Deepgram для распознавания и Yandex для синтеза речи
     """
     user_id = message.from_user.id
     user = user_data.get(user_id)
@@ -2772,7 +2401,7 @@ async def handle_voice_message(message: types.Message):
         )
         return
     
-    status_msg = await message.answer("🎤 *Обрабатываю голосовое сообщение...*", parse_mode='Markdown')
+    status_msg = await message.answer("🎤 *Распознаю речь...*", parse_mode='Markdown')
     
     temp_file = None
     try:
@@ -2783,9 +2412,8 @@ async def handle_voice_message(message: types.Message):
             temp_file = tmp.name
             await message.bot.download_file(file_info.file_path, destination=temp_file)
         
-        # Читаем аудиофайл
-        with open(temp_file, 'rb') as f:
-            audio_data = f.read()
+        # Распознаем речь через Deepgram
+        recognized_text = await speech_to_text(temp_file)
         
         # Удаляем временный файл
         try:
@@ -2793,51 +2421,113 @@ async def handle_voice_message(message: types.Message):
         except:
             pass
         
-        # Создаем агента и обрабатываем аудио
-        agent = DeepgramVoiceAgent(
-            DEEPGRAM_API_KEY, 
-            {"scores": user["scores"]}, 
-            user.get("history", [])
-        )
-        
-        # Пробуем использовать Voice Agent
-        audio_response = await agent.process_audio_stream(audio_data)
-        
-        # Если Voice Agent не сработал, используем упрощенный метод
-        if not audio_response:
-            logger.info("🔄 Voice Agent не сработал, использую упрощенный метод")
-            audio_response = await agent.process_audio_simple(audio_data)
-        
-        if not audio_response:
+        if not recognized_text:
             await status_msg.edit_text(
-                "❌ *Не удалось обработать голосовое сообщение*\n\n"
+                "❌ *Не удалось распознать речь*\n\n"
                 "Попробуйте еще раз или напишите текстом.",
                 parse_mode='Markdown'
             )
             return
         
-        # Обновляем историю пользователя из агента
-        user["history"] = agent.history
+        # Показываем распознанный текст
+        await status_msg.edit_text(
+            f"📝 *Вы сказали:*\n"
+            f"_{recognized_text}_\n\n"
+            f"🤔 *Думаю над ответом...*",
+            parse_mode='Markdown'
+        )
         
-        # Проверяем режим
+        # Получаем профиль пользователя
+        scores = {k: round(mean(v), 1) for k, v in user["scores"].items()}
+        
+        # Формируем промпт с учетом истории
+        profile_lines = []
+        for k, v in scores.items():
+            lvl = level(v)
+            p = LEVEL_PROFILES.get(k, {}).get(lvl, {})
+            archetype = p.get("archetype", "")
+            profile_lines.append(f"{VECTORS[k]['name']}: {lvl}/6 — {VECTORS[k]['levels'][lvl]['name']}" + (f" ({archetype})" if archetype else ""))
+        profile_summary = "\n".join(profile_lines)
+        
+        # Добавляем историю диалога в промпт
+        history_text = ""
+        if user.get("history"):
+            recent_history = user["history"][-5:]
+            history_lines = []
+            for entry in recent_history:
+                role = "Клиент" if entry["role"] == "user" else "Психолог"
+                history_lines.append(f"{role}: {entry['text']}")
+            if history_lines:
+                history_text = "ИСТОРИЯ ДИАЛОГА:\n" + "\n".join(history_lines) + "\n\n"
+        
+        system_prompt = f"""Ты психолог. Учитывай профиль человека:
+
+{profile_summary}
+
+{history_text}Отвечай коротко, 2-4 предложения, по делу. Используй местоимение "ты"."""
+        
+        # Получаем ответ от DeepSeek
+        response = await call_deepseek(recognized_text, system_prompt, max_tokens=300)
+        
+        if not response:
+            # Если DeepSeek не ответил, используем fallback
+            bottleneck_key = get_priority_order(scores)[0]
+            bottleneck_lvl = level(scores[bottleneck_key])
+            response = FALLBACK_ANALYSIS[bottleneck_key][bottleneck_lvl]
+        
+        # Сохраняем в историю
+        if "history" not in user:
+            user["history"] = []
+        
+        user["history"].append({
+            "role": "user", 
+            "text": recognized_text, 
+            "timestamp": datetime.datetime.now().isoformat()
+        })
+        
+        user["history"].append({
+            "role": "assistant", 
+            "text": response, 
+            "timestamp": datetime.datetime.now().isoformat()
+        })
+        
+        if len(user["history"]) > 10:
+            user["history"] = user["history"][-10:]
+        
+        # Проверяем режим пользователя
         voice_mode = user.get("voice_mode", False)
         
         if voice_mode:
-            # Отправляем голосовой ответ
-            audio_file = BufferedInputFile(audio_response, filename="response.wav")
-            await message.answer_voice(
-                audio_file,
-                caption="🎙 *Голосовой ответ*",
+            await status_msg.edit_text(
+                f"📝 *Вы сказали:*\n_{recognized_text}_\n\n🎧 *Озвучиваю ответ...*",
                 parse_mode='Markdown'
             )
-            await status_msg.delete()
+            
+            # Используем Yandex для синтеза речи
+            audio_data = await text_to_speech(response)
+            
+            if audio_data:
+                audio_file = BufferedInputFile(audio_data, filename="response.opus")
+                await message.answer_voice(
+                    audio_file,
+                    caption="🎙 *Голосовой ответ*",
+                    parse_mode='Markdown'
+                )
+                await status_msg.delete()
+            else:
+                await status_msg.edit_text(
+                    f"📝 *Вы сказали:*\n_{recognized_text}_\n\n"
+                    f"*Ответ:*\n{response}",
+                    parse_mode='Markdown',
+                    reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                        [InlineKeyboardButton(text="🎙 Вкл. голосовой режим", callback_data="toggle_voice")],
+                        [InlineKeyboardButton(text="❓ Еще вопрос", callback_data="smart_questions")]
+                    ])
+                )
         else:
-            # Нужно получить текст из истории
-            # В реальном приложении нужно парсить ConversationText из WebSocket
-            # Пока используем заглушку
             await status_msg.edit_text(
-                f"✅ *Голосовое сообщение обработано*\n\n"
-                f"Чтобы услышать ответ, включите голосовой режим.",
+                f"📝 *Вы сказали:*\n_{recognized_text}_\n\n"
+                f"*Ответ:*\n{response}",
                 parse_mode='Markdown',
                 reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                     [InlineKeyboardButton(text="🎙 Вкл. голосовой режим", callback_data="toggle_voice")],
@@ -2931,14 +2621,15 @@ async def apistatus_command(message: types.Message):
     
     deepseek_status = "✅ работает" if DEEPSEEK_API_KEY else "❌ не настроен"
     deepgram_status = "✅ работает" if DEEPGRAM_API_KEY else "❌ не настроен"
+    yandex_status = "✅ работает" if YANDEX_API_KEY else "❌ не настроен"
     
     text = f"📊 **Статус API:**\n\n"
     text += f"• DeepSeek API: {deepseek_status}\n"
-    text += f"• Deepgram API: {deepgram_status}\n\n"
+    text += f"• Deepgram STT: {deepgram_status}\n"
+    text += f"• Yandex TTS: {yandex_status}\n\n"
     
-    if DEEPGRAM_API_KEY:
-        text += f"🎙 Voice Agent API: доступен\n"
-        text += f"📡 WebSocket: wss://agent.deepgram.com\n"
+    if YANDEX_API_KEY:
+        text += f"🎙 TTS: Yandex SpeechKit (русский голос Оксана)\n"
     
     await status_msg.edit_text(text, parse_mode='Markdown')
 
@@ -3765,7 +3456,7 @@ async def handle_smart_question(callback: types.CallbackQuery, question: str):
         audio_data = await text_to_speech(response)
         
         if audio_data:
-            audio_file = BufferedInputFile(audio_data, filename="response.mp3")
+            audio_file = BufferedInputFile(audio_data, filename="response.opus")
             await callback.message.answer_voice(
                 audio_file,
                 caption=f"❓ *{question}*\n\n🎙 *Голосовой ответ*",
@@ -3881,7 +3572,7 @@ async def handle_message(message: types.Message):
         audio_data = await text_to_speech(response)
         
         if audio_data:
-            audio_file = BufferedInputFile(audio_data, filename="response.mp3")
+            audio_file = BufferedInputFile(audio_data, filename="response.opus")
             await message.answer_voice(
                 audio_file,
                 caption=f"🎙 *Голосовой ответ*",
@@ -3920,9 +3611,14 @@ async def main():
         return
     
     if DEEPGRAM_API_KEY:
-        logger.info("✅ Deepgram API ключ найден")
+        logger.info("✅ Deepgram API ключ найден (для распознавания речи)")
     else:
-        logger.warning("⚠️ Deepgram API ключ не найден. Голосовые функции будут недоступны.")
+        logger.warning("⚠️ Deepgram API ключ не найден. Распознавание речи будет недоступно.")
+    
+    if YANDEX_API_KEY:
+        logger.info("✅ Yandex API ключ найден (для синтеза речи)")
+    else:
+        logger.warning("⚠️ Yandex API ключ не найден. Голосовые ответы будут недоступны.")
     
     bot = Bot(token=TELEGRAM_TOKEN)
     dp = Dispatcher()
@@ -3934,8 +3630,7 @@ async def main():
     dp.message.register(start_command, Command("start"))
     dp.message.register(stats_command, Command("stats"))
     dp.message.register(apistatus_command, Command("apistatus"))
-    dp.message.register(test_tts_command, Command("test_tts"))
-    dp.message.register(test_agent_command, Command("test_agent"))
+    dp.message.register(test_yandex_command, Command("test_yandex"))
     dp.callback_query.register(callback_handler)
     dp.message.register(handle_voice_message, lambda m: m.voice is not None)
     dp.message.register(handle_message)
@@ -3949,8 +3644,9 @@ async def main():
     logger.info("Бот запущен...")
     print("🚀 Виртуальный психолог запущен!")
     print(f"👤 Ваш Telegram ID: {ADMIN_IDS[0] if ADMIN_IDS else 'не указан'}")
-    print("📊 Команды: /stats, /apistatus, /test_tts, /test_agent")
-    print("🎙 Голосовые функции: " + ("ВКЛЮЧЕНЫ" if DEEPGRAM_API_KEY else "ОТКЛЮЧЕНЫ"))
+    print("📊 Команды: /stats, /apistatus, /test_yandex")
+    print("🎙 Распознавание речи: " + ("ВКЛЮЧЕНО (Deepgram)" if DEEPGRAM_API_KEY else "ОТКЛЮЧЕНО"))
+    print("🎙 Синтез речи: " + ("ВКЛЮЧЕН (Yandex, русский)" if YANDEX_API_KEY else "ОТКЛЮЧЕН"))
     print("⚠️ Голос доступен ТОЛЬКО после завершения теста")
     
     await dp.start_polling(bot, drop_pending_updates=True)
