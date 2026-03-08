@@ -1522,7 +1522,7 @@ async def text_to_speech(text: str) -> bytes:
         "voice": "oksana",  # Русский женский голос
         "emotion": "neutral",
         "speed": 1.0,
-        "format": "oggopus",  # Меняем wav на oggopus (OGG Opus)
+        "format": "oggopus",  # OGG Opus - отлично работает с Telegram
     }
     
     try:
@@ -1546,7 +1546,7 @@ async def text_to_speech(text: str) -> bytes:
                     error_text = await response.text()
                     logger.error(f"❌ Ошибка Yandex TTS {response.status}: {error_text}")
                     
-                    # Пробуем альтернативный формат
+                    # Пробуем альтернативный формат если oggopus не сработал
                     if "format" in error_text or response.status == 400:
                         logger.info("🔄 Пробую формат lpcm...")
                         data["format"] = "lpcm"
@@ -2469,11 +2469,19 @@ async def handle_voice_message(message: types.Message):
         if len(user["history"]) > 10:
             user["history"] = user["history"][-10:]
         
+        # Создаем клавиатуру для продолжения
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="❓ Ещё вопрос", callback_data="smart_questions")],
+            [InlineKeyboardButton(text="🧠 К профилю", callback_data="show_results")],
+            [InlineKeyboardButton(text="🏠 В меню", callback_data="back_to_menu")]
+        ])
+        
         # Отправляем и текст, и голос (автоматически, без кнопки)
         await status_msg.edit_text(
             f"📝 *Вы сказали:*\n_{recognized_text}_\n\n"
             f"*Ответ:*\n{response}",
-            parse_mode='Markdown'
+            parse_mode='Markdown',
+            reply_markup=keyboard
         )
         
         # Получаем голосовой ответ через Yandex
@@ -2527,12 +2535,27 @@ async def start_command(message: types.Message):
     text = (
         f"🧠 *ВАРИАТИКА 2.8 — МАТРИЦА ПОВЕДЕНИЙ*\n"
         f"   _лаборатория психологических профилей_\n\n"
-        f"👋 *Привет, {user_name}.*\n\n"
-        f"⚠️ Это не тест. Это вскрытие ваших\n"
-        f"поведенческих шаблонов. Без наркоза.\n\n"
-        f"📌 *ЗАЧЕМ:*\n"
-        f"Потому что если вы снова наступите\n"
-        f"на те же грабли — грабли обидятся.\n\n"
+        f"👋 *Привет, {user_name}!*\n\n"
+        f"📌 *ИНСТРУКЦИЯ ПО ИСПОЛЬЗОВАНИЮ:*\n\n"
+        f"🔹 **ШАГ 1 — Пройдите тест**\n"
+        f"   Нажмите кнопку «🔪 ДЕЛАЕМ ВСКРЫТИЕ!» и ответьте на 32 вопроса.\n"
+        f"   Это займёт约 12 минут.\n\n"
+        f"🔹 **ШАГ 2 — Изучите свой профиль**\n"
+        f"   После теста вы увидите:\n"
+        f"   • Ваш психологический портрет\n"
+        f"   • Интимный профиль 🔞\n"
+        f"   • Рекомендации что делать\n"
+        f"   • Мысли психолога о вас\n\n"
+        f"🔹 **ШАГ 3 — Задавайте вопросы**\n"
+        f"   • 📝 **Текстом** — просто напишите вопрос\n"
+        f"   • 🎤 **Голосом** — отправьте голосовое сообщение\n"
+        f"   • ❓ **Выберите готовый вопрос** — нажмите «ЕЩЁ ВОПРОС»\n\n"
+        f"🎙 *ГОЛОСОВЫЕ ФУНКЦИИ:*\n"
+        f"   • Вы говорите — я распознаю речь (Deepgram)\n"
+        f"   • Я отвечаю — текстом + голосом (Yandex SpeechKit)\n"
+        f"   • Голос автоматически включается ПОСЛЕ теста\n\n"
+        f"⚠️ *ГОЛОС ДОСТУПЕН ТОЛЬКО ПОСЛЕ ТЕСТА*\n"
+        f"   Сначала пройдите все 4 этапа, чтобы активировать голос.\n\n"
         f"🔪 *4 СФЕРЫ, КОТОРЫЕ МЫ ПРЕПАРИРУЕМ:*\n\n"
         f"🛡 **Реакция на угрозу**\n"
         f"   → Как вы орете или молчите, когда давят\n\n"
@@ -3377,10 +3400,18 @@ async def handle_smart_question(callback: types.CallbackQuery, question: str):
     if len(user["history"]) > 10:
         user["history"] = user["history"][-10:]
     
-    # Отправляем текстовый ответ
+    # Создаем клавиатуру для продолжения
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="❓ Ещё вопрос", callback_data="smart_questions")],
+        [InlineKeyboardButton(text="🧠 К профилю", callback_data="show_results")],
+        [InlineKeyboardButton(text="🏠 В меню", callback_data="back_to_menu")]
+    ])
+    
+    # Отправляем текстовый ответ с клавиатурой
     await callback.message.edit_text(
         f"❓ *{question}*\n\n{response}",
-        parse_mode='Markdown'
+        parse_mode='Markdown',
+        reply_markup=keyboard
     )
     
     # Проверяем, пройден ли тест (голос автоматически активен)
@@ -3477,10 +3508,18 @@ async def handle_message(message: types.Message):
     
     await thinking.delete()
     
-    # Отправляем текстовый ответ
+    # Создаем клавиатуру для продолжения
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="❓ Ещё вопрос", callback_data="smart_questions")],
+        [InlineKeyboardButton(text="🧠 К профилю", callback_data="show_results")],
+        [InlineKeyboardButton(text="🏠 В меню", callback_data="back_to_menu")]
+    ])
+    
+    # Отправляем текстовый ответ с клавиатурой
     await message.answer(
         f"🧠 *Ответ*\n\n{response}",
-        parse_mode='Markdown'
+        parse_mode='Markdown',
+        reply_markup=keyboard
     )
     
     # Проверяем, пройден ли тест (голос автоматически активен)
