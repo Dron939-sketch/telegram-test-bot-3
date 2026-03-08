@@ -1396,7 +1396,7 @@ def get_priority_order(scores: dict) -> list:
 
 async def speech_to_text(voice_file_path: str) -> str:
     """
-    Преобразует голосовое сообщение в текст через Deepgram API
+    Преобразует голосовое сообщение в текст через Deepgram STT API
     
     Args:
         voice_file_path (str): путь к временному файлу с голосовым сообщением
@@ -1408,12 +1408,13 @@ async def speech_to_text(voice_file_path: str) -> str:
         logger.error("❌ DEEPGRAM_API_KEY не найден")
         return ""
     
+    # Используем nova-3 для русского языка (поддерживается согласно документации)
     url = "https://api.deepgram.com/v1/listen"
     params = {
+        "model": "nova-3",  # nova-3 поддерживает русский язык
         "language": "ru",
         "punctuate": "true",
         "smart_format": "true",
-        "model": "general"
     }
     
     headers = {
@@ -1422,7 +1423,7 @@ async def speech_to_text(voice_file_path: str) -> str:
     }
     
     try:
-        logger.info(f"🎤 Отправка голосового сообщения в Deepgram STT")
+        logger.info(f"🎤 Отправка голосового сообщения в Deepgram STT (модель nova-3)")
         
         # Читаем аудиофайл
         with open(voice_file_path, 'rb') as audio_file:
@@ -1442,6 +1443,29 @@ async def speech_to_text(voice_file_path: str) -> str:
                 if response.status != 200:
                     error_text = await response.text()
                     logger.error(f"❌ Ошибка Deepgram API {response.status}: {error_text[:200]}")
+                    
+                    # Пробуем альтернативную модель nova-2
+                    if response.status == 400 or response.status == 404:
+                        logger.info("🔄 Пробуем альтернативную модель nova-2...")
+                        params["model"] = "nova-2"
+                        
+                        async with session.post(
+                            url,
+                            params=params,
+                            headers=headers,
+                            data=audio_data,
+                            timeout=timeout
+                        ) as retry_response:
+                            if retry_response.status == 200:
+                                result = await retry_response.json()
+                                try:
+                                    transcript = result["results"]["channels"][0]["alternatives"][0]["transcript"]
+                                    logger.info(f"✅ Голос распознан (nova-2): {len(transcript)} символов")
+                                    return transcript
+                                except (KeyError, IndexError) as e:
+                                    logger.error(f"❌ Ошибка парсинга ответа Deepgram: {e}")
+                                    return ""
+                    
                     return ""
                 
                 result = await response.json()
@@ -1467,7 +1491,7 @@ async def speech_to_text(voice_file_path: str) -> str:
 
 async def text_to_speech(text: str) -> bytes:
     """
-    Преобразует текст в голосовое сообщение через Deepgram TTS
+    Преобразует текст в голосовое сообщение через Deepgram TTS API
     
     Args:
         text (str): текст для озвучивания
@@ -1479,84 +1503,173 @@ async def text_to_speech(text: str) -> bytes:
         logger.error("❌ DEEPGRAM_API_KEY не найден")
         return None
     
-    # Ограничиваем длину текста для TTS (Deepgram имеет лимиты)
+    # Ограничиваем длину текста
     if len(text) > 1000:
         text = text[:1000] + "..."
     
     # Deepgram TTS API endpoint
     url = "https://api.deepgram.com/v1/speak"
     
-    # Доступные модели для русского языка:
-    # - aura-asteria-ru - женский голос
-    # - aura-orion-ru - мужской голос (альтернатива)
-    # - aura-helios-ru - еще один вариант
-    params = {
-        "model": "aura-asteria-ru",  # Русский женский голос
-    }
+    # Пробуем разные подходы к указанию модели
+    approaches = [
+        # Подход 1: только модель (стандартный)
+        {
+            "name": "Стандартный",
+            "params": {"model": "aura-asteria-ru"},
+            "data": {"text": text}
+        },
+        # Подход 2: модель + voice parameter
+        {
+            "name": "С voice параметром",
+            "params": {"model": "aura-asteria-ru"},
+            "data": {"text": text, "voice": "ru-RU-Standard-A"}
+        },
+        # Подход 3: другая модель
+        {
+            "name": "Модель aura-orion-ru",
+            "params": {"model": "aura-orion-ru"},
+            "data": {"text": text}
+        },
+        # Подход 4: модель aura-helios-ru
+        {
+            "name": "Модель aura-helios-ru",
+            "params": {"model": "aura-helios-ru"},
+            "data": {"text": text}
+        },
+        # Подход 5: английская модель как fallback
+        {
+            "name": "Английская модель (fallback)",
+            "params": {"model": "aura-athena-en"},
+            "data": {"text": text}
+        }
+    ]
     
     headers = {
         "Authorization": f"Token {DEEPGRAM_API_KEY}",
         "Content-Type": "application/json"
     }
     
-    data = {
-        "text": text
-    }
+    for approach in approaches:
+        try:
+            logger.info(f"🎧 Пробуем подход: {approach['name']}")
+            
+            timeout = aiohttp.ClientTimeout(total=30)
+            
+            async with aiohttp.ClientSession() as session:
+                async with session.post(
+                    url,
+                    params=approach["params"],
+                    headers=headers,
+                    json=approach["data"],
+                    timeout=timeout
+                ) as response:
+                    
+                    if response.status == 200:
+                        audio_data = await response.read()
+                        logger.info(f"✅ Успех с подходом '{approach['name']}': {len(audio_data)} байт")
+                        return audio_data
+                    else:
+                        error_text = await response.text()
+                        logger.warning(f"⚠️ Подход '{approach['name']}' не сработал: {response.status} - {error_text}")
+                        continue
+                        
+        except Exception as e:
+            logger.warning(f"⚠️ Ошибка с подходом '{approach['name']}': {e}")
+            continue
+    
+    # Если ничего не сработало, пробуем узнать доступные модели через API
+    logger.info("🔍 Пытаемся получить информацию о доступных TTS моделях...")
     
     try:
-        logger.info(f"🎧 Отправка текста в Deepgram TTS: {len(text)} символов")
-        
-        timeout = aiohttp.ClientTimeout(total=60, connect=30, sock_read=60)
-        
+        # Запрос к API для получения списка моделей (если такой эндпоинт существует)
+        models_url = "https://api.deepgram.com/v1/models?type=tts"
         async with aiohttp.ClientSession() as session:
-            async with session.post(
-                url,
-                params=params,
-                headers=headers,
-                json=data,
-                timeout=timeout
+            async with session.get(
+                models_url,
+                headers={"Authorization": f"Token {DEEPGRAM_API_KEY}"}
             ) as response:
-                
-                if response.status != 200:
-                    error_text = await response.text()
-                    logger.error(f"❌ Ошибка Deepgram TTS {response.status}: {error_text}")
-                    
-                    # Пробуем альтернативную модель если первая не сработала
-                    if response.status == 400:
-                        logger.info("🔄 Пробуем альтернативную модель aura-orion-ru...")
-                        params["model"] = "aura-orion-ru"
-                        
-                        async with session.post(
-                            url,
-                            params=params,
-                            headers=headers,
-                            json=data,
-                            timeout=timeout
-                        ) as retry_response:
-                            if retry_response.status == 200:
-                                audio_data = await retry_response.read()
-                                logger.info(f"✅ Аудио получено (альтернативная модель): {len(audio_data)} байт")
-                                return audio_data
-                            else:
-                                error_text = await retry_response.text()
-                                logger.error(f"❌ Ошибка Deepgram TTS (альтернативная) {retry_response.status}: {error_text}")
-                    
-                    return None
-                
-                # Получаем аудиоданные
-                audio_data = await response.read()
-                logger.info(f"✅ Аудио получено: {len(audio_data)} байт")
-                return audio_data
-                    
-    except asyncio.TimeoutError:
-        logger.error("⏰ Таймаут при обращении к Deepgram TTS")
-        return None
-    except aiohttp.ClientError as e:
-        logger.error(f"🌐 Сетевая ошибка Deepgram TTS: {e}")
-        return None
+                if response.status == 200:
+                    models_info = await response.json()
+                    logger.info(f"📋 Доступные TTS модели: {models_info}")
+                else:
+                    logger.warning(f"❌ Не удалось получить список моделей: {response.status}")
     except Exception as e:
-        logger.error(f"💥 Неожиданная ошибка Deepgram TTS: {e}")
-        return None
+        logger.warning(f"⚠️ Ошибка при запросе списка моделей: {e}")
+    
+    logger.error("❌ Все попытки Deepgram TTS не удались")
+    return None
+
+async def test_deepgram_models():
+    """Тестирует доступные модели Deepgram"""
+    if not DEEPGRAM_API_KEY:
+        logger.error("❌ DEEPGRAM_API_KEY не найден")
+        return
+    
+    logger.info("🔍 Тестирование Deepgram STT моделей...")
+    
+    # Тестируем STT модели
+    stt_models = [
+        "nova-3",
+        "nova-2", 
+        "enhanced",
+        "base",
+    ]
+    
+    # Создаем тестовый аудиофайл (пустой, только для проверки соединения)
+    url = "https://api.deepgram.com/v1/listen"
+    headers = {
+        "Authorization": f"Token {DEEPGRAM_API_KEY}",
+    }
+    
+    for model in stt_models:
+        params = {
+            "model": model,
+            "language": "ru",
+        }
+        
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(
+                    url,
+                    params=params,
+                    headers=headers
+                ) as response:
+                    if response.status != 404:  # 404 значит что эндпоинт существует
+                        logger.info(f"✅ STT модель {model} доступна (статус: {response.status})")
+                    else:
+                        logger.info(f"❌ STT модель {model} НЕ доступна")
+        except Exception as e:
+            logger.info(f"❌ STT модель {model}: ошибка {e}")
+    
+    logger.info("🔍 Тестирование Deepgram TTS моделей...")
+    
+    # Тестируем TTS модели
+    tts_models = [
+        "aura-asteria-ru",
+        "aura-orion-ru",
+        "aura-helios-ru",
+        "aura-athena-en",
+        "aura-luna-en",
+    ]
+    
+    tts_url = "https://api.deepgram.com/v1/speak"
+    
+    for model in tts_models:
+        params = {"model": model}
+        
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(
+                    tts_url,
+                    params=params,
+                    headers=headers
+                ) as response:
+                    if response.status != 404:
+                        logger.info(f"✅ TTS модель {model} доступна (статус: {response.status})")
+                    else:
+                        logger.info(f"❌ TTS модель {model} НЕ доступна")
+        except Exception as e:
+            logger.info(f"❌ TTS модель {model}: ошибка {e}")
 
 async def toggle_voice_mode(callback: types.CallbackQuery):
     """
