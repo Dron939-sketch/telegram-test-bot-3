@@ -1582,32 +1582,32 @@ class DeepgramVoiceAgent:
         self.current_audio_response = None
         
     def _create_system_prompt(self) -> str:
-    """Создает системный промпт на основе профиля пользователя (на русском)"""
-    scores = self.user_profile.get("scores", {})
-    bottleneck_key = get_priority_order(scores)[0]
-    bottleneck_lvl = level(scores[bottleneck_key])
-    bottleneck_profile = LEVEL_PROFILES.get(bottleneck_key, {}).get(bottleneck_lvl, {})
-    
-    profile_lines = []
-    for k, v in scores.items():
-        lvl = level(v)
-        p = LEVEL_PROFILES.get(k, {}).get(lvl, {})
-        archetype = p.get("archetype", "")
-        profile_lines.append(f"{VECTORS[k]['name']}: {lvl}/6 — {VECTORS[k]['levels'][lvl]['name']}" + (f" ({archetype})" if archetype else ""))
-    
-    profile_summary = "\n".join(profile_lines)
-    
-    history_text = ""
-    if self.history:
-        recent_history = self.history[-5:]
-        history_lines = []
-        for entry in recent_history:
-            role = "Клиент" if entry["role"] == "user" else "Психолог"
-            history_lines.append(f"{role}: {entry['text']}")
-        if history_lines:
-            history_text = "\n\nИСТОРИЯ ДИАЛОГА:\n" + "\n".join(history_lines)
-    
-    prompt = f"""ТЫ — РУССКОЯЗЫЧНЫЙ ПСИХОЛОГ. ОТВЕЧАЙ ТОЛЬКО НА РУССКОМ ЯЗЫКЕ.
+        """Создает системный промпт на основе профиля пользователя (на русском)"""
+        scores = self.user_profile.get("scores", {})
+        bottleneck_key = get_priority_order(scores)[0]
+        bottleneck_lvl = level(scores[bottleneck_key])
+        bottleneck_profile = LEVEL_PROFILES.get(bottleneck_key, {}).get(bottleneck_lvl, {})
+        
+        profile_lines = []
+        for k, v in scores.items():
+            lvl = level(v)
+            p = LEVEL_PROFILES.get(k, {}).get(lvl, {})
+            archetype = p.get("archetype", "")
+            profile_lines.append(f"{VECTORS[k]['name']}: {lvl}/6 — {VECTORS[k]['levels'][lvl]['name']}" + (f" ({archetype})" if archetype else ""))
+        
+        profile_summary = "\n".join(profile_lines)
+        
+        history_text = ""
+        if self.history:
+            recent_history = self.history[-5:]
+            history_lines = []
+            for entry in recent_history:
+                role = "Клиент" if entry["role"] == "user" else "Психолог"
+                history_lines.append(f"{role}: {entry['text']}")
+            if history_lines:
+                history_text = "\n\nИСТОРИЯ ДИАЛОГА:\n" + "\n".join(history_lines)
+        
+        prompt = f"""ТЫ — РУССКОЯЗЫЧНЫЙ ПСИХОЛОГ. ОТВЕЧАЙ ТОЛЬКО НА РУССКОМ ЯЗЫКЕ.
 
 Вот профиль человека, с которым ты общаешься:
 
@@ -1624,49 +1624,49 @@ class DeepgramVoiceAgent:
 3. Отвечай коротко, 2-4 предложения
 4. Будь эмпатичным, но конкретным
 5. Учитывай профиль человека в ответах"""
-    
-    return prompt
+        
+        return prompt
     
     def _create_agent_settings(self) -> dict:
-    """Создает настройки для Voice Agent с русским языком и DeepSeek"""
-    return {
-        "type": "Settings",
-        "audio": {
-            "input": {
-                "encoding": "linear16",
-                "sample_rate": 24000
-            },
-            "output": {
-                "encoding": "linear16",
-                "sample_rate": 24000,
-                "container": "wav"
-            }
-        },
-        "agent": {
-            "language": "ru",  # Явно указываем русский язык
-            "listen": {
-                "provider": {
-                    "type": "deepgram",
-                    "model": "nova-3"  # Для распознавания русской речи
-                }
-            },
-            "think": {
-                "provider": {
-                    "type": "open_ai",  # DeepSeek совместим с OpenAI API
-                    "model": "deepseek-chat",
-                    "base_url": "https://api.deepseek.com/v1"  # URL DeepSeek API
+        """Создает настройки для Voice Agent с русским языком и DeepSeek"""
+        return {
+            "type": "Settings",
+            "audio": {
+                "input": {
+                    "encoding": "linear16",
+                    "sample_rate": 24000
                 },
-                "prompt": self._create_system_prompt()  # Промпт на русском
-            },
-            "speak": {
-                "provider": {
-                    "type": "deepgram",
-                    "model": "aura-asteria-ru"  # Русский голос
+                "output": {
+                    "encoding": "linear16",
+                    "sample_rate": 24000,
+                    "container": "wav"
                 }
             },
-            "greeting": "Здравствуйте! Я готов ответить на ваши вопросы с учетом вашего психологического профиля."
+            "agent": {
+                "language": "ru",  # Явно указываем русский язык
+                "listen": {
+                    "provider": {
+                        "type": "deepgram",
+                        "model": "nova-3"  # Для распознавания русской речи
+                    }
+                },
+                "think": {
+                    "provider": {
+                        "type": "open_ai",  # DeepSeek совместим с OpenAI API
+                        "model": "deepseek-chat",
+                        "base_url": "https://api.deepseek.com/v1"  # URL DeepSeek API
+                    },
+                    "prompt": self._create_system_prompt()  # Промпт на русском
+                },
+                "speak": {
+                    "provider": {
+                        "type": "deepgram",
+                        "model": "aura-asteria-ru"  # Русский голос
+                    }
+                },
+                "greeting": "Здравствуйте! Я готов ответить на ваши вопросы с учетом вашего психологического профиля."
+            }
         }
-    }
     
     def _convert_ogg_to_pcm(self, ogg_data: bytes) -> bytes:
         """
@@ -1802,9 +1802,6 @@ class DeepgramVoiceAgent:
                 
                 # Закрываем соединение
                 await websocket.close()
-                
-                # Сохраняем в историю (текст из ConversationText мы не получили, но можем добавить позже)
-                # Для истории текста нужно будет парсить ConversationText сообщения
                 
                 if len(self.audio_buffer) > 0:
                     # Добавляем WAV заголовок
