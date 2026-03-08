@@ -1483,9 +1483,15 @@ async def text_to_speech(text: str) -> bytes:
     if len(text) > 1000:
         text = text[:1000] + "..."
     
+    # Deepgram TTS API endpoint
     url = "https://api.deepgram.com/v1/speak"
+    
+    # Доступные модели для русского языка:
+    # - aura-asteria-ru - женский голос
+    # - aura-orion-ru - мужской голос (альтернатива)
+    # - aura-helios-ru - еще один вариант
     params = {
-        "model": "aura-asteria-ru"  # Русский голос
+        "model": "aura-asteria-ru",  # Русский женский голос
     }
     
     headers = {
@@ -1513,7 +1519,28 @@ async def text_to_speech(text: str) -> bytes:
                 
                 if response.status != 200:
                     error_text = await response.text()
-                    logger.error(f"❌ Ошибка Deepgram TTS {response.status}: {error_text[:200]}")
+                    logger.error(f"❌ Ошибка Deepgram TTS {response.status}: {error_text}")
+                    
+                    # Пробуем альтернативную модель если первая не сработала
+                    if response.status == 400:
+                        logger.info("🔄 Пробуем альтернативную модель aura-orion-ru...")
+                        params["model"] = "aura-orion-ru"
+                        
+                        async with session.post(
+                            url,
+                            params=params,
+                            headers=headers,
+                            json=data,
+                            timeout=timeout
+                        ) as retry_response:
+                            if retry_response.status == 200:
+                                audio_data = await retry_response.read()
+                                logger.info(f"✅ Аудио получено (альтернативная модель): {len(audio_data)} байт")
+                                return audio_data
+                            else:
+                                error_text = await retry_response.text()
+                                logger.error(f"❌ Ошибка Deepgram TTS (альтернативная) {retry_response.status}: {error_text}")
+                    
                     return None
                 
                 # Получаем аудиоданные
