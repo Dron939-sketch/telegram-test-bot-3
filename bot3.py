@@ -28,7 +28,6 @@ from aiogram import Bot, Dispatcher, types
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, BufferedInputFile
 from aiogram.filters import Command
 from aiogram.exceptions import TelegramBadRequest
-from datetime import datetime, timedelta
 
 # Загружаем переменные окружения
 load_dotenv()
