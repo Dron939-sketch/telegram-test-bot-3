@@ -3,8 +3,7 @@
 """
 ВИРТУАЛЬНЫЙ ПСИХОЛОГ - Матрица Поведений 4×6
 ПОЛНАЯ ВЕРСИЯ с ИНТИМНЫМ ПРОФИЛЕМ, МЫСЛЯМИ ПСИХОЛОГА и ГОЛОСОВЫМИ ФУНКЦИЯМИ
-ИНТЕГРАЦИЯ С YANDEX SPEECHKIT (TTS) И DEEPGRAM (STT)
-ГОЛОСОВЫЕ ФУНКЦИИ ДОСТУПНЫ ТОЛЬКО ПОСЛЕ ЗАВЕРШЕНИЯ ТЕСТА
+ГОЛОС АВТОМАТИЧЕСКИ АКТИВЕН ПОСЛЕ ЗАВЕРШЕНИЯ ТЕСТА
 """
 
 import os
@@ -1523,7 +1522,7 @@ async def text_to_speech(text: str) -> bytes:
         "voice": "oksana",  # Русский женский голос
         "emotion": "neutral",
         "speed": 1.0,
-        "format": "lpcm",  # Меняем opus на lpcm (линейный PCM)
+        "format": "wav",  # Используем WAV формат для лучшей совместимости
         "sampleRateHertz": 48000,
     }
     
@@ -1542,31 +1541,11 @@ async def text_to_speech(text: str) -> bytes:
                 
                 if response.status == 200:
                     audio_data = await response.read()
-                    logger.info(f"✅ Аудио от Yandex получено: {len(audio_data)} байт (формат LPCM)")
+                    logger.info(f"✅ Аудио от Yandex получено: {len(audio_data)} байт (формат WAV)")
                     return audio_data
                 else:
                     error_text = await response.text()
                     logger.error(f"❌ Ошибка Yandex TTS {response.status}: {error_text}")
-                    
-                    # Пробуем альтернативный формат
-                    if "format" in error_text:
-                        logger.info("🔄 Пробую формат wav...")
-                        data["format"] = "wav"
-                        
-                        async with session.post(
-                            url,
-                            headers=headers,
-                            data=data,
-                            timeout=timeout
-                        ) as retry_response:
-                            if retry_response.status == 200:
-                                audio_data = await retry_response.read()
-                                logger.info(f"✅ Аудио от Yandex получено (wav): {len(audio_data)} байт")
-                                return audio_data
-                            else:
-                                error_text = await retry_response.text()
-                                logger.error(f"❌ Ошибка Yandex TTS (wav) {retry_response.status}: {error_text}")
-                    
                     return None
                     
     except asyncio.TimeoutError:
@@ -1595,8 +1574,7 @@ async def test_yandex_command(message: types.Message):
     audio = await text_to_speech(test_text)
     
     if audio:
-        # Используем .raw для LPCM или .wav для WAV
-        audio_file = BufferedInputFile(audio, filename="test.raw")
+        audio_file = BufferedInputFile(audio, filename="test.wav")
         await message.answer_voice(
             audio_file,
             caption="✅ Yandex SpeechKit работает! Голос: Оксана"
@@ -1781,8 +1759,7 @@ async def show_stage_intro(callback: types.CallbackQuery, stage_key: str):
             "intimate_profile": None,
             "ai_analysis": None,
             "ai_recommendations": None,
-            "history": [],
-            "voice_mode": False
+            "history": []
         }
     
     user_data[user_id]["current_stage"] = stage_key
@@ -2337,52 +2314,12 @@ async def show_saved_intimate_profile(callback: types.CallbackQuery, profile_tex
         await callback.message.edit_text(full_text, parse_mode='Markdown', reply_markup=keyboard)
 
 # ══════════════════════════════════════════════
-#  ФУНКЦИИ ДЛЯ ГОЛОСОВОГО РЕЖИМА
+#  ФУНКЦИИ ДЛЯ ГОЛОСОВОГО РЕЖИМА (АВТОМАТИЧЕСКИ АКТИВЕН ПОСЛЕ ТЕСТА)
 # ══════════════════════════════════════════════
 
-async def noop_callback(callback: types.CallbackQuery):
-    """Заглушка для неактивных кнопок"""
-    await callback.answer("Эта функция станет доступна после прохождения теста", show_alert=True)
-
-async def toggle_voice_mode(callback: types.CallbackQuery):
-    """
-    Переключает голосовой режим для пользователя
-    Доступно ТОЛЬКО после завершения теста
-    """
-    user_id = callback.from_user.id
-    user = user_data.get(user_id, {})
-    
-    # Проверяем, пройден ли тест
-    test_completed = all(len(user.get("scores", {}).get(stage, [])) >= 8 for stage in STAGE_ORDER)
-    
-    if not test_completed:
-        await callback.message.edit_text(
-            "🎙 *Голосовой режим станет доступен после завершения теста*\n\n"
-            "Сначала пройдите все 4 этапа, чтобы получить свой психологический портрет.\n"
-            "После этого вы сможете общаться со мной голосом.",
-            parse_mode='Markdown',
-            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="🔪 Пройти тест", callback_data="start_test")],
-                [InlineKeyboardButton(text="◀️ Назад", callback_data="back_to_menu")]
-            ])
-        )
-        return
-    
-    current_mode = user.get("voice_mode", False)
-    user["voice_mode"] = not current_mode
-    
-    mode_text = "🎙 ГОЛОСОВОЙ" if user["voice_mode"] else "📝 ТЕКСТОВЫЙ"
-    
-    await callback.message.edit_text(
-        f"✅ Режим ответов переключен на *{mode_text}*\n\n"
-        f"Теперь я буду отвечать {'голосовыми сообщениями' if user['voice_mode'] else 'текстом'}.",
-        parse_mode='Markdown',
-        reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="◀️ Назад", callback_data="show_results")]
-        ])
-    )
-    
-    logger.info(f"Пользователь {user_id} переключил режим на {mode_text}")
+def is_test_completed(user: dict) -> bool:
+    """Проверяет, пройден ли тест"""
+    return all(len(user.get("scores", {}).get(stage, [])) >= 8 for stage in STAGE_ORDER)
 
 async def handle_voice_message(message: types.Message):
     """
@@ -2399,9 +2336,7 @@ async def handle_voice_message(message: types.Message):
         return
     
     # Критическая проверка: тест должен быть полностью пройден
-    test_completed = all(len(user["scores"][stage]) >= 8 for stage in STAGE_ORDER)
-    
-    if not test_completed:
+    if not is_test_completed(user):
         await message.answer(
             "🎙 *Голосовые сообщения доступны только после завершения теста*\n\n"
             "Сначала пройдите все 4 этапа, чтобы я мог анализировать ваши вопросы с учетом вашего профиля.",
@@ -2515,45 +2450,22 @@ async def handle_voice_message(message: types.Message):
         if len(user["history"]) > 10:
             user["history"] = user["history"][-10:]
         
-        # Проверяем режим пользователя
-        voice_mode = user.get("voice_mode", False)
+        # Отправляем и текст, и голос (автоматически, без кнопки)
+        await status_msg.edit_text(
+            f"📝 *Вы сказали:*\n_{recognized_text}_\n\n"
+            f"*Ответ:*\n{response}",
+            parse_mode='Markdown'
+        )
         
-        if voice_mode:
-            await status_msg.edit_text(
-                f"📝 *Вы сказали:*\n_{recognized_text}_\n\n🎧 *Озвучиваю ответ...*",
+        # Получаем голосовой ответ через Yandex
+        audio_data = await text_to_speech(response)
+        
+        if audio_data:
+            audio_file = BufferedInputFile(audio_data, filename="response.wav")
+            await message.answer_voice(
+                audio_file,
+                caption="🎙 *Голосовой ответ*",
                 parse_mode='Markdown'
-            )
-            
-            # Используем Yandex для синтеза речи
-            audio_data = await text_to_speech(response)
-            
-            if audio_data:
-                audio_file = BufferedInputFile(audio_data, filename="response.opus")
-                await message.answer_voice(
-                    audio_file,
-                    caption="🎙 *Голосовой ответ*",
-                    parse_mode='Markdown'
-                )
-                await status_msg.delete()
-            else:
-                await status_msg.edit_text(
-                    f"📝 *Вы сказали:*\n_{recognized_text}_\n\n"
-                    f"*Ответ:*\n{response}",
-                    parse_mode='Markdown',
-                    reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                        [InlineKeyboardButton(text="🎙 Вкл. голосовой режим", callback_data="toggle_voice")],
-                        [InlineKeyboardButton(text="❓ Еще вопрос", callback_data="smart_questions")]
-                    ])
-                )
-        else:
-            await status_msg.edit_text(
-                f"📝 *Вы сказали:*\n_{recognized_text}_\n\n"
-                f"*Ответ:*\n{response}",
-                parse_mode='Markdown',
-                reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                    [InlineKeyboardButton(text="🎙 Вкл. голосовой режим", callback_data="toggle_voice")],
-                    [InlineKeyboardButton(text="❓ Еще вопрос", callback_data="smart_questions")]
-                ])
             )
     
     except Exception as e:
@@ -2588,8 +2500,7 @@ async def start_command(message: types.Message):
         "intimate_profile": None,
         "ai_analysis": None,
         "ai_recommendations": None,
-        "history": [],
-        "voice_mode": False
+        "history": []
     }
     
     stats.register_start(user_id)
@@ -2620,8 +2531,7 @@ async def start_command(message: types.Message):
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="🔪 ДЕЛАЕМ ВСКРЫТИЕ!", callback_data="start_test")],
         [InlineKeyboardButton(text="📖 ЧТО ЗА МЕТОД", callback_data="about_method")],
-        [InlineKeyboardButton(text="😱 РЕЗУЛЬТ В ЛИЦАХ", callback_data="results_examples")],
-        [InlineKeyboardButton(text="🎙 ГОЛОСОВОЙ РЕЖИМ", callback_data="toggle_voice")]
+        [InlineKeyboardButton(text="😱 РЕЗУЛЬТ В ЛИЦАХ", callback_data="results_examples")]
     ])
     
     await message.answer(text, reply_markup=keyboard, parse_mode='Markdown')
@@ -2671,8 +2581,7 @@ async def callback_handler(callback: types.CallbackQuery):
             "intimate_profile": None,
             "ai_analysis": None,
             "ai_recommendations": None,
-            "history": [],
-            "voice_mode": False
+            "history": []
         }
     
     try:
@@ -2690,15 +2599,9 @@ async def callback_handler(callback: types.CallbackQuery):
         elif data == "results_examples":
             await show_results_examples(callback)
         
-        elif data == "toggle_voice":
-            await toggle_voice_mode(callback)
-        
-        elif data == "noop":
-            await noop_callback(callback)
-        
         elif data == "back_to_menu":
             user = user_data.get(user_id, {})
-            test_completed = all(len(user.get("scores", {}).get(stage, [])) >= 8 for stage in STAGE_ORDER)
+            test_completed = is_test_completed(user)
             
             keyboard_buttons = [
                 [InlineKeyboardButton(text="🔪 ДЕЛАЕМ ВСКРЫТИЕ!", callback_data="start_test")],
@@ -2706,17 +2609,11 @@ async def callback_handler(callback: types.CallbackQuery):
                 [InlineKeyboardButton(text="😱 РЕЗУЛЬТ В ЛИЦАХ", callback_data="results_examples")],
             ]
             
-            if test_completed:
-                voice_status = "🎙 ВЫКЛ" if not user.get("voice_mode", False) else "🎙 ВКЛ"
-                keyboard_buttons.append([InlineKeyboardButton(text=f"{voice_status}", callback_data="toggle_voice")])
-            else:
-                keyboard_buttons.append([InlineKeyboardButton(text="🎙 (доступно после теста)", callback_data="noop")])
-            
             keyboard = InlineKeyboardMarkup(inline_keyboard=keyboard_buttons)
             
             menu_text = "🧠 *МАТРИЦА ПОВЕДЕНИЙ 4×6*\n\nГотовы к вскрытию?"
             if test_completed:
-                menu_text += "\n\n✅ Тест пройден! Теперь доступен голосовой режим."
+                menu_text += "\n\n✅ Тест пройден! Теперь доступны голосовые сообщения."
             
             await callback.message.edit_text(
                 menu_text,
@@ -2843,7 +2740,6 @@ async def callback_handler(callback: types.CallbackQuery):
         
         elif data == "restart_test":
             old_history = user_data[user_id].get("history", [])
-            old_voice_mode = user_data[user_id].get("voice_mode", False)
             
             user_data[user_id] = {
                 "stage": "menu",
@@ -2855,14 +2751,12 @@ async def callback_handler(callback: types.CallbackQuery):
                 "intimate_profile": None,
                 "ai_analysis": None,
                 "ai_recommendations": None,
-                "history": old_history[-10:] if old_history else [],
-                "voice_mode": old_voice_mode
+                "history": old_history[-10:] if old_history else []
             }
             keyboard = InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="🔪 ДЕЛАЕМ ВСКРЫТИЕ!", callback_data="start_test")],
                 [InlineKeyboardButton(text="📖 ЧТО ЗА МЕТОД", callback_data="about_method")],
-                [InlineKeyboardButton(text="😱 РЕЗУЛЬТ В ЛИЦАХ", callback_data="results_examples")],
-                [InlineKeyboardButton(text="🎙 ГОЛОСОВОЙ РЕЖИМ", callback_data="toggle_voice")]
+                [InlineKeyboardButton(text="😱 РЕЗУЛЬТ В ЛИЦАХ", callback_data="results_examples")]
             ])
             await callback.message.edit_text(
                 "🧠 *МАТРИЦА ПОВЕДЕНИЙ 4×6*\n\nГотовы к вскрытию?",
@@ -3327,10 +3221,8 @@ async def show_smart_questions(callback: types.CallbackQuery):
     user["smart_questions"] = questions
     
     voice_info = ""
-    if user.get("voice_mode", False):
-        voice_info = "🎙 *Голосовой режим включен* — я отвечу голосом\n"
-    else:
-        voice_info = "📝 *Текстовый режим* — нажмите 🎙 в меню для голосовых ответов\n"
+    if is_test_completed(user):
+        voice_info = "🎙 *Голосовой режим активен* — после ответа придет голосовое сообщение\n"
     
     keyboard = []
     for i, q in enumerate(questions, 1):
@@ -3466,42 +3358,23 @@ async def handle_smart_question(callback: types.CallbackQuery, question: str):
     if len(user["history"]) > 10:
         user["history"] = user["history"][-10:]
     
-    voice_mode = user.get("voice_mode", False)
+    # Отправляем текстовый ответ
+    await callback.message.edit_text(
+        f"❓ *{question}*\n\n{response}",
+        parse_mode='Markdown'
+    )
     
-    if voice_mode:
-        status_msg = await callback.message.edit_text(
-            "🎧 *Озвучиваю ответ...*",
-            parse_mode='Markdown'
-        )
-        
+    # Проверяем, пройден ли тест (голос автоматически активен)
+    if is_test_completed(user):
         audio_data = await text_to_speech(response)
         
         if audio_data:
-            audio_file = BufferedInputFile(audio_data, filename="response.opus")
+            audio_file = BufferedInputFile(audio_data, filename="response.wav")
             await callback.message.answer_voice(
                 audio_file,
-                caption=f"❓ *{question}*\n\n🎙 *Голосовой ответ*",
+                caption=f"🎙 *Голосовой ответ*",
                 parse_mode='Markdown'
             )
-            await status_msg.delete()
-        else:
-            await callback.message.edit_text(
-                f"❓ *{question}*\n\n{response}",
-                parse_mode='Markdown',
-                reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                    [InlineKeyboardButton(text="❓ Ещё вопрос", callback_data="smart_questions")],
-                    [InlineKeyboardButton(text="◀️ Назад", callback_data="show_results")]
-                ])
-            )
-    else:
-        await callback.message.edit_text(
-            f"❓ *{question}*\n\n{response}",
-            parse_mode='Markdown',
-            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="❓ Ещё вопрос", callback_data="smart_questions")],
-                [InlineKeyboardButton(text="◀️ Назад", callback_data="show_results")]
-            ])
-        )
 
 async def handle_message(message: types.Message):
     user_id = message.from_user.id
@@ -3585,39 +3458,23 @@ async def handle_message(message: types.Message):
     
     await thinking.delete()
     
-    voice_mode = user.get("voice_mode", False)
+    # Отправляем текстовый ответ
+    await message.answer(
+        f"🧠 *Ответ*\n\n{response}",
+        parse_mode='Markdown'
+    )
     
-    if voice_mode:
-        status_msg = await message.answer("🎧 *Озвучиваю ответ...*", parse_mode='Markdown')
-        
+    # Проверяем, пройден ли тест (голос автоматически активен)
+    if is_test_completed(user):
         audio_data = await text_to_speech(response)
         
         if audio_data:
-            audio_file = BufferedInputFile(audio_data, filename="response.opus")
+            audio_file = BufferedInputFile(audio_data, filename="response.wav")
             await message.answer_voice(
                 audio_file,
                 caption=f"🎙 *Голосовой ответ*",
                 parse_mode='Markdown'
             )
-            await status_msg.delete()
-        else:
-            await status_msg.edit_text(
-                f"🧠 *Ответ*\n\n{response}",
-                reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                    [InlineKeyboardButton(text="❓ Еще вопрос", callback_data="smart_questions")],
-                    [InlineKeyboardButton(text="🏠 Меню", callback_data="back_to_menu")]
-                ]),
-                parse_mode='Markdown'
-            )
-    else:
-        await message.answer(
-            f"🧠 *Ответ*\n\n{response}",
-            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="❓ Еще вопрос", callback_data="smart_questions")],
-                [InlineKeyboardButton(text="🏠 Меню", callback_data="back_to_menu")]
-            ]),
-            parse_mode='Markdown'
-        )
     
     user["stage"] = "menu"
 
@@ -3668,7 +3525,7 @@ async def main():
     print("📊 Команды: /stats, /apistatus, /test_yandex")
     print("🎙 Распознавание речи: " + ("ВКЛЮЧЕНО (Deepgram)" if DEEPGRAM_API_KEY else "ОТКЛЮЧЕНО"))
     print("🎙 Синтез речи: " + ("ВКЛЮЧЕН (Yandex, русский)" if YANDEX_API_KEY else "ОТКЛЮЧЕН"))
-    print("⚠️ Голос доступен ТОЛЬКО после завершения теста")
+    print("⚠️ Голос автоматически активен после завершения теста")
     
     await dp.start_polling(bot, drop_pending_updates=True)
 
