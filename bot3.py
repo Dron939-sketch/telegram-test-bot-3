@@ -1398,6 +1398,15 @@ def get_priority_order(scores: dict) -> list:
     else:
         return [k for k, _ in sorted(scores.items(), key=lambda x: x[1])]
 
+def should_be_ironic(text: str) -> bool:
+    """Определяет, стоит ли ответить с иронией"""
+    ironic_markers = [
+        "очевидно", "разумеется", "конечно", "естественно",
+        "неужели", "серьёзно", "правда?", "интересно",
+        "ха", "хм", "ну-ну", "ага"
+    ]
+    return any(marker in text.lower() for marker in ironic_markers)
+
 # ══════════════════════════════════════════════
 #  ФУНКЦИИ РАБОТЫ С DEEPGRAM API (только для распознавания речи)
 # ══════════════════════════════════════════════
@@ -1491,9 +1500,10 @@ async def speech_to_text(voice_file_path: str) -> str:
 #  ФУНКЦИИ РАБОТЫ С YANDEX SPEECHKIT (только для синтеза речи)
 # ══════════════════════════════════════════════
 
-async def text_to_speech(text: str) -> bytes:
+async def text_to_speech(text: str, is_ironic: bool = False) -> bytes:
     """
     Преобразует текст в голос через Yandex SpeechKit
+    с возможностью выбора ироничной интонации
     """
     YANDEX_API_KEY = os.environ.get("YANDEX_API_KEY", "")
     
@@ -1501,32 +1511,33 @@ async def text_to_speech(text: str) -> bytes:
         logger.error("❌ YANDEX_API_KEY не найден")
         return None
     
-    # Ограничиваем длину текста
     if len(text) > 1000:
         text = text[:1000] + "..."
     
-    # URL для Yandex SpeechKit
     url = "https://tts.api.cloud.yandex.net/speech/v1/tts:synthesize"
     
     headers = {
         "Authorization": f"Api-Key {YANDEX_API_KEY}",
     }
     
-    # Доступные русские голоса:
-    # oksana - женский, нейтральный
-    # alena - женский, живой
-    # filipp - мужской
-    # ermil - мужской
+    # Выбираем голос и эмоцию
+    # Alexander - основной (новый, живой)
+    # Kirill - запасной (со strict эмоцией)
+    voice = "alexander"  # или "kirill"
+    
+    # Эмоции: neutral, good (добрый/ироничный), strict (строгий/надменный)
+    emotion = "good" if is_ironic else "neutral"
+    
     data = {
         "text": text,
-        "voice": "oksana",  # Русский женский голос
-        "emotion": "neutral",
+        "voice": voice,
+        "emotion": emotion,
         "speed": 1.0,
-        "format": "oggopus",  # OGG Opus - отлично работает с Telegram
+        "format": "oggopus",
     }
     
     try:
-        logger.info(f"🎧 Отправка текста в Яндекс TTS: {len(text)} символов")
+        logger.info(f"🎧 Отправка в Яндекс TTS: голос {voice}, эмоция {emotion}")
         
         timeout = aiohttp.ClientTimeout(total=30)
         
@@ -1540,16 +1551,16 @@ async def text_to_speech(text: str) -> bytes:
                 
                 if response.status == 200:
                     audio_data = await response.read()
-                    logger.info(f"✅ Аудио от Yandex получено: {len(audio_data)} байт (формат OGG Opus)")
+                    logger.info(f"✅ Аудио получено: {len(audio_data)} байт")
                     return audio_data
                 else:
                     error_text = await response.text()
                     logger.error(f"❌ Ошибка Yandex TTS {response.status}: {error_text}")
                     
-                    # Пробуем альтернативный формат если oggopus не сработал
-                    if "format" in error_text or response.status == 400:
-                        logger.info("🔄 Пробую формат lpcm...")
-                        data["format"] = "lpcm"
+                    # Пробуем запасной голос
+                    if response.status == 400:
+                        logger.info("🔄 Пробую запасной голос kirill...")
+                        data["voice"] = "kirill"
                         
                         async with session.post(
                             url,
@@ -1559,22 +1570,13 @@ async def text_to_speech(text: str) -> bytes:
                         ) as retry_response:
                             if retry_response.status == 200:
                                 audio_data = await retry_response.read()
-                                logger.info(f"✅ Аудио от Yandex получено (lpcm): {len(audio_data)} байт")
+                                logger.info(f"✅ Аудио от kirill получено")
                                 return audio_data
-                            else:
-                                error_text = await retry_response.text()
-                                logger.error(f"❌ Ошибка Yandex TTS (lpcm) {retry_response.status}: {error_text}")
                     
                     return None
                     
-    except asyncio.TimeoutError:
-        logger.error("⏰ Таймаут при обращении к Yandex TTS")
-        return None
-    except aiohttp.ClientError as e:
-        logger.error(f"🌐 Сетевая ошибка Yandex TTS: {e}")
-        return None
     except Exception as e:
-        logger.error(f"💥 Неожиданная ошибка Yandex TTS: {e}")
+        logger.error(f"💥 Ошибка Yandex TTS: {e}")
         return None
 
 # ══════════════════════════════════════════════
