@@ -14,9 +14,7 @@ import aiohttp
 import asyncio
 import datetime
 import tempfile
-import struct
-import wave
-import io
+import random  # добавьте это, если его нет
 from typing import Optional, Dict, List, Any
 from statistics import mean
 from dotenv import load_dotenv
@@ -24,6 +22,8 @@ from aiogram import Bot, Dispatcher, types
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, BufferedInputFile
 from aiogram.filters import Command
 from aiogram.exceptions import TelegramBadRequest
+import websockets
+from websockets.exceptions import WebSocketException
 
 # Для WebSocket
 import websockets
