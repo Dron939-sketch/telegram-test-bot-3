@@ -4,6 +4,9 @@
 ВИРТУАЛЬНЫЙ ПСИХОЛОГ - Матрица Поведений 4×6
 ПОЛНАЯ ВЕРСИЯ с ИНТИМНЫМ ПРОФИЛЕМ, МЫСЛЯМИ ПСИХОЛОГА и ГОЛОСОВЫМИ ФУНКЦИЯМИ
 ГОЛОС АВТОМАТИЧЕСКИ АКТИВЕН ПОСЛЕ ЗАВЕРШЕНИЯ ТЕСТА
++ МОТИВАЦИОННЫЕ СООБЩЕНИЯ через 5 минут и 24 часа
++ ПЕРСОНАЛИЗИРОВАННОЕ ОБРАЩЕНИЕ ПО ИМЕНИ
++ РОЛЬ ЗАБОТЛИВОГО СТАРШЕГО ТОВАРИЩА
 """
 
 import os
@@ -25,6 +28,7 @@ from aiogram import Bot, Dispatcher, types
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, BufferedInputFile
 from aiogram.filters import Command
 from aiogram.exceptions import TelegramBadRequest
+from datetime import datetime, timedelta
 
 # Загружаем переменные окружения
 load_dotenv()
@@ -50,6 +54,7 @@ ADMIN_IDS = [532205848]
 
 # Хранилище данных пользователей
 user_data: Dict[int, Dict[str, Any]] = {}
+user_names: Dict[int, str] = {}  # Хранилище имен пользователей
 
 # ─── Система уточняющих вопросов ───────────────────────────────────────────
 CLARIFICATION_ZONES = [1.49, 2.00, 2.50, 3.00, 3.50]
@@ -1598,7 +1603,7 @@ async def test_yandex_command(message: types.Message):
         audio_file = BufferedInputFile(audio, filename="test.ogg")
         await message.answer_voice(
             audio_file,
-            caption="✅ Yandex SpeechKit работает! Голос: Оксана"
+            caption="✅ Yandex SpeechKit работает! Голос: Александр"
         )
         await status.delete()
     else:
@@ -1610,156 +1615,345 @@ async def test_yandex_command(message: types.Message):
             "3. Подключена ли служба SpeechKit"
         )
 
-# ══════════════════════════════════════════════
-#  ФУНКЦИЯ call_deepseek
-# ══════════════════════════════════════════════
-
-async def call_deepseek(prompt, system_message="", max_tokens=500, retry_count=3):
-    """Асинхронный вызов DeepSeek API"""
-    if not DEEPSEEK_API_KEY:
-        logger.error("❌ DEEPSEEK_API_KEY не найден")
-        return None
-
-    url = "https://api.deepseek.com/chat/completions"
+async def test_voices_command(message: types.Message):
+    """Тестирует разные голоса Yandex TTS"""
+    if message.from_user.id not in ADMIN_IDS:
+        await message.answer("⛔ Только для администраторов")
+        return
     
-    headers = {
-        "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
-        "Content-Type": "application/json",
-    }
-
-    messages = []
-    if system_message:
-        messages.append({"role": "system", "content": system_message})
-    messages.append({"role": "user", "content": prompt})
-
-    data = {
-        "model": "deepseek-chat",
-        "messages": messages,
-        "temperature": 0.7,
-        "max_tokens": max_tokens,
-    }
-
-    for attempt in range(retry_count):
-        try:
-            logger.info(f"📡 Попытка {attempt + 1}/{retry_count}")
-            
-            timeout = aiohttp.ClientTimeout(total=120)
-            
-            async with aiohttp.ClientSession() as session:
-                async with session.post(
-                    url,
-                    headers=headers,
-                    json=data,
-                    timeout=timeout
-                ) as response:
-                    
-                    if response.status != 200:
-                        error_text = await response.text()
-                        logger.error(f"❌ Ошибка API {response.status}: {error_text[:200]}")
-                        
-                        if response.status == 429:
-                            wait_time = (2 ** attempt) + random.random()
-                            await asyncio.sleep(wait_time)
-                            continue
-                        elif response.status >= 500:
-                            wait_time = (2 ** attempt) + random.random()
-                            await asyncio.sleep(wait_time)
-                            continue
-                        else:
-                            return None
-                    
-                    result = await response.json()
-                    
-                    if result and "choices" in result and len(result["choices"]) > 0:
-                        content = result["choices"][0]["message"]["content"]
-                        logger.info(f"✅ Успех! Длина ответа: {len(content)} символов")
-                        return content
-                    else:
-                        logger.error(f"❌ Странный формат ответа: {result}")
-                        return None
-                            
-        except asyncio.TimeoutError:
-            logger.error(f"⏰ Таймаут соединения (попытка {attempt + 1})")
-            if attempt < retry_count - 1:
-                wait_time = (2 ** attempt) + random.random()
-                await asyncio.sleep(wait_time)
-        except Exception as e:
-            logger.error(f"💥 Неожиданная ошибка: {e}")
-            if attempt < retry_count - 1:
-                wait_time = (2 ** attempt) + random.random()
-                await asyncio.sleep(wait_time)
+    test_text = "Ну, допустим, вы действительно так считаете. Интересная мысль."
+    status = await message.answer("🎧 Тестирую голоса...")
     
-    logger.error("❌ ВСЕ ПОПЫТКИ НЕ УДАЛИСЬ")
-    return None
-
-def generate_smart_questions(scores):
-    """Генерирует 4-5 вопросов на основе профиля"""
-    questions = []
-    
-    tf = level(scores["ТФ"])
-    sb = level(scores["СБ"])
-    ub = level(scores["УБ"])
-    cv = level(scores["ЧВ"])
-    
-    if tf <= 2:
-        questions.append("Как начать зарабатывать, если нет денег?")
-        questions.append("Почему мне не везет с деньгами?")
-    elif tf <= 4:
-        questions.append("Как увеличить доход без новых вложений?")
-        questions.append("Как создать финансовую подушку?")
-    
-    if sb <= 2:
-        questions.append("Как перестать бояться конфликтов?")
-        questions.append("Как научиться говорить 'нет'?")
-    elif sb <= 4:
-        questions.append("Почему я злюсь внутри, но молчу?")
-        questions.append("Как защищать границы без агрессии?")
-    
-    if ub <= 2:
-        questions.append("Как понять, что происходит в жизни?")
-    elif ub == 4:
-        questions.append("Как перестать искать заговоры?")
-    
-    if cv <= 2:
-        questions.append("Как перестать зависеть от других?")
-    elif cv <= 4:
-        questions.append("Почему отношения поверхностные?")
-    
-    general = [
-        "С чего начать изменения?",
-        "Что мне делать с этой ситуацией?",
-        "Как не срываться на близких?"
+    voices_to_test = [
+        ("alexander", "neutral", "Александр (нейтральный)"),
+        ("alexander", "good", "Александр (ироничный)"),
+        ("kirill", "neutral", "Кирилл (нейтральный)"),
+        ("kirill", "strict", "Кирилл (строгий)"),
+        ("filipp", "neutral", "Филипп (нейтральный)"),
+        ("ermil", "good", "Эрмил (добрый)"),
     ]
     
-    while len(questions) < 5:
-        for q in general:
-            if q not in questions and len(questions) < 5:
-                questions.append(q)
+    headers = {
+        "Authorization": f"Api-Key {YANDEX_API_KEY}",
+    }
     
-    return questions[:5]
+    for voice, emotion, description in voices_to_test:
+        data = {
+            "text": test_text,
+            "voice": voice,
+            "emotion": emotion,
+            "speed": 1.0,
+            "format": "oggopus",
+        }
+        
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.post(
+                    "https://tts.api.cloud.yandex.net/speech/v1/tts:synthesize",
+                    headers=headers,
+                    data=data,
+                    timeout=30
+                ) as response:
+                    if response.status == 200:
+                        audio_data = await response.read()
+                        audio_file = BufferedInputFile(audio_data, filename=f"{voice}_{emotion}.ogg")
+                        await message.answer_voice(
+                            audio_file,
+                            caption=f"🎙 *{description}*",
+                            parse_mode='Markdown'
+                        )
+                        await asyncio.sleep(0.5)
+                    else:
+                        await message.answer(f"❌ {description}: ошибка {response.status}")
+        except Exception as e:
+            await message.answer(f"❌ {description}: ошибка {str(e)[:50]}")
+    
+    await status.delete()
 
-def needs_clarification(avg: float) -> bool:
-    """True если среднее в пограничной зоне ±0.12"""
-    return any(abs(avg - b) <= CLARIFICATION_MARGIN for b in CLARIFICATION_ZONES)
+# ══════════════════════════════════════════════
+#  ФУНКЦИЯ МОТИВАЦИОННЫХ СООБЩЕНИЙ
+# ══════════════════════════════════════════════
 
-def calc_synthetic_score(scores_list: list, target_avg: float) -> float:
-    """Какой балл добавить для получения target_avg"""
-    n = len(scores_list)
-    synthetic = target_avg * (n + 1) - sum(scores_list)
-    return max(1.0, min(4.0, synthetic))
+def generate_motivation_message(user_id: int, scores: dict, user_name: str = "друг") -> str:
+    """
+    Генерирует персонализированное мотивирующее сообщение на основе профиля
+    с обращением по имени и в роли заботливого старшего товарища
+    """
+    # Получаем уровни по каждому вектору
+    tf_level = level(scores["ТФ"])
+    sb_level = level(scores["СБ"])
+    ub_level = level(scores["УБ"])
+    cv_level = level(scores["ЧВ"])
+    
+    # Определяем самое слабое место
+    levels = {
+        "ТФ": (tf_level, VECTORS["ТФ"]["name"], VECTORS["ТФ"]["emoji"]),
+        "СБ": (sb_level, VECTORS["СБ"]["name"], VECTORS["СБ"]["emoji"]),
+        "УБ": (ub_level, VECTORS["УБ"]["name"], VECTORS["УБ"]["emoji"]),
+        "ЧВ": (cv_level, VECTORS["ЧВ"]["name"], VECTORS["ЧВ"]["emoji"]),
+    }
+    
+    weakest = min(levels.items(), key=lambda x: x[1][0])
+    weakest_key, (weakest_level, weakest_name, weakest_emoji) = weakest
+    
+    # Определяем следующий уровень
+    next_level = weakest_level + 1
+    if next_level > 6:
+        next_level = 6
+    
+    # Получаем описание следующего уровня
+    next_level_info = VECTORS[weakest_key]["levels"][next_level]
+    current_level_info = VECTORS[weakest_key]["levels"][weakest_level]
+    
+    # Получаем живой профиль для более глубокого понимания
+    profile = LEVEL_PROFILES.get(weakest_key, {}).get(weakest_level, {})
+    
+    # Массив мотивирующих обращений в роли старшего товарища
+    greetings = [
+        f"Слушай, {user_name}...",
+        f"Знаешь, {user_name}, что я подумал?",
+        f"{user_name}, давай начистоту:",
+        f"Эй, {user_name}, есть разговор:",
+        f"Слышь, {user_name}...",
+        f"{user_name}, я тут подумал о тебе...",
+        f"В общем, {user_name}, дело такое:",
+    ]
+    
+    # Основной текст в зависимости от самого слабого места
+    main_texts = {
+        "СБ": f"Твой главный тормоз — реакция на угрозу. Ты сейчас на уровне «{current_level_info['name']}».",
+        "ТФ": f"Твоя ахиллесова пята — ресурсы. Ты на уровне «{current_level_info['name']}».",
+        "УБ": f"Самое узкое место — как ты понимаешь мир. Уровень «{current_level_info['name']}».",
+        "ЧВ": f"Больнее всего бьет по отношениям. Уровень «{current_level_info['name']}».",
+    }
+    
+    # Советы для роста
+    tips = {
+        "СБ": {
+            1: "Начни с малого: в безопасной обстановке скажи 'нет' хотя бы один раз. Просто чтобы тело вспомнило, что возражать можно без последствий.",
+            2: "В следующий раз, когда захочется уйти, останься на 2 минуты дольше. Просто постой и посмотри, что произойдет.",
+            3: "Вместо автоматического 'да' попробуй сказать 'мне нужно подумать'. Это легальная пауза, которая дает тебе право выбора.",
+            4: "Выбери одного человека, которому доверяешь, и скажи ему одну правду о своих чувствах. Одну. Сегодня.",
+            5: "В следующий раз, когда будешь гасить конфликт, спроси себя: 'А может, этому конфликту нужно случиться?'",
+            6: "Перед тем как атаковать, спроси себя: 'Что я хочу получить в итоге?' Если ответ есть — действуй.",
+        },
+        "ТФ": {
+            1: "Найди один навык, который у тебя есть, и предложи его кому-то за деньги. Не важно сколько — важен сам факт.",
+            2: "Посмотри на свои подработки за последний год. Что повторялось? Сделай это своей первой системой.",
+            3: "Открой отдельный счет и переведи туда 10% от следующего дохода. До того, как потратишь.",
+            4: "Напиши инструкцию для одной своей задачи. Просто представь, что ты учишь кого-то другому.",
+            5: "Раздели свои накопления на три части: неприкосновенный запас, рабочий капитал и то, что можно инвестировать.",
+            6: "Раз в месяц общайся с теми, кто работает на нижних уровнях твоей системы. Узнай, что на самом деле происходит.",
+        },
+        "УБ": {
+            1: "Выбери одну тему, которую ты избегаешь, и удели ей 10 минут. Просто подумай, что ты уже знаешь об этом.",
+            2: "Вспомни последнее 'знаковое' событие и объясни его без мистики — через действия людей и обстоятельства.",
+            3: "Возьми одно утверждение авторитета и проверь его сам. Найди аргументы 'за' и 'против'.",
+            4: "В следующий раз, когда найдешь виноватого, спроси себя: 'Что я могу сделать, независимо от того, кто виноват?'",
+            5: "Найди три повторяющихся наблюдения в своей жизни и сформулируй принцип. Например: 'Когда я злюсь, я обычно голоден'.",
+            6: "Возьми одну свою теорию и проверь ее действием. Сделай предсказание и посмотри, сбудется ли оно.",
+        },
+        "ЧВ": {
+            1: "Сделай сегодня одно действие самостоятельно — то, что обычно делаешь только с кем-то. Сходи в кино один.",
+            2: "В одном разговоре сегодня скажи мнение, которое расходится с собеседником. Начни с малого: 'А мне понравился этот фильм'.",
+            3: "Выбери одного человека из своего круга и проведи с ним час без телефона. Просто поговори.",
+            4: "Попроси о чем-то прямо, без манипуляций. 'Мне нужна твоя помощь' — этого достаточно.",
+            5: "Познакомься с одним новым человеком из сферы, которая тебе незнакома. Расширь карту мира.",
+            6: "Из всей своей сети выбери трех человек, которые важны больше всего. Инвестируй в них время на этой неделе.",
+        }
+    }
+    
+    # Мотивирующие фразы
+    motivation_phrases = [
+        f"Я не просто так тебя гружу — я вижу в тебе потенциал. Между «{current_level_info['name']}» и «{next_level_info['name']}» — не пропасть, а несколько конкретных шагов.",
+        f"Ты уже прошел тест, а это значит, что готов что-то менять. Я в тебя верю, {user_name}. Давай сделаем первый шаг.",
+        f"Знаешь, в чем твоя суперсила? В том, что ты дошел до конца теста. 80% людей сливаются на полпути. А ты нет.",
+        f"Я тут подумал: ты же не для галочки это проходил. Значит, поработаем. Начинаем с самого слабого места — {weakest_emoji} {weakest_name}.",
+        f"Слушай, {user_name}, я понимаю, что может быть страшно. Но страх проходит, а сделанное остается.",
+    ]
+    
+    import random
+    greeting = random.choice(greetings)
+    main_text = main_texts[weakest_key]
+    motivation_phrase = random.choice(motivation_phrases)
+    tip = tips[weakest_key][weakest_level]
+    
+    text = (
+        f"🧠 *ЧЕРЕЗ 5 МИНУТ ПОСЛЕ ТЕСТА*\n\n"
+        f"{greeting}\n\n"
+        f"{main_text} {weakest_level}/6 — это когда {current_level_info['desc'].lower()}.\n\n"
+        f"🎯 *Цель:* уровень {next_level}/6 — «{next_level_info['name']}» — это когда {next_level_info['desc'].lower()}.\n\n"
+        f"{motivation_phrase}\n\n"
+        f"🛠 *Что делать прямо сейчас:*\n{tip}\n\n"
+        f"⚡️ *Помни:* я с тобой на связи 24/7. Напиши, если что. Это не просто слова."
+    )
+    
+    return text
 
-def apply_clarification(avg: float, answer_val: int) -> float:
-    """Сдвиг на ±0.15 в зависимости от ответа"""
-    return round(avg - 0.15 if answer_val == 0 else avg + 0.15, 2)
+# ══════════════════════════════════════════════
+#  МЕНЕДЖЕР ОТЛОЖЕННЫХ ЗАДАЧ
+# ══════════════════════════════════════════════
 
-def check_consistency(scores_list: list) -> bool:
-    """Проверяет не хаотичны ли ответы. >1.3 = непоследовательны"""
-    if len(scores_list) < 4:
-        return True
-    avg = mean(scores_list)
-    variance = sum((x - avg) ** 2 for x in scores_list) / len(scores_list)
-    std_dev = variance ** 0.5
-    return std_dev <= 1.3
+class DelayedTaskManager:
+    """Управляет отложенными задачами (напоминания, мотивация)"""
+    
+    def __init__(self):
+        self.tasks = {}
+        self.bot_instance = None
+        self.running = False
+    
+    def set_bot(self, bot):
+        """Устанавливает экземпляр бота"""
+        self.bot_instance = bot
+    
+    async def schedule_motivation(self, user_id: int, scores: dict, user_name: str, delay_minutes: int = 5):
+        """Планирует отправку мотивационного сообщения через указанное количество минут"""
+        task_id = f"motivation_{user_id}_{datetime.now().timestamp()}"
+        
+        # Отменяем предыдущую задачу для этого пользователя, если есть
+        for tid in list(self.tasks.keys()):
+            if tid.startswith(f"motivation_{user_id}"):
+                self.tasks[tid]["task"].cancel()
+                del self.tasks[tid]
+        
+        # Создаем новую задачу
+        async def send_motivation():
+            await asyncio.sleep(delay_minutes * 60)  # конвертируем минуты в секунды
+            if self.bot_instance:
+                try:
+                    # Генерируем сообщение
+                    message_text = generate_motivation_message(user_id, scores, user_name)
+                    
+                    # Создаем клавиатуру
+                    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+                        [InlineKeyboardButton(text="❓ ЗАДАТЬ ВОПРОС", callback_data="smart_questions")],
+                        [InlineKeyboardButton(text="🧠 К ПРОФИЛЮ", callback_data="show_results")],
+                        [InlineKeyboardButton(text="📈 ЧТО ДАЛЬШЕ?", callback_data="more_info")]
+                    ])
+                    
+                    # Отправляем сообщение
+                    await self.bot_instance.send_message(
+                        user_id,
+                        message_text,
+                        parse_mode='Markdown',
+                        reply_markup=keyboard
+                    )
+                    
+                    # Отправляем голосовую версию, если есть ключ Yandex
+                    if YANDEX_API_KEY:
+                        # Для мотивационных сообщений используем более вдохновляющий тон
+                        audio_data = await text_to_speech(message_text, is_ironic=False)
+                        if audio_data:
+                            audio_file = BufferedInputFile(audio_data, filename="motivation.ogg")
+                            await self.bot_instance.send_voice(
+                                user_id,
+                                audio_file,
+                                caption="🎙 *Мотивационное сообщение*",
+                                parse_mode='Markdown'
+                            )
+                except Exception as e:
+                    logger.error(f"Ошибка при отправке мотивационного сообщения пользователю {user_id}: {e}")
+        
+        task = asyncio.create_task(send_motivation())
+        self.tasks[task_id] = {
+            "task": task,
+            "user_id": user_id,
+            "type": "motivation",
+            "scheduled_time": datetime.now() + timedelta(minutes=delay_minutes)
+        }
+        logger.info(f"📅 Запланировано мотивационное сообщение для пользователя {user_id} через {delay_minutes} минут")
+        return task_id
+    
+    async def schedule_reminder(self, user_id: int, message: str, delay_hours: int = 24):
+        """Планирует напоминание через указанное количество часов"""
+        task_id = f"reminder_{user_id}_{datetime.now().timestamp()}"
+        
+        async def send_reminder():
+            await asyncio.sleep(delay_hours * 3600)
+            if self.bot_instance:
+                try:
+                    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+                        [InlineKeyboardButton(text="❓ ЗАДАТЬ ВОПРОС", callback_data="smart_questions")],
+                        [InlineKeyboardButton(text="🧠 К ПРОФИЛЮ", callback_data="show_results")],
+                        [InlineKeyboardButton(text="🔄 ПРОЙТИ ТЕСТ ЗАНОВО", callback_data="restart_test")]
+                    ])
+                    
+                    await self.bot_instance.send_message(
+                        user_id,
+                        message,
+                        parse_mode='Markdown',
+                        reply_markup=keyboard
+                    )
+                except Exception as e:
+                    logger.error(f"Ошибка при отправке напоминания пользователю {user_id}: {e}")
+        
+        task = asyncio.create_task(send_reminder())
+        self.tasks[task_id] = {
+            "task": task,
+            "user_id": user_id,
+            "type": "reminder",
+            "scheduled_time": datetime.now() + timedelta(hours=delay_hours)
+        }
+        return task_id
+    
+    def cancel_user_tasks(self, user_id: int):
+        """Отменяет все задачи для конкретного пользователя"""
+        for task_id in list(self.tasks.keys()):
+            if self.tasks[task_id]["user_id"] == user_id:
+                self.tasks[task_id]["task"].cancel()
+                del self.tasks[task_id]
+        logger.info(f"❌ Отменены все задачи для пользователя {user_id}")
+
+# Создаем глобальный экземпляр менеджера задач
+task_manager = DelayedTaskManager()
+
+async def test_motivation_command(message: types.Message):
+    """Тестирует мотивационное сообщение (для админов)"""
+    if message.from_user.id not in ADMIN_IDS:
+        await message.answer("⛔ Только для администраторов")
+        return
+    
+    # Создаем тестовый профиль
+    test_scores = {
+        "СБ": 2.3,
+        "ТФ": 3.1,
+        "УБ": 2.8,
+        "ЧВ": 3.5
+    }
+    
+    mot_text = generate_motivation_message(ADMIN_IDS[0], test_scores, "Тестовый")
+    
+    # Отправляем текстовую версию
+    await message.answer(mot_text, parse_mode='Markdown')
+    
+    # Отправляем голосовую версию
+    audio_data = await text_to_speech(mot_text, is_ironic=False)
+    if audio_data:
+        audio_file = BufferedInputFile(audio_data, filename="motivation_test.ogg")
+        await message.answer_voice(
+            audio_file,
+            caption="🎙 *Тестовое мотивационное сообщение*",
+            parse_mode='Markdown'
+        )
+
+async def show_tasks_command(message: types.Message):
+    """Показывает все запланированные задачи (для админов)"""
+    if message.from_user.id not in ADMIN_IDS:
+        await message.answer("⛔ Только для администраторов")
+        return
+    
+    if not task_manager.tasks:
+        await message.answer("📭 Нет запланированных задач")
+        return
+    
+    text = "📋 *ЗАПЛАНИРОВАННЫЕ ЗАДАЧИ*\n\n"
+    for task_id, task_info in task_manager.tasks.items():
+        user_id = task_info["user_id"]
+        task_type = task_info["type"]
+        scheduled = task_info["scheduled_time"].strftime("%d.%m %H:%M")
+        text += f"• {task_type} для {user_id} в {scheduled}\n"
+    
+    await message.answer(text, parse_mode='Markdown')
 
 # ══════════════════════════════════════════════
 #  ФУНКЦИИ ЭТАПОВ
@@ -2125,7 +2319,7 @@ async def show_level_detail(callback: types.CallbackQuery, vector_key: str):
         except TelegramBadRequest as e:
             if "message is not modified" not in str(e).lower() and "сообщение не изменено" not in str(e).lower():
                 raise
-                
+
 # ══════════════════════════════════════════════
 #  ФУНКЦИИ ЭКРАНОВ
 # ══════════════════════════════════════════════
@@ -2437,11 +2631,15 @@ async def handle_voice_message(message: types.Message):
             if history_lines:
                 history_text = "ИСТОРИЯ ДИАЛОГА:\n" + "\n".join(history_lines) + "\n\n"
         
-        system_prompt = f"""Ты психолог. Учитывай профиль человека:
+        # Получаем имя пользователя
+        user_name = user_names.get(user_id, message.from_user.first_name or "друг")
+        
+        system_prompt = f"""Ты психолог, старший товарищ, наставник. Твоя задача — помочь, поддержать, иногда мягко поругать, но всегда быть на стороне человека.
 
+ПРОФИЛЬ ЧЕЛОВЕКА:
 {profile_summary}
 
-{history_text}Отвечай коротко, 2-4 предложения, по делу. Используй местоимение "ты"."""
+{history_text}Отвечай коротко, 2-4 предложения, по делу. Используй местоимение "ты". Обращайся к человеку по имени ({user_name}), если это уместно."""
         
         # Получаем ответ от DeepSeek
         response = await call_deepseek(recognized_text, system_prompt, max_tokens=300)
@@ -2459,13 +2657,13 @@ async def handle_voice_message(message: types.Message):
         user["history"].append({
             "role": "user", 
             "text": recognized_text, 
-            "timestamp": datetime.datetime.now().isoformat()
+            "timestamp": datetime.now().isoformat()
         })
         
         user["history"].append({
             "role": "assistant", 
             "text": response, 
-            "timestamp": datetime.datetime.now().isoformat()
+            "timestamp": datetime.now().isoformat()
         })
         
         if len(user["history"]) > 10:
@@ -2487,7 +2685,8 @@ async def handle_voice_message(message: types.Message):
         )
         
         # Получаем голосовой ответ через Yandex
-        ironic = should_be_ironic(response) audio_data = await text_to_speech(response, ironic)
+        ironic = should_be_ironic(response)
+        audio_data = await text_to_speech(response, ironic)
         
         if audio_data:
             audio_file = BufferedInputFile(audio_data, filename="response.ogg")
@@ -2512,12 +2711,166 @@ async def handle_voice_message(message: types.Message):
                 pass
 
 # ══════════════════════════════════════════════
+#  ФУНКЦИЯ call_deepseek
+# ══════════════════════════════════════════════
+
+async def call_deepseek(prompt, system_message="", max_tokens=500, retry_count=3):
+    """Асинхронный вызов DeepSeek API"""
+    if not DEEPSEEK_API_KEY:
+        logger.error("❌ DEEPSEEK_API_KEY не найден")
+        return None
+
+    url = "https://api.deepseek.com/chat/completions"
+    
+    headers = {
+        "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
+        "Content-Type": "application/json",
+    }
+
+    messages = []
+    if system_message:
+        messages.append({"role": "system", "content": system_message})
+    messages.append({"role": "user", "content": prompt})
+
+    data = {
+        "model": "deepseek-chat",
+        "messages": messages,
+        "temperature": 0.7,
+        "max_tokens": max_tokens,
+    }
+
+    for attempt in range(retry_count):
+        try:
+            logger.info(f"📡 Попытка {attempt + 1}/{retry_count}")
+            
+            timeout = aiohttp.ClientTimeout(total=120)
+            
+            async with aiohttp.ClientSession() as session:
+                async with session.post(
+                    url,
+                    headers=headers,
+                    json=data,
+                    timeout=timeout
+                ) as response:
+                    
+                    if response.status != 200:
+                        error_text = await response.text()
+                        logger.error(f"❌ Ошибка API {response.status}: {error_text[:200]}")
+                        
+                        if response.status == 429:
+                            wait_time = (2 ** attempt) + random.random()
+                            await asyncio.sleep(wait_time)
+                            continue
+                        elif response.status >= 500:
+                            wait_time = (2 ** attempt) + random.random()
+                            await asyncio.sleep(wait_time)
+                            continue
+                        else:
+                            return None
+                    
+                    result = await response.json()
+                    
+                    if result and "choices" in result and len(result["choices"]) > 0:
+                        content = result["choices"][0]["message"]["content"]
+                        logger.info(f"✅ Успех! Длина ответа: {len(content)} символов")
+                        return content
+                    else:
+                        logger.error(f"❌ Странный формат ответа: {result}")
+                        return None
+                            
+        except asyncio.TimeoutError:
+            logger.error(f"⏰ Таймаут соединения (попытка {attempt + 1})")
+            if attempt < retry_count - 1:
+                wait_time = (2 ** attempt) + random.random()
+                await asyncio.sleep(wait_time)
+        except Exception as e:
+            logger.error(f"💥 Неожиданная ошибка: {e}")
+            if attempt < retry_count - 1:
+                wait_time = (2 ** attempt) + random.random()
+                await asyncio.sleep(wait_time)
+    
+    logger.error("❌ ВСЕ ПОПЫТКИ НЕ УДАЛИСЬ")
+    return None
+
+def generate_smart_questions(scores):
+    """Генерирует 4-5 вопросов на основе профиля"""
+    questions = []
+    
+    tf = level(scores["ТФ"])
+    sb = level(scores["СБ"])
+    ub = level(scores["УБ"])
+    cv = level(scores["ЧВ"])
+    
+    if tf <= 2:
+        questions.append("Как начать зарабатывать, если нет денег?")
+        questions.append("Почему мне не везет с деньгами?")
+    elif tf <= 4:
+        questions.append("Как увеличить доход без новых вложений?")
+        questions.append("Как создать финансовую подушку?")
+    
+    if sb <= 2:
+        questions.append("Как перестать бояться конфликтов?")
+        questions.append("Как научиться говорить 'нет'?")
+    elif sb <= 4:
+        questions.append("Почему я злюсь внутри, но молчу?")
+        questions.append("Как защищать границы без агрессии?")
+    
+    if ub <= 2:
+        questions.append("Как понять, что происходит в жизни?")
+    elif ub == 4:
+        questions.append("Как перестать искать заговоры?")
+    
+    if cv <= 2:
+        questions.append("Как перестать зависеть от других?")
+    elif cv <= 4:
+        questions.append("Почему отношения поверхностные?")
+    
+    general = [
+        "С чего начать изменения?",
+        "Что мне делать с этой ситуацией?",
+        "Как не срываться на близких?"
+    ]
+    
+    while len(questions) < 5:
+        for q in general:
+            if q not in questions and len(questions) < 5:
+                questions.append(q)
+    
+    return questions[:5]
+
+def needs_clarification(avg: float) -> bool:
+    """True если среднее в пограничной зоне ±0.12"""
+    return any(abs(avg - b) <= CLARIFICATION_MARGIN for b in CLARIFICATION_ZONES)
+
+def calc_synthetic_score(scores_list: list, target_avg: float) -> float:
+    """Какой балл добавить для получения target_avg"""
+    n = len(scores_list)
+    synthetic = target_avg * (n + 1) - sum(scores_list)
+    return max(1.0, min(4.0, synthetic))
+
+def apply_clarification(avg: float, answer_val: int) -> float:
+    """Сдвиг на ±0.15 в зависимости от ответа"""
+    return round(avg - 0.15 if answer_val == 0 else avg + 0.15, 2)
+
+def check_consistency(scores_list: list) -> bool:
+    """Проверяет не хаотичны ли ответы. >1.3 = непоследовательны"""
+    if len(scores_list) < 4:
+        return True
+    avg = mean(scores_list)
+    variance = sum((x - avg) ** 2 for x in scores_list) / len(scores_list)
+    std_dev = variance ** 0.5
+    return std_dev <= 1.3
+
+# ══════════════════════════════════════════════
 #  ОБРАБОТЧИКИ TELEGRAM
 # ══════════════════════════════════════════════
 
 async def start_command(message: types.Message):
     user_id = message.from_user.id
     user_name = message.from_user.first_name or "Пользователь"
+    
+    # Сохраняем имя пользователя
+    user_names[user_id] = user_name
     
     user_data[user_id] = {
         "stage": "menu",
@@ -2604,7 +2957,7 @@ async def apistatus_command(message: types.Message):
     text += f"• Yandex TTS: {yandex_status}\n\n"
     
     if YANDEX_API_KEY:
-        text += f"🎙 TTS: Yandex SpeechKit (русский голос Оксана)\n"
+        text += f"🎙 TTS: Yandex SpeechKit (русский голос Александр, с иронией)\n"
     
     await status_msg.edit_text(text, parse_mode='Markdown')
 
@@ -2846,6 +3199,25 @@ async def show_results(callback: types.CallbackQuery):
         user["logged"] = True
         user["profile_complete"] = True
         user["stage"] = "menu"
+        
+        # ✅ ЗАПУСКАЕМ МОТИВАЦИОННЫЕ СООБЩЕНИЯ
+        # Отменяем старые задачи
+        task_manager.cancel_user_tasks(user_id)
+        
+        # Получаем имя пользователя
+        user_name = user_names.get(user_id, callback.from_user.first_name or "друг")
+        
+        # Планируем первое сообщение через 5 минут
+        asyncio.create_task(task_manager.schedule_motivation(user_id, scores, user_name, delay_minutes=5))
+        
+        # Планируем второе сообщение через 24 часа
+        reminder_text = (
+            f"🧠 *ПРОШЕЛ ДЕНЬ ПОСЛЕ ТЕСТА*\n\n"
+            f"Привет, {user_name}! Как твои успехи? Удалось сделать хоть один шаг из рекомендованных?\n\n"
+            f"Помни: изменения не происходят сами по себе. Они происходят, когда ты делаешь выбор каждый день.\n\n"
+            f"Если застрял — просто напиши мне. Я помню твой профиль и подскажу. Я всегда на связи."
+        )
+        asyncio.create_task(task_manager.schedule_reminder(user_id, reminder_text, delay_hours=24))
     
     text = f"🧠 *ВАШ ПРОФИЛЬ*\n\n"
     
@@ -3371,11 +3743,15 @@ async def handle_smart_question(callback: types.CallbackQuery, question: str):
         if history_lines:
             history_text = "ИСТОРИЯ ДИАЛОГА:\n" + "\n".join(history_lines) + "\n\n"
     
-    system_prompt = f"""Ты психолог. Учитывай профиль человека:
+    # Получаем имя пользователя
+    user_name = user_names.get(user_id, callback.from_user.first_name or "друг")
+    
+    system_prompt = f"""Ты психолог, старший товарищ, наставник. Твоя задача — помочь, поддержать, иногда мягко поругать, но всегда быть на стороне человека.
 
+ПРОФИЛЬ ЧЕЛОВЕКА:
 {profile_summary}
 
-{history_text}Отвечай коротко, по делу, без воды, 2-4 предложения."""
+{history_text}Отвечай коротко, по делу, без воды, 2-4 предложения. Обращайся к человеку по имени ({user_name}), если это уместно."""
     
     prompt = f"Вопрос: {question}\n\nДай короткий, практичный ответ с учетом моего профиля."
     response = await call_deepseek(prompt, system_prompt, max_tokens=300)
@@ -3391,12 +3767,12 @@ async def handle_smart_question(callback: types.CallbackQuery, question: str):
     user["history"].append({
         "role": "user", 
         "text": question, 
-        "timestamp": datetime.datetime.now().isoformat()
+        "timestamp": datetime.now().isoformat()
     })
     user["history"].append({
         "role": "assistant", 
         "text": response, 
-        "timestamp": datetime.datetime.now().isoformat()
+        "timestamp": datetime.now().isoformat()
     })
     
     if len(user["history"]) > 10:
@@ -3418,7 +3794,8 @@ async def handle_smart_question(callback: types.CallbackQuery, question: str):
     
     # Проверяем, пройден ли тест (голос автоматически активен)
     if is_test_completed(user):
-        ironic = should_be_ironic(response) audio_data = await text_to_speech(response, ironic)
+        ironic = should_be_ironic(response)
+        audio_data = await text_to_speech(response, ironic)
         
         if audio_data:
             audio_file = BufferedInputFile(audio_data, filename="response.ogg")
@@ -3478,11 +3855,15 @@ async def handle_message(message: types.Message):
         if history_lines:
             history_text = "ИСТОРИЯ ДИАЛОГА:\n" + "\n".join(history_lines) + "\n\n"
     
-    system_prompt = f"""Ты психолог. Учитывай профиль человека:
+    # Получаем имя пользователя
+    user_name = user_names.get(user_id, message.from_user.first_name or "друг")
+    
+    system_prompt = f"""Ты психолог, старший товарищ, наставник. Твоя задача — помочь, поддержать, иногда мягко поругать, но всегда быть на стороне человека.
 
+ПРОФИЛЬ ЧЕЛОВЕКА:
 {profile_summary}
 
-{history_text}Отвечай коротко, 2-4 предложения, по делу."""
+{history_text}Отвечай коротко, 2-4 предложения, по делу. Обращайся к человеку по имени ({user_name}), если это уместно."""
     
     response = await call_deepseek(f"Вопрос: {message.text}", system_prompt, max_tokens=300)
     
@@ -3497,12 +3878,12 @@ async def handle_message(message: types.Message):
     user["history"].append({
         "role": "user", 
         "text": message.text, 
-        "timestamp": datetime.datetime.now().isoformat()
+        "timestamp": datetime.now().isoformat()
     })
     user["history"].append({
         "role": "assistant", 
         "text": response, 
-        "timestamp": datetime.datetime.now().isoformat()
+        "timestamp": datetime.now().isoformat()
     })
     
     if len(user["history"]) > 10:
@@ -3526,7 +3907,8 @@ async def handle_message(message: types.Message):
     
     # Проверяем, пройден ли тест (голос автоматически активен)
     if is_test_completed(user):
-        ironic = should_be_ironic(response) audio_data = await text_to_speech(response, ironic)
+        ironic = should_be_ironic(response)
+        audio_data = await text_to_speech(response, ironic)
         
         if audio_data:
             audio_file = BufferedInputFile(audio_data, filename="response.ogg")
@@ -3561,6 +3943,9 @@ async def main():
     bot = Bot(token=TELEGRAM_TOKEN)
     dp = Dispatcher()
     
+    # Передаем бота в менеджер задач
+    task_manager.set_bot(bot)
+    
     await bot.delete_webhook(drop_pending_updates=True)
     print("✅ Вебхук удален")
     
@@ -3569,6 +3954,9 @@ async def main():
     dp.message.register(stats_command, Command("stats"))
     dp.message.register(apistatus_command, Command("apistatus"))
     dp.message.register(test_yandex_command, Command("test_yandex"))
+    dp.message.register(test_voices_command, Command("test_voices"))
+    dp.message.register(test_motivation_command, Command("test_mot"))
+    dp.message.register(show_tasks_command, Command("tasks"))
     dp.callback_query.register(callback_handler)
     dp.message.register(handle_voice_message, lambda m: m.voice is not None)
     dp.message.register(handle_message)
@@ -3582,10 +3970,11 @@ async def main():
     logger.info("Бот запущен...")
     print("🚀 Виртуальный психолог запущен!")
     print(f"👤 Ваш Telegram ID: {ADMIN_IDS[0] if ADMIN_IDS else 'не указан'}")
-    print("📊 Команды: /stats, /apistatus, /test_yandex")
+    print("📊 Команды: /stats, /apistatus, /test_yandex, /test_voices, /test_mot, /tasks")
     print("🎙 Распознавание речи: " + ("ВКЛЮЧЕНО (Deepgram)" if DEEPGRAM_API_KEY else "ОТКЛЮЧЕНО"))
-    print("🎙 Синтез речи: " + ("ВКЛЮЧЕН (Yandex, русский)" if YANDEX_API_KEY else "ОТКЛЮЧЕН"))
+    print("🎙 Синтез речи: " + ("ВКЛЮЧЕН (Yandex, русский, Александр)" if YANDEX_API_KEY else "ОТКЛЮЧЕН"))
     print("⚠️ Голос автоматически активен после завершения теста")
+    print("📅 Мотивационные сообщения через 5 минут и 24 часа")
     
     await dp.start_polling(bot, drop_pending_updates=True)
 
