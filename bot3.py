@@ -2487,7 +2487,7 @@ async def handle_voice_message(message: types.Message):
         )
         
         # Получаем голосовой ответ через Yandex
-        audio_data = await text_to_speech(response)
+        ironic = should_be_ironic(response) audio_data = await text_to_speech(response, ironic)
         
         if audio_data:
             audio_file = BufferedInputFile(audio_data, filename="response.ogg")
@@ -3418,7 +3418,7 @@ async def handle_smart_question(callback: types.CallbackQuery, question: str):
     
     # Проверяем, пройден ли тест (голос автоматически активен)
     if is_test_completed(user):
-        audio_data = await text_to_speech(response)
+        ironic = should_be_ironic(response) audio_data = await text_to_speech(response, ironic)
         
         if audio_data:
             audio_file = BufferedInputFile(audio_data, filename="response.ogg")
@@ -3526,7 +3526,7 @@ async def handle_message(message: types.Message):
     
     # Проверяем, пройден ли тест (голос автоматически активен)
     if is_test_completed(user):
-        audio_data = await text_to_speech(response)
+        ironic = should_be_ironic(response) audio_data = await text_to_speech(response, ironic)
         
         if audio_data:
             audio_file = BufferedInputFile(audio_data, filename="response.ogg")
