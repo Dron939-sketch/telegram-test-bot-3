@@ -1523,12 +1523,12 @@ async def text_to_speech(text: str) -> bytes:
         "voice": "oksana",  # Русский женский голос
         "emotion": "neutral",
         "speed": 1.0,
-        "format": "opus",
+        "format": "lpcm",  # Меняем opus на lpcm (линейный PCM)
         "sampleRateHertz": 48000,
     }
     
     try:
-        logger.info(f"🎧 Отправка текста в Yandex TTS: {len(text)} символов")
+        logger.info(f"🎧 Отправка текста в Яндекс TTS: {len(text)} символов")
         
         timeout = aiohttp.ClientTimeout(total=30)
         
@@ -1542,11 +1542,31 @@ async def text_to_speech(text: str) -> bytes:
                 
                 if response.status == 200:
                     audio_data = await response.read()
-                    logger.info(f"✅ Аудио от Yandex получено: {len(audio_data)} байт")
+                    logger.info(f"✅ Аудио от Yandex получено: {len(audio_data)} байт (формат LPCM)")
                     return audio_data
                 else:
                     error_text = await response.text()
                     logger.error(f"❌ Ошибка Yandex TTS {response.status}: {error_text}")
+                    
+                    # Пробуем альтернативный формат
+                    if "format" in error_text:
+                        logger.info("🔄 Пробую формат wav...")
+                        data["format"] = "wav"
+                        
+                        async with session.post(
+                            url,
+                            headers=headers,
+                            data=data,
+                            timeout=timeout
+                        ) as retry_response:
+                            if retry_response.status == 200:
+                                audio_data = await retry_response.read()
+                                logger.info(f"✅ Аудио от Yandex получено (wav): {len(audio_data)} байт")
+                                return audio_data
+                            else:
+                                error_text = await retry_response.text()
+                                logger.error(f"❌ Ошибка Yandex TTS (wav) {retry_response.status}: {error_text}")
+                    
                     return None
                     
     except asyncio.TimeoutError:
