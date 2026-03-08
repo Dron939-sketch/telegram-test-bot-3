@@ -1524,13 +1524,27 @@ async def text_to_speech(text: str, is_ironic: bool = False) -> bytes:
         "Authorization": f"Api-Key {YANDEX_API_KEY}",
     }
     
-    # Выбираем голос и эмоцию
-    # Alexander - основной (новый, живой)
-    # Kirill - запасной (со strict эмоцией)
-    voice = "alexander"  # или "kirill"
+    # Актуальные голоса Yandex SpeechKit (на 2024 год)
+    # Полный список: https://cloud.yandex.ru/docs/speechkit/tts/voices
     
-    # Эмоции: neutral, good (добрый/ироничный), strict (строгий/надменный)
-    emotion = "good" if is_ironic else "neutral"
+    # Мужские голоса:
+    # - alena (женский, нейтральный) - основной
+    # - filipp (мужской, эмоциональный)
+    # - oksana (женский, нейтральный) - хороший для заботы
+    # - marina (женский, спокойный)
+    # - alexandr (мужской, но пишется через "а" - alexandr, не alexander!)
+    # - anton (мужской, нейтральный)
+    # - ermil (мужской, добрый) - отлично для мотивации
+    
+    # Для иронии лучше использовать filipp или ermil
+    # Для заботы - oksana или alexandr
+    
+    if is_ironic:
+        voice = "filipp"  # эмоциональный, с иронией
+        emotion = "good"  # для filipp доступна эмоция good
+    else:
+        voice = "oksana"  # заботливый женский голос для мотивации
+        emotion = "neutral"
     
     data = {
         "text": text,
@@ -1561,10 +1575,18 @@ async def text_to_speech(text: str, is_ironic: bool = False) -> bytes:
                     error_text = await response.text()
                     logger.error(f"❌ Ошибка Yandex TTS {response.status}: {error_text}")
                     
-                    # Пробуем запасной голос
-                    if response.status == 400:
-                        logger.info("🔄 Пробую запасной голос kirill...")
-                        data["voice"] = "kirill"
+                    # Пробуем альтернативные голоса при ошибке
+                    fallback_voices = [
+                        {"voice": "oksana", "emotion": "neutral"},  # Женский, нейтральный
+                        {"voice": "alexandr", "emotion": "neutral"},  # Мужской, через "а"
+                        {"voice": "anton", "emotion": "neutral"},  # Мужской
+                        {"voice": "ermil", "emotion": "good"},  # Добрый мужской
+                    ]
+                    
+                    for fallback in fallback_voices:
+                        logger.info(f"🔄 Пробую запасной голос: {fallback['voice']}")
+                        data["voice"] = fallback["voice"]
+                        data["emotion"] = fallback["emotion"]
                         
                         async with session.post(
                             url,
@@ -1574,8 +1596,10 @@ async def text_to_speech(text: str, is_ironic: bool = False) -> bytes:
                         ) as retry_response:
                             if retry_response.status == 200:
                                 audio_data = await retry_response.read()
-                                logger.info(f"✅ Аудио от kirill получено")
+                                logger.info(f"✅ Аудио от {fallback['voice']} получено")
                                 return audio_data
+                            else:
+                                logger.warning(f"❌ Голос {fallback['voice']} тоже не работает")
                     
                     return None
                     
@@ -1615,27 +1639,30 @@ async def test_yandex_command(message: types.Message):
         )
 
 async def test_voices_command(message: types.Message):
-    """Тестирует разные голоса Yandex TTS"""
+    """Тестирует разные голоса Yandex TTS (актуальные на 2024)"""
     if message.from_user.id not in ADMIN_IDS:
         await message.answer("⛔ Только для администраторов")
         return
     
     test_text = "Ну, допустим, вы действительно так считаете. Интересная мысль."
-    status = await message.answer("🎧 Тестирую голоса...")
+    status = await message.answer("🎧 Тестирую актуальные голоса Yandex...")
     
+    # Актуальные голоса Yandex SpeechKit
     voices_to_test = [
-        ("alexander", "neutral", "Александр (нейтральный)"),
-        ("alexander", "good", "Александр (ироничный)"),
-        ("kirill", "neutral", "Кирилл (нейтральный)"),
-        ("kirill", "strict", "Кирилл (строгий)"),
-        ("filipp", "neutral", "Филипп (нейтральный)"),
-        ("ermil", "good", "Эрмил (добрый)"),
+        ("oksana", "neutral", "Оксана (женский, заботливый)"),
+        ("alena", "neutral", "Алена (женский, нейтральный)"),
+        ("filipp", "good", "Филипп (мужской, ироничный)"),
+        ("ermil", "good", "Эрмил (мужской, добрый)"),
+        ("alexandr", "neutral", "Александр (мужской, через 'а')"),
+        ("anton", "neutral", "Антон (мужской, нейтральный)"),
+        ("marina", "neutral", "Марина (женский, спокойный)"),
     ]
     
     headers = {
         "Authorization": f"Api-Key {YANDEX_API_KEY}",
     }
     
+    results = []
     for voice, emotion, description in voices_to_test:
         data = {
             "text": test_text,
@@ -1661,12 +1688,18 @@ async def test_voices_command(message: types.Message):
                             caption=f"🎙 *{description}*",
                             parse_mode='Markdown'
                         )
+                        results.append(f"✅ {description}")
                         await asyncio.sleep(0.5)
                     else:
-                        await message.answer(f"❌ {description}: ошибка {response.status}")
+                        error = await response.text()
+                        results.append(f"❌ {description}: {response.status}")
+                        logger.error(f"Ошибка {voice}: {error}")
         except Exception as e:
-            await message.answer(f"❌ {description}: ошибка {str(e)[:50]}")
+            results.append(f"❌ {description}: {str(e)[:50]}")
     
+    # Отправляем сводку
+    summary = "📊 *РЕЗУЛЬТАТЫ ТЕСТА ГОЛОСОВ*\n\n" + "\n".join(results)
+    await message.answer(summary, parse_mode='Markdown')
     await status.delete()
 
 # ══════════════════════════════════════════════
@@ -2940,6 +2973,7 @@ async def stats_command(message: types.Message):
     await message.answer(stats.get_stats_text(), parse_mode='Markdown')
 
 async def apistatus_command(message: types.Message):
+    """Обработчик команды /apistatus (обновлено)"""
     if message.from_user.id not in ADMIN_IDS:
         await message.answer("⛔ Доступ запрещен")
         return
@@ -2956,7 +2990,11 @@ async def apistatus_command(message: types.Message):
     text += f"• Yandex TTS: {yandex_status}\n\n"
     
     if YANDEX_API_KEY:
-        text += f"🎙 TTS: Yandex SpeechKit (русский голос Александр, с иронией)\n"
+        text += f"🎙 Доступные голоса Yandex:\n"
+        text += f"   • Оксана (женский, заботливый) - основной для мотивации\n"
+        text += f"   • Филипп (мужской, ироничный) - для сарказма\n"
+        text += f"   • Эрмил (мужской, добрый) - для поддержки\n"
+        text += f"   • Александр (мужской, нейтральный) - через 'а'\n"
     
     await status_msg.edit_text(text, parse_mode='Markdown')
 
