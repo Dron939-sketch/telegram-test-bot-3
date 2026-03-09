@@ -745,6 +745,28 @@ def check_consistency(scores_list: list) -> bool:
     std_dev = variance ** 0.5
     return std_dev <= 1.3
 
+def format_box_text(text: str, width: int = 58) -> str:
+    """Форматирует текст для вставки в бокс с переносом строк"""
+    if not text:
+        return " " * width
+    
+    words = text.split()
+    lines = []
+    current_line = ""
+    
+    for word in words:
+        if len(current_line) + len(word) + 1 <= width:
+            current_line += (" " + word if current_line else word)
+        else:
+            lines.append(current_line.ljust(width))
+            current_line = word
+    
+    if current_line:
+        lines.append(current_line.ljust(width))
+    
+    return "\n".join(lines)
+
+
 def calculate_profile_confidence(profile: dict) -> float:
     """Рассчитывает уверенность в профиле"""
     confidence = 0.5  # базовое значение
@@ -1820,6 +1842,21 @@ async def show_preliminary_profile(callback: CallbackQuery, state: FSMContext):
     confidence = calculate_profile_confidence(data)
     confidence_bar = "█" * int(confidence * 10) + "░" * (10 - int(confidence * 10))
     
+       # Форматируем все длинные строки
+    attention_desc_formatted = format_box_text(simple_profile['attention_desc'])
+    thinking_desc_formatted = format_box_text(simple_profile['thinking_desc'])
+    sb_desc_formatted = format_box_text(simple_profile['sb_desc'])
+    tf_desc_formatted = format_box_text(simple_profile['tf_desc'])
+    ub_desc_formatted = format_box_text(simple_profile['ub_desc'])
+    chv_desc_formatted = format_box_text(simple_profile['chv_desc'])
+    growth_point_formatted = format_box_text(simple_profile['growth_point'])
+    
+    # Форматируем дополнительные строки
+    strong_text = "✅ Это твоя сильная сторона" if simple_profile.get('tf_strong') else ""
+    weak_text = "⚠️ Это тебя ограничивает" if simple_profile.get('ub_weak') else ""
+    strong_formatted = format_box_text(strong_text) if strong_text else ""
+    weak_formatted = format_box_text(weak_text) if weak_text else ""
+    
     # Текст портрета
     text = f"""
 ╔══════════════════════════════════════════════════════════════╗
@@ -1831,29 +1868,29 @@ async def show_preliminary_profile(callback: CallbackQuery, state: FSMContext):
 ├──────────────────────────────────────────────────────────────┤
 │                                                               │
 │  🎭 *{simple_profile['attention']}*                           │
-│  {simple_profile['attention_desc']}                           │
+│{attention_desc_formatted}│
 │                                                               │
 │  🧠 *{simple_profile['thinking']}*                            │
-│  {simple_profile['thinking_desc']}                            │
+│{thinking_desc_formatted}│
 │                                                               │
 │  📊 *ТВОИ СИЛЬНЫЕ И СЛАБЫЕ СТОРОНЫ:*                         │
 │                                                               │
 │  🛡 *Реакция на давление:*                                    │
-│  {simple_profile['sb_desc']}                                  │
+│{sb_desc_formatted}│
 │                                                               │
 │  💰 *Отношение к деньгам:*                                    │
-│  {simple_profile['tf_desc']}                                  │
-│  {'✅ Это твоя сильная сторона' if simple_profile.get('tf_strong') else ''}
+│{tf_desc_formatted}│
+│{strong_formatted}│
 │                                                               │
 │  🔍 *Как ты понимаешь мир:*                                   │
-│  {simple_profile['ub_desc']}                                  │
-│  {'⚠️ Это тебя ограничивает' if simple_profile.get('ub_weak') else ''}
+│{ub_desc_formatted}│
+│{weak_formatted}│
 │                                                               │
 │  🤝 *Отношения с людьми:*                                     │
-│  {simple_profile['chv_desc']}                                 │
+│{chv_desc_formatted}│
 │                                                               │
 │  🎯 *Главный рычаг роста:*                                    │
-│  {simple_profile['growth_point']}                             │
+│{growth_point_formatted}│
 │                                                               │
 │  📊 *Уверенность в портрете:* {confidence_bar} {int(confidence*100)}%
 └──────────────────────────────────────────────────────────────┘
@@ -1864,17 +1901,17 @@ async def show_preliminary_profile(callback: CallbackQuery, state: FSMContext):
 ├──────────────────────────────────────────────────────────────┤
 │                                                               │
 │  ┌────────────────────────────────────────────────────────┐  │
-│  │  [✅ ДА, ЭТО Я]                                         │  │
+│  │  ✅ ДА, ЭТО Я                                           │  │
 │  │  Всё верно, узнаю себя — переходим к глубине            │  │
 │  └────────────────────────────────────────────────────────┘  │
 │                                                               │
 │  ┌────────────────────────────────────────────────────────┐  │
-│  │  [❓ ЕСТЬ СОМНЕНИЯ]                                     │  │
+│  │  ❓ ЕСТЬ СОМНЕНИЯ                                       │  │
 │  │  Кое-что не совпадает — давай уточним                   │  │
 │  └────────────────────────────────────────────────────────┘  │
 │                                                               │
 │  ┌────────────────────────────────────────────────────────┐  │
-│  │  [🔄 ЭТО НЕ Я]                                          │  │
+│  │  🔄 ЭТО НЕ Я                                            │  │
 │  │  Совсем не похоже — пройдем другой тест                 │  │
 │  └────────────────────────────────────────────────────────┘  │
 └──────────────────────────────────────────────────────────────┘
@@ -1888,7 +1925,6 @@ async def show_preliminary_profile(callback: CallbackQuery, state: FSMContext):
     
     await callback.message.edit_text(text, reply_markup=keyboard, parse_mode='Markdown')
     await state.set_state(TestStates.profile_confirmation)
-
 
 # ============================================
 # НОВЫЕ ФУНКЦИИ: ОБРАБОТКА ПОДТВЕРЖДЕНИЯ ПРОФИЛЯ
