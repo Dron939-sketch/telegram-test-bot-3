@@ -613,7 +613,7 @@ async def cmd_start(message: Message, state: FSMContext):
         )
         
         keyboard = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="🚀 Давай, погнали!", callback_data="start_test")],
+            [InlineKeyboardButton(text="🚀 Давай, погнали!", callback_data="start_context")],
             [InlineKeyboardButton(text="🤨 А ты вообще кто такой?", callback_data="why_details")]
         ])
         
@@ -655,7 +655,7 @@ async def show_why_details(callback: CallbackQuery, state: FSMContext):
 👌 Погнали?"""
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="👌 Погнали!", callback_data="start_test")]
+        [InlineKeyboardButton(text="👌 Погнали!", callback_data="start_context")],
     ])
     
     await callback.message.edit_text(text, reply_markup=keyboard, parse_mode='HTML')
@@ -2434,10 +2434,15 @@ async def start_context(callback: CallbackQuery, state: FSMContext):
     
     context = user_contexts[user_id]
     
+    # Принудительный сброс (чтобы точно спросило)
+    context.city = None
+    context.gender = None
+    context.age = None
+    
     question, keyboard = await context.ask_for_context()
     
     if question:
-        await callback.message.edit_text(
+        await callback.message.answer(  # ← ДОЛЖНО БЫТЬ answer, НЕ edit_text
             f"📝 *Давайте познакомимся*\n\n{question}",
             reply_markup=keyboard,
             parse_mode='Markdown'
@@ -2557,7 +2562,7 @@ async def show_context_complete(message_or_callback, state: FSMContext, context:
     summary += "👇 *Начинаем?*"
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🚀 НАЧАТЬ ТЕСТ", callback_data="start_test")],
+        [InlineKeyboardButton(text="🚀 НАЧАТЬ ТЕСТ", callback_data="start_stage_1_intro")],  # ← ИЗМЕНЕНО!
         [InlineKeyboardButton(text="📖 ЧТО ДАЕТ ТЕСТ", callback_data="show_benefits")],
         [InlineKeyboardButton(text="❓ ЗАДАТЬ ВОПРОС", callback_data="ask_pretest")]
     ])
@@ -2565,7 +2570,8 @@ async def show_context_complete(message_or_callback, state: FSMContext, context:
     if isinstance(message_or_callback, Message):
         await message_or_callback.answer(summary, reply_markup=keyboard, parse_mode='Markdown')
     else:
-        await message_or_callback.message.edit_text(summary, reply_markup=keyboard, parse_mode='Markdown')
+        # ИСПРАВЛЕНО: отправляем новое сообщение, а не редактируем старое
+        await message_or_callback.message.answer(summary, reply_markup=keyboard, parse_mode='Markdown')
     
     await state.clear()
 
