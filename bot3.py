@@ -18,7 +18,7 @@ from typing import Optional, Dict, List, Any, Tuple, Union
 from statistics import mean
 from dotenv import load_dotenv
 from aiogram import Bot, Dispatcher, types, F
-from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, BufferedInputFile, CallbackQuery, Message
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, BufferedInputFile, CallbackQuery, Message, ReplyKeyboardMarkup, KeyboardButton
 from aiogram.filters import Command
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
@@ -104,42 +104,61 @@ class TestStates(StatesGroup):
     results = State()
     awaiting_question = State()
     pretest_question = State()
+    awaiting_context = State()  # 👈 НОВОЕ состояние для сбора контекста
+    mode_selection = State()     # 👈 НОВОЕ состояние для выбора режима
 
 
 # ============================================
-# РЕЖИМЫ ОБЩЕНИЯ
+# РЕЖИМЫ ОБЩЕНИЯ (ОБНОВЛЕНЫ)
 # ============================================
 
 COMMUNICATION_MODES = {
-    "hard": {
-        "name": "🔴 ЖЕСТКИЙ РЕЖИМ",
-        "description": "Делай как сказано. Вопросы потом. Ты здесь не за соплями, а за результатом.",
-        "prompt": "Ты жесткий наставник, военный инструктор. Говори коротко, приказным тоном. Никакой жалости, только дело. Используй короткие предложения, команды, без воды.",
-        "emoji": "🔴",
-        "voice_emotion": "strict",
-        "voice": "filipp"
-    },
-    "medium": {
-        "name": "🟡 СРЕДНИЙ РЕЖИМ",
-        "description": "Объясняю, показываю, поддерживаю. Но с тебя — действия. Баланс дисциплины и эмпатии.",
-        "prompt": "Ты старший товарищ, наставник. Сочетаешь поддержку с требовательностью. Можешь и подбодрить, и подстегнуть. Говори по делу, но с заботой.",
-        "emoji": "🟡",
+    "coach": {
+        "name": "🔵 КОУЧ",
+        "description": "Партнёрский стиль: задаю вопросы, помогаю найти ответы внутри себя. Без давления, но с фокусом на результат.",
+        "prompt": "Ты коуч, который задаёт открытые вопросы, помогает клиенту осознать свои цели и найти ресурсы. Ты не даёшь готовых ответов, а направляешь. Используй больше вопросов, поддерживай, но не навязывай.",
+        "emoji": "🔵",
         "voice_emotion": "neutral",
-        "voice": "oksana"
+        "voice": "oksana",
+        "style": "socratic",
+        "question_style": "open",
+        "directness": 0.3,
+        "support_level": 0.8
     },
-    "soft": {
-        "name": "🟢 МЯГКИЙ РЕЖИМ",
-        "description": "Давай разберемся, почему тебе страшно, и пойдем маленькими шагами. Для работы с травмами и блоками.",
-        "prompt": "Ты заботливый друг, психотерапевт. Говори мягко, поддерживающе. Никакого давления, только принятие и помощь. Используй больше вопросов, проявляй эмпатию.",
+    "friend": {
+        "name": "🟢 ДРУГ",
+        "description": "Тёплый, поддерживающий стиль. Как близкий человек, который выслушает и поймёт. Для работы с чувствами и самооценкой.",
+        "prompt": "Ты близкий друг, который принимает без осуждения. Говори тепло, с эмпатией. Используй больше отражения чувств, поддерживай, показывай, что ты рядом. Можно использовать личные обращения.",
         "emoji": "🟢",
         "voice_emotion": "good",
-        "voice": "ermil"
+        "voice": "ermil",
+        "style": "empathic",
+        "question_style": "reflective",
+        "directness": 0.1,
+        "support_level": 1.0
+    },
+    "trainer": {
+        "name": "🔴 ТРЕНЕР",
+        "description": "Структурированный, требовательный стиль. Чёткие инструкции, конкретные шаги, фокус на действиях. Для достижения целей.",
+        "prompt": "Ты спортивный тренер или наставник, который даёт чёткие инструкции. Говори коротко, по делу, без воды. Фокус на действиях, дисциплине, результате. Можно использовать командный тон.",
+        "emoji": "🔴",
+        "voice_emotion": "strict",
+        "voice": "filipp",
+        "style": "directive",
+        "question_style": "closed",
+        "directness": 0.9,
+        "support_level": 0.4
     }
 }
 
+# Для обратной совместимости со старыми режимами
+COMMUNICATION_MODES["hard"] = COMMUNICATION_MODES["trainer"]
+COMMUNICATION_MODES["medium"] = COMMUNICATION_MODES["coach"]
+COMMUNICATION_MODES["soft"] = COMMUNICATION_MODES["friend"]
+
 
 # ============================================
-# КЛАСС UserContext
+# КЛАСС UserContext (РАСШИРЕННЫЙ)
 # ============================================
 
 class UserContext:
@@ -150,12 +169,21 @@ class UserContext:
         self.timezone_offset = 3
         self.gender = None
         self.age = None
-        self.communication_mode = "medium"
+        self.birth_date = None
+        self.name = None
+        self.communication_mode = "coach"
         self.last_context_update = None
         self.weather_cache = {}
         self.weather_cache_time = None
+        self.season = None
+        self.moon_phase = None
+        self.holidays_today = []
+        self.working_hours = True
+        self.user_preferences = {}
+        self.awaiting_context = None  # для пошагового сбора
         
     def get_greeting(self, user_name: str = "") -> str:
+        """Персонализированное приветствие с учётом времени суток, пола и погоды"""
         now = datetime.now()
         hour = now.hour
         
@@ -168,11 +196,121 @@ class UserContext:
         else:
             greeting = "Доброй ночи"
         
+        # Определяем обращение
+        address = self.get_address()
+        
+        base = f"{greeting}"
         if user_name:
-            return f"{greeting}, {user_name}!"
-        return greeting + "!"
+            base += f", {user_name}"
+        if address:
+            base += f" {address}"
+        base += "!"
+        
+        # Добавляем погодный контекст
+        if self.weather_cache:
+            temp = self.weather_cache.get('temp')
+            weather_desc = self.weather_cache.get('description', '')
+            icon = self.weather_cache.get('icon', '')
+            
+            if temp is not None:
+                if temp < 0:
+                    weather_note = f"❄️ На улице морозно, {temp}°C. Одевайся теплее!"
+                elif temp < 10:
+                    weather_note = f"☁️ Прохладно, {temp}°C. Хорошего дня!"
+                elif temp < 20:
+                    weather_note = f"🍃 Свежо, {temp}°C. Отличная погода!"
+                elif temp < 30:
+                    weather_note = f"☀️ Тепло, {temp}°C. Прекрасный день!"
+                else:
+                    weather_note = f"🔥 Жарко, {temp}°C. Пей больше воды!"
+                
+                base += f"\n\n{icon} {weather_note}"
+        
+        return base
+    
+    def get_address(self) -> str:
+        """Возвращает обращение в зависимости от пола"""
+        if self.gender == "male":
+            return "братишка"
+        elif self.gender == "female":
+            return "сестрёнка"
+        else:
+            return "родной"
+    
+    async def ask_for_context(self) -> Tuple[Optional[str], Optional[InlineKeyboardMarkup]]:
+        """Возвращает первый вопрос для сбора контекста"""
+        if not self.city:
+            self.awaiting_context = "city"
+            return "🌆 В каком городе ты находишься? (Это нужно для погоды и времени)", InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="⏭ Пропустить", callback_data="skip_context")]
+            ])
+        
+        if not self.gender:
+            self.awaiting_context = "gender"
+            return "👤 Ты братишка или сестрёнка? (Напиши М или Ж)", InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="👨 Братишка", callback_data="set_gender_male")],
+                [InlineKeyboardButton(text="👩 Сестрёнка", callback_data="set_gender_female")],
+                [InlineKeyboardButton(text="⏭ Пропустить", callback_data="skip_context")]
+            ])
+        
+        if not self.age:
+            self.awaiting_context = "age"
+            return "📅 Сколько тебе лет? (Напиши число)", InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="⏭ Пропустить", callback_data="skip_context")]
+            ])
+        
+        self.awaiting_context = None
+        return None, None
+    
+    async def process_context_answer(self, text: str) -> Tuple[bool, Optional[str], Optional[InlineKeyboardMarkup]]:
+        """Обрабатывает ответ на контекстный вопрос"""
+        if not self.awaiting_context:
+            return False, None, None
+        
+        field = self.awaiting_context
+        
+        if field == "city":
+            self.city = text.strip()
+            self.awaiting_context = None
+            # Обновляем погоду
+            await self.update_weather()
+            # Спрашиваем дальше
+            question, keyboard = await self.ask_for_context()
+            return True, question, keyboard
+                
+        elif field == "gender":
+            gender_lower = text.lower().strip()
+            if gender_lower in ['м', 'муж', 'мужчина', 'male', 'братишка']:
+                self.gender = "male"
+            elif gender_lower in ['ж', 'жен', 'женщина', 'female', 'сестрёнка']:
+                self.gender = "female"
+            else:
+                self.gender = "other"
+            
+            self.awaiting_context = None
+            question, keyboard = await self.ask_for_context()
+            return True, question, keyboard
+                
+        elif field == "age":
+            try:
+                self.age = int(text.strip())
+                self.awaiting_context = None
+                question, keyboard = await self.ask_for_context()
+                return True, question, keyboard
+            except ValueError:
+                return False, "Пожалуйста, введите число (например: 25)", None
+        
+        return False, None, None
+    
+    async def handle_gender_callback(self, gender: str) -> Tuple[Optional[str], Optional[InlineKeyboardMarkup]]:
+        """Обрабатывает выбор пола через callback"""
+        self.gender = gender
+        self.awaiting_context = None
+        question, keyboard = await self.ask_for_context()
+        return question, keyboard
     
     def get_day_context(self) -> dict:
+        """Возвращает контекст текущего дня"""
         now = datetime.now()
         weekdays_ru = {
             0: "понедельник", 1: "вторник", 2: "среда", 3: "четверг",
@@ -203,21 +341,76 @@ class UserContext:
         context_parts.append(self.get_greeting(user_name))
         
         day_context = self.get_day_context()
-        context_parts.append(f"Сегодня {day_context['weekday']}, {day_context['day']} {day_context['month']}, {day_context['time_str']}")
+        context_parts.append(f"📅 Сегодня {day_context['weekday']}, {day_context['day']} {day_context['month']}, {day_context['time_str']}")
+        
+        if self.city:
+            context_parts.append(f"📍 Город: {self.city}")
         
         age_stage = self.get_age_stage()
         if age_stage:
-            context_parts.append(f"Возрастной этап: {age_stage}")
+            gender_str = ""
+            if self.gender == "male":
+                gender_str = "Братишка"
+            elif self.gender == "female":
+                gender_str = "Сестрёнка"
+            
+            if gender_str:
+                context_parts.append(f"👤 {gender_str}, {self.age} лет — {age_stage}")
+            else:
+                context_parts.append(f"👤 Возраст: {self.age} — {age_stage}")
+        
+        if day_context['is_weekend']:
+            context_parts.append("🏖 Сегодня выходной")
+        elif 9 <= day_context['hour'] < 18:
+            context_parts.append("💼 Рабочее время")
+        else:
+            context_parts.append("🏡 Личное время")
+        
+        season = self.get_season()
+        if season:
+            context_parts.append(f"🍂 Сезон: {season}")
+        
+        moon = self.get_moon_phase()
+        if moon:
+            context_parts.append(f"🌙 {moon}")
         
         return "\n".join(context_parts)
     
-    async def get_weather(self) -> dict:
+    def get_prompt_context(self) -> str:
+        """Возвращает контекст для вставки в промпт AI"""
+        lines = []
+        
+        if self.gender:
+            gender_text = "мужской" if self.gender == "male" else "женский" if self.gender == "female" else "другой"
+            lines.append(f"Пол пользователя: {gender_text}")
+            lines.append(f"Обращение: {self.get_address()}")
+        if self.age:
+            lines.append(f"Возраст: {self.age} лет ({self.get_age_stage()})")
+        if self.city:
+            lines.append(f"Город: {self.city}")
+        
+        day = self.get_day_context()
+        lines.append(f"Время: {day['time_str']}, {day['weekday']}" + (" (выходной)" if day['is_weekend'] else ""))
+        
+        if self.weather_cache:
+            lines.append(f"Погода: {self.weather_cache['icon']} {self.weather_cache['description']}, {self.weather_cache['temp']}°C")
+            if self.season:
+                lines.append(f"Сезон: {self.season}")
+        
+        moon = self.get_moon_phase()
+        if moon:
+            lines.append(f"Луна: {moon}")
+        
+        return "\n".join(lines)
+    
+    async def update_weather(self):
+        """Обновляет погоду через OpenWeatherMap API"""
         if not self.city or not OPENWEATHER_API_KEY:
-            return {}
+            return False
         
         if self.weather_cache and self.weather_cache_time:
             if (datetime.now() - self.weather_cache_time).seconds < 3600:
-                return self.weather_cache
+                return True
         
         url = f"http://api.openweathermap.org/data/2.5/weather?q={self.city}&appid={OPENWEATHER_API_KEY}&units=metric&lang=ru"
         try:
@@ -225,7 +418,6 @@ class UserContext:
                 async with session.get(url) as response:
                     if response.status == 200:
                         data = await response.json()
-                        weather_desc = data['weather'][0]['description']
                         
                         weather_icons = {
                             "clear": "☀️",
@@ -247,55 +439,112 @@ class UserContext:
                         self.weather_cache = {
                             "temp": round(data['main']['temp']),
                             "feels_like": round(data['main']['feels_like']),
-                            "description": weather_desc,
+                            "description": data['weather'][0]['description'],
                             "humidity": data['main']['humidity'],
                             "wind": round(data['wind']['speed']),
                             "icon": icon,
                             "pressure": data['main']['pressure']
                         }
                         self.weather_cache_time = datetime.now()
-                        return self.weather_cache
+                        self.update_season()
+                        return True
         except Exception as e:
             logger.error(f"Ошибка получения погоды: {e}")
-        return {}
+        return False
+    
+    def update_season(self):
+        """Определяет сезон на основе даты и температуры"""
+        now = datetime.now()
+        month = now.month
+        temp = self.weather_cache.get('temp', 0) if self.weather_cache else 0
+        
+        if month in [12, 1, 2]:
+            if temp < -10:
+                self.season = "суровая зима"
+            elif temp < 0:
+                self.season = "зима"
+            else:
+                self.season = "мягкая зима"
+        elif month in [3, 4, 5]:
+            if temp < 5:
+                self.season = "холодная весна"
+            elif temp < 15:
+                self.season = "весна"
+            else:
+                self.season = "тёплая весна"
+        elif month in [6, 7, 8]:
+            if temp > 25:
+                self.season = "жаркое лето"
+            else:
+                self.season = "лето"
+        else:
+            if temp < 5:
+                self.season = "холодная осень"
+            elif temp < 15:
+                self.season = "осень"
+            else:
+                self.season = "тёплая осень"
+    
+    def get_season(self) -> str:
+        """Возвращает текущий сезон"""
+        return self.season
+    
+    def get_moon_phase(self) -> str:
+        """Определяет фазу луны (упрощённо)"""
+        now = datetime.now()
+        day_of_month = now.day
+        
+        if day_of_month < 4:
+            return "новолуние 🌑"
+        elif day_of_month < 11:
+            return "растущая луна 🌒"
+        elif day_of_month < 18:
+            return "полнолуние 🌕"
+        elif day_of_month < 25:
+            return "убывающая луна 🌘"
+        else:
+            return "старая луна 🌚"
     
     def get_weather_recommendation(self, weather: dict) -> str:
+        """Возвращает рекомендацию на основе погоды"""
         if not weather:
             return ""
         
         temp = weather['temp']
+        desc = weather['description']
         
-        if temp < -20:
-            return f"❄️ Морозно, {temp}°C. Сиди дома."
+        if "дождь" in desc or "ливень" in desc:
+            return "Возьми зонт ☔️"
+        elif "снег" in desc:
+            return "Осторожно на дорогах ❄️"
+        elif temp > 25:
+            return "Пей больше воды 💧"
         elif temp < -10:
-            return f"❄️ Холодно, {temp}°C. Одевайся теплее."
+            return "Одевайся очень тепло 🧣"
         elif temp < 0:
-            return f"☁️ Подморозило, {temp}°C."
-        elif temp < 10:
-            return f"🍂 Прохладно, {temp}°C."
-        elif temp < 20:
-            return f"🍃 Свежо, {temp}°C."
-        elif temp < 30:
-            return f"☀️ Теплынь, {temp}°C."
-        else:
-            return f"🔥 Жара, {temp}°C."
+            return "Не забудь шапку 🧤"
+        
+        return ""
     
     def get_age_stage(self) -> str:
+        """Возвращает возрастной этап"""
         if not self.age:
             return ""
         
         if self.age < 18:
-            return "Подростковый возраст — время поиска себя"
+            return "подростковый возраст — время поиска себя"
         elif self.age < 25:
-            return "Молодость — время проб и ошибок"
+            return "молодость — время проб и ошибок"
         elif self.age < 35:
-            return "Активная зрелость"
+            return "активная зрелость"
         elif self.age < 45:
-            return "Расцвет — время реализации"
+            return "расцвет — время реализации"
         elif self.age < 55:
-            return "Мудрая зрелость"
+            return "мудрая зрелость"
+        elif self.age < 65:
+            return "золотой возраст"
         else:
-            return "Возраст гармонии"
+            return "возраст гармонии и мудрости"
 
 
 # ============================================
@@ -438,14 +687,20 @@ def get_priority_order(scores: dict) -> list:
     else:
         return [k for k, _ in sorted(scores.items(), key=lambda x: x[1])]
 
-def is_test_completed(user: dict) -> bool:
+def is_test_completed(user_data: dict) -> bool:
     """Проверяет, завершен ли тест"""
-    if not user or "scores" not in user:
-        return False
-    # Проверяем, что по каждому вектору есть ответы
-    for vector in VECTORS:
-        if len(user.get("scores", {}).get(vector, [])) < 8:
+    # Проверяем наличие всех ключевых данных
+    required_fields = ["perception_type", "thinking_level", "behavioral_levels", "dilts_counts"]
+    for field in required_fields:
+        if field not in user_data:
             return False
+    
+    # Проверяем, что по каждому вектору есть ответы
+    behavioral_levels = user_data.get("behavioral_levels", {})
+    for vector in VECTORS:
+        if len(behavioral_levels.get(vector, [])) < 1:
+            return False
+    
     return True
 
 def should_be_ironic(text: str) -> bool:
@@ -533,7 +788,7 @@ async def speech_to_text(voice_file_path: str) -> str:
         logger.error(f"💥 Ошибка Deepgram STT: {e}")
         return ""
 
-async def text_to_speech(text: str, mode: str = "medium") -> Optional[bytes]:
+async def text_to_speech(text: str, mode: str = "coach") -> Optional[bytes]:
     """Преобразует текст в голос через Yandex SpeechKit"""
     if not YANDEX_API_KEY:
         logger.error("❌ YANDEX_API_KEY не найден")
@@ -551,20 +806,30 @@ async def text_to_speech(text: str, mode: str = "medium") -> Optional[bytes]:
         "Authorization": f"Api-Key {YANDEX_API_KEY}",
     }
     
-    mode_config = COMMUNICATION_MODES.get(mode, COMMUNICATION_MODES["medium"])
+    mode_config = COMMUNICATION_MODES.get(mode, COMMUNICATION_MODES["coach"])
     voice = mode_config.get("voice", "oksana")
     emotion = mode_config.get("voice_emotion", "neutral")
+    
+    # Настройка скорости под режим
+    if mode == "coach":
+        speed = "1.0"
+    elif mode == "friend":
+        speed = "0.9"
+    elif mode == "trainer":
+        speed = "1.1"
+    else:
+        speed = "1.0"
     
     data = {
         "text": clean_text,
         "voice": voice,
         "emotion": emotion,
-        "speed": "1.0",
+        "speed": speed,
         "format": "oggopus",
     }
     
     try:
-        logger.info(f"🎧 Отправка в Яндекс TTS: голос {voice}, эмоция {emotion}")
+        logger.info(f"🎧 Отправка в Яндекс TTS: голос {voice}, эмоция {emotion}, скорость {speed}")
         
         timeout = aiohttp.ClientTimeout(total=30)
         
@@ -666,6 +931,78 @@ async def call_deepseek(prompt: str, system_message: str = "", max_tokens: int =
     
     logger.error("❌ ВСЕ ПОПЫТКИ НЕ УДАЛИСЬ")
     return None
+
+
+async def generate_response_with_full_context(user_id: int, user_message: str, state_data: dict) -> str:
+    """Генерирует ответ с учётом полного контекста пользователя"""
+    
+    # Получаем контекст пользователя
+    user_context = user_contexts.get(user_id)
+    
+    # Получаем режим
+    mode = "coach"
+    if user_context:
+        mode = user_context.communication_mode
+    elif state_data.get("communication_mode"):
+        mode = state_data["communication_mode"]
+    
+    mode_config = COMMUNICATION_MODES.get(mode, COMMUNICATION_MODES["coach"])
+    
+    # Получаем профиль
+    profile_data = state_data.get("profile_data", {})
+    profile_code = profile_data.get('display_name', 'не определен')
+    
+    # Собираем полный контекст для AI
+    full_context = ""
+    if user_context:
+        full_context = user_context.get_prompt_context()
+    
+    # Определяем обращение
+    address = user_context.get_address() if user_context else "родной"
+    
+    # Собираем историю
+    history = state_data.get("history", [])
+    history_text = ""
+    for entry in history[-5:]:
+        role = "Клиент" if entry["role"] == "user" else "Психолог"
+        history_text += f"{role}: {entry['text']}\n"
+    
+    # Собираем промпт
+    base_prompt = f"""Ты — Фреди, виртуальный психолог, оцифрованная версия Андрея Мейстера.
+Ты общаешься с пользователем как с {address}.
+
+ПРОФИЛЬ ПОЛЬЗОВАТЕЛЯ: {profile_code}
+
+КОНТЕКСТ ПОЛЬЗОВАТЕЛЯ:
+{full_context}
+
+РЕЖИМ ОБЩЕНИЯ: {mode_config['name']}
+{mode_config['description']}
+
+СТИЛЬ: {mode_config['prompt']}
+
+ИСТОРИЯ ДИАЛОГА:
+{history_text}
+
+СООБЩЕНИЕ ПОЛЬЗОВАТЕЛЯ: {user_message}
+
+ОТВЕТ (учитывая пол, возраст, погоду, время суток и стиль {mode_config['name']}):"""
+    
+    # Отправляем в DeepSeek
+    response = await call_deepseek(base_prompt, max_tokens=500)
+    
+    if not response:
+        # Fallback с учётом контекста
+        if user_context and user_context.weather_cache:
+            weather = user_context.weather_cache
+            if weather['temp'] < 0 and "грусть" in user_message.lower():
+                response = f"Слушай, {address}, погода {weather['icon']} действительно может влиять на настроение. Расскажи подробнее?"
+            else:
+                response = f"Я слышу тебя, {address}. Что именно тебя беспокоит?"
+        else:
+            response = f"Я слышу тебя, {address}. Расскажи подробнее?"
+    
+    return response
 
 
 # ============================================
@@ -1113,9 +1450,13 @@ class DelayedTaskManager:
                         lvl = level(score)
                         profile = LEVEL_PROFILES.get(vector, {}).get(lvl, {})
                         
+                        # Получаем обращение
+                        context = user_contexts.get(user_id)
+                        address = context.get_address() if context else "друг"
+                        
                         message_text = (
                             f"🧠 *ЧЕРЕЗ {delay_minutes} МИНУТ ПОСЛЕ ТЕСТА*\n\n"
-                            f"Слушай, {user_name}...\n\n"
+                            f"Слушай, {address}...\n\n"
                             f"Твое самое узкое место — {VECTORS[vector]['name']} (уровень {lvl}).\n"
                             f"{profile.get('pain_origin', '')}\n\n"
                             f"🎯 *Первый шаг:*\n"
@@ -1123,7 +1464,8 @@ class DelayedTaskManager:
                             f"⚡️ Я с тобой на связи."
                         )
                     else:
-                        message_text = f"Слушай, {user_name}...\n\nКак ты? Я рядом."
+                        address = user_contexts.get(user_id).get_address() if user_contexts.get(user_id) else "друг"
+                        message_text = f"Слушай, {address}...\n\nКак ты? Я рядом."
                     
                     keyboard = InlineKeyboardMarkup(inline_keyboard=[
                         [InlineKeyboardButton(text="❓ ЗАДАТЬ ВОПРОС", callback_data="smart_questions")],
@@ -1139,7 +1481,7 @@ class DelayedTaskManager:
                     )
                     
                     context_obj = user_contexts.get(user_id)
-                    mode = context_obj.communication_mode if context_obj else "medium"
+                    mode = context_obj.communication_mode if context_obj else "coach"
                     
                     if YANDEX_API_KEY:
                         audio_data = await text_to_speech(message_text, mode)
@@ -1271,18 +1613,358 @@ def get_help_keyboard() -> InlineKeyboardMarkup:
 
 
 # ============================================
+# НОВЫЕ ФУНКЦИИ ДЛЯ СБОРА КОНТЕКСТА
+# ============================================
+
+async def start_context(callback: CallbackQuery, state: FSMContext):
+    """Начинает сбор контекста"""
+    user_id = callback.from_user.id
+    
+    if user_id not in user_contexts:
+        user_contexts[user_id] = UserContext(user_id)
+    
+    context = user_contexts[user_id]
+    
+    question, keyboard = await context.ask_for_context()
+    
+    if question:
+        await callback.message.edit_text(
+            f"📝 *Давай знакомиться, {context.get_address()}!*\n\n{question}",
+            reply_markup=keyboard,
+            parse_mode='Markdown'
+        )
+        await state.set_state(TestStates.awaiting_context)
+    else:
+        # Вся информация уже есть
+        await show_context_complete(callback, state, context)
+
+
+async def skip_context(callback: CallbackQuery, state: FSMContext):
+    """Пропускает сбор контекста"""
+    user_id = callback.from_user.id
+    context = user_contexts.get(user_id)
+    
+    if context:
+        context.awaiting_context = None
+    
+    await callback.message.edit_text(
+        "⏭ Хорошо, будем общаться без привязки к месту и времени.\n\n"
+        "Но помни: с контекстом советы точнее 😉\n"
+        "Можешь в любой момент рассказать о себе — просто напиши /context",
+        parse_mode='Markdown'
+    )
+    await asyncio.sleep(1)
+    
+    await show_main_menu(callback.message, context)
+
+
+async def set_gender_male(callback: CallbackQuery, state: FSMContext):
+    """Устанавливает пол: мужской"""
+    user_id = callback.from_user.id
+    context = user_contexts.get(user_id)
+    
+    if context:
+        question, keyboard = await context.handle_gender_callback("male")
+        if question:
+            await callback.message.edit_text(
+                f"📝 *Давай знакомиться, {context.get_address()}!*\n\n{question}",
+                reply_markup=keyboard,
+                parse_mode='Markdown'
+            )
+        else:
+            await show_context_complete(callback, state, context)
+    else:
+        await callback.message.edit_text("❌ Ошибка контекста")
+    await callback.answer()
+
+
+async def set_gender_female(callback: CallbackQuery, state: FSMContext):
+    """Устанавливает пол: женский"""
+    user_id = callback.from_user.id
+    context = user_contexts.get(user_id)
+    
+    if context:
+        question, keyboard = await context.handle_gender_callback("female")
+        if question:
+            await callback.message.edit_text(
+                f"📝 *Давай знакомиться, {context.get_address()}!*\n\n{question}",
+                reply_markup=keyboard,
+                parse_mode='Markdown'
+            )
+        else:
+            await show_context_complete(callback, state, context)
+    else:
+        await callback.message.edit_text("❌ Ошибка контекста")
+    await callback.answer()
+
+
+async def handle_context_message(message: Message, state: FSMContext):
+    """Обрабатывает ответы на контекстные вопросы"""
+    user_id = message.from_user.id
+    context = user_contexts.get(user_id)
+    
+    if not context or not context.awaiting_context:
+        return False
+    
+    success, next_question, keyboard = await context.process_context_answer(message.text)
+    
+    if success:
+        if next_question:
+            # Есть следующий вопрос
+            await message.answer(
+                f"📝 {next_question}",
+                reply_markup=keyboard,
+                parse_mode='Markdown'
+            )
+        else:
+            # Вопросы закончились
+            await show_context_complete(message, state, context)
+    else:
+        await message.answer(next_question or "Пожалуйста, ответьте корректно.")
+    
+    return True
+
+
+async def show_context_complete(message_or_callback, state: FSMContext, context: UserContext):
+    """Показывает итоговый экран после сбора контекста"""
+    address = context.get_address()
+    
+    # Обновляем погоду
+    await context.update_weather()
+    
+    # Формируем итоговое сообщение
+    summary = f"✅ *Отлично, {address}! Теперь я знаю о тебе:*\n\n"
+    
+    if context.city:
+        summary += f"📍 Город: {context.city}\n"
+    if context.gender:
+        gender_str = "Мужчина" if context.gender == "male" else "Женщина" if context.gender == "female" else "Другое"
+        summary += f"👤 Пол: {gender_str}\n"
+    if context.age:
+        summary += f"📅 Возраст: {context.age} ({context.get_age_stage()})\n"
+    if context.weather_cache:
+        summary += f"{context.weather_cache['icon']} Погода: {context.weather_cache['description']}, {context.weather_cache['temp']}°C\n"
+    
+    summary += f"\n🎯 Теперь я буду учитывать это в наших разговорах, {address}!\n\n"
+    summary += f"━━━━━━━━━━━━━━━━━━━━\n"
+    summary += f"🧠 *ЧТО ДАЛЬШЕ?*\n\n"
+    summary += f"Чтобы я мог помочь по-настоящему, нужно пройти тест (12 минут).\n"
+    summary += f"Он определит твой психологический профиль по 4 векторам.\n\n"
+    summary += f"После теста ты сможешь выбрать, *как* мы будем общаться:\n"
+    summary += f"🔵 КОУЧ — задаю вопросы, помогаю найти ответы внутри себя\n"
+    summary += f"🟢 ДРУГ — тепло и поддерживающе, как близкий человек\n"
+    summary += f"🔴 ТРЕНЕР — чётко, структурно, с фокусом на результат\n\n"
+    summary += f"━━━━━━━━━━━━━━━━━━━━\n"
+    summary += f"👇 *Начинаем знакомство?*"
+    
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🚀 НАЧАТЬ ТЕСТ", callback_data="start_test")],
+        [InlineKeyboardButton(text="📖 ЧТО ДАЕТ ТЕСТ", callback_data="show_benefits")],
+        [InlineKeyboardButton(text="❓ ЗАДАТЬ ВОПРОС", callback_data="ask_pretest")]
+    ])
+    
+    if isinstance(message_or_callback, Message):
+        await message_or_callback.answer(summary, reply_markup=keyboard, parse_mode='Markdown')
+    else:
+        await message_or_callback.message.edit_text(summary, reply_markup=keyboard, parse_mode='Markdown')
+    
+    await state.clear()
+
+
+# ============================================
+# НОВЫЕ ФУНКЦИИ ДЛЯ ВЫБОРА РЕЖИМА
+# ============================================
+
+async def show_mode_selection(callback: CallbackQuery, state: FSMContext):
+    """Показывает выбор режима общения после получения профиля"""
+    user_id = callback.from_user.id
+    data = await state.get_data()
+    context = user_contexts.get(user_id)
+    
+    profile_data = data.get("profile_data", {})
+    profile_code = profile_data.get('display_name', 'SA-5_INT')
+    
+    address = context.get_address() if context else "родной"
+    
+    text = f"""
+🧠 *ФРЕДИ: ВЫБЕРИ СТИЛЬ ОБЩЕНИЯ*
+
+📊 Твой профиль: `{profile_code}`
+
+Теперь, когда я знаю, кто ты, {address},
+ты можешь выбрать, **КАК** мы будем общаться дальше:
+
+━━━━━━━━━━━━━━━━━━━━
+🔵 *КОУЧ*
+Партнёрский стиль: задаю вопросы, помогаю найти ответы внутри себя.
+Без давления, но с фокусом на результат.
+
+🟢 *ДРУГ*
+Тёплый, поддерживающий стиль. Как близкий человек, 
+который выслушает и поймёт.
+
+🔴 *ТРЕНЕР*
+Структурированный, требовательный стиль. Чёткие инструкции, 
+конкретные шаги, фокус на действиях.
+
+━━━━━━━━━━━━━━━━━━━━
+👇 *Как тебе комфортнее?*
+"""
+    
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(text="🔵 КОУЧ", callback_data="set_mode_coach"),
+            InlineKeyboardButton(text="🟢 ДРУГ", callback_data="set_mode_friend"),
+            InlineKeyboardButton(text="🔴 ТРЕНЕР", callback_data="set_mode_trainer")
+        ],
+        [InlineKeyboardButton(text="◀️ Вернуться к результатам", callback_data="back_to_results")]
+    ])
+    
+    await callback.message.edit_text(text, reply_markup=keyboard, parse_mode='Markdown')
+    await state.set_state(TestStates.mode_selection)
+
+
+async def set_mode_coach(callback: CallbackQuery, state: FSMContext):
+    """Устанавливает режим КОУЧ"""
+    user_id = callback.from_user.id
+    context = user_contexts.get(user_id)
+    
+    if context:
+        context.communication_mode = "coach"
+    
+    await state.update_data(communication_mode="coach")
+    
+    await callback.answer("✅ Режим КОУЧ активирован")
+    
+    address = context.get_address() if context else "родной"
+    
+    text = f"""
+🔵 *РЕЖИМ КОУЧ АКТИВИРОВАН*
+
+Отлично, {address}!
+
+Теперь я буду:
+• Задавать открытые вопросы
+• Помогать находить ответы внутри тебя
+• Поддерживать, но не навязывать
+
+Главное правило коучинга: 
+ответы уже есть у тебя, я просто помогаю их увидеть.
+
+━━━━━━━━━━━━━━━━━━━━
+🧠 *Что дальше?*
+Ты можешь задать любой вопрос, и я отвечу в стиле КОУЧ.
+"""
+    
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🧠 К ПОРТРЕТУ", callback_data="show_results")],
+        [InlineKeyboardButton(text="❓ ЗАДАТЬ ВОПРОС", callback_data="smart_questions")],
+        [InlineKeyboardButton(text="🎯 ЧЕМ ПОМОЧЬ", callback_data="show_help")]
+    ])
+    
+    await callback.message.edit_text(text, reply_markup=keyboard, parse_mode='Markdown')
+    await state.set_state(TestStates.results)
+
+
+async def set_mode_friend(callback: CallbackQuery, state: FSMContext):
+    """Устанавливает режим ДРУГ"""
+    user_id = callback.from_user.id
+    context = user_contexts.get(user_id)
+    
+    if context:
+        context.communication_mode = "friend"
+    
+    await state.update_data(communication_mode="friend")
+    
+    await callback.answer("✅ Режим ДРУГ активирован")
+    
+    address = context.get_address() if context else "родной"
+    
+    text = f"""
+🟢 *РЕЖИМ ДРУГ АКТИВИРОВАН*
+
+Приятно познакомиться, {address}!
+
+Теперь я буду:
+• Слушать и принимать без осуждения
+• Отражать твои чувства
+• Быть рядом и поддерживать
+
+Здесь можно быть собой — любая тема, любое настроение.
+Я принимаю тебя любым.
+
+━━━━━━━━━━━━━━━━━━━━
+🧠 *Что дальше?*
+Рассказывай, что у тебя на душе. Я рядом.
+"""
+    
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🧠 К ПОРТРЕТУ", callback_data="show_results")],
+        [InlineKeyboardButton(text="❓ ЗАДАТЬ ВОПРОС", callback_data="smart_questions")],
+        [InlineKeyboardButton(text="🎯 ЧЕМ ПОМОЧЬ", callback_data="show_help")]
+    ])
+    
+    await callback.message.edit_text(text, reply_markup=keyboard, parse_mode='Markdown')
+    await state.set_state(TestStates.results)
+
+
+async def set_mode_trainer(callback: CallbackQuery, state: FSMContext):
+    """Устанавливает режим ТРЕНЕР"""
+    user_id = callback.from_user.id
+    context = user_contexts.get(user_id)
+    
+    if context:
+        context.communication_mode = "trainer"
+    
+    await state.update_data(communication_mode="trainer")
+    
+    await callback.answer("✅ Режим ТРЕНЕР активирован")
+    
+    address = context.get_address() if context else "родной"
+    
+    text = f"""
+🔴 *РЕЖИМ ТРЕНЕР АКТИВИРОВАН*
+
+Привет, {address}!
+
+Теперь я буду:
+• Давать чёткие инструкции
+• Фокусироваться на действиях
+• Требовать результат
+
+Здесь без воды — только конкретные шаги, 
+которые приведут тебя к цели.
+
+━━━━━━━━━━━━━━━━━━━━
+🧠 *Что дальше?*
+Ставь задачу — я дам план действий.
+"""
+    
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🧠 К ПОРТРЕТУ", callback_data="show_results")],
+        [InlineKeyboardButton(text="❓ ЗАДАТЬ ВОПРОС", callback_data="smart_questions")],
+        [InlineKeyboardButton(text="🎯 ЧЕМ ПОМОЧЬ", callback_data="show_help")]
+    ])
+    
+    await callback.message.edit_text(text, reply_markup=keyboard, parse_mode='Markdown')
+    await state.set_state(TestStates.results)
+
+
+# ============================================
 # ОБРАБОТЧИКИ ЭТАПА 1
 # ============================================
 
 async def show_stage_1_intro(callback: CallbackQuery, state: FSMContext):
     """Экран перед ЭТАПОМ 1"""
     user_id = callback.from_user.id
+    context = user_contexts.get(user_id)
+    address = context.get_address() if context else "родной"
     
     await state.set_state(TestStates.stage_1)
     
     intro_text = (
         f"🧠 *ЭТАП 1: КОНФИГУРАЦИЯ ВОСПРИЯТИЯ*\n\n"
-        f"Восприятие — это линза, через которую ты смотришь на мир.\n\n"
+        f"Восприятие — это линза, через которую ты смотришь на мир, {address}.\n\n"
         f"Она сформирована культурой, нормами, ценностями и опытом, который тебя строил. Это определило, что ты замечаешь автоматически, а что остаётся за кадром.\n\n"
         f"🔍 *Что мы исследуем:*\n"
         f"• Куда направлено твое внимание — вовне или внутрь\n"
@@ -1986,6 +2668,7 @@ async def show_results_screen(callback: CallbackQuery, state: FSMContext):
     """Показывает финальный портрет"""
     user_id = callback.from_user.id
     data = await state.get_data()
+    context = user_contexts.get(user_id)
     
     scores = {}
     for k in VECTORS:
@@ -2021,7 +2704,8 @@ async def show_results_screen(callback: CallbackQuery, state: FSMContext):
         [InlineKeyboardButton(text="🎯 ЧЕМ ПОМОЧЬ", callback_data="show_help"),
          InlineKeyboardButton(text="❓ ЗАДАТЬ ВОПРОС", callback_data="smart_questions")],
         [InlineKeyboardButton(text="📖 СКАЗКА", callback_data="show_tale"),
-         InlineKeyboardButton(text="✨ ЕЩЁ", callback_data="more_info")]
+         InlineKeyboardButton(text="✨ ЕЩЁ", callback_data="more_info")],
+        [InlineKeyboardButton(text="⚙️ ВЫБРАТЬ СТИЛЬ ОБЩЕНИЯ", callback_data="show_mode_selection")]
     ])
     
     await callback.message.edit_text(text, reply_markup=keyboard, parse_mode='Markdown')
@@ -2295,29 +2979,14 @@ async def handle_smart_question(callback: CallbackQuery, state: FSMContext, ques
     user_id = callback.from_user.id
     data = await state.get_data()
     
-    scores = {}
-    for k in VECTORS:
-        levels = data.get("behavioral_levels", {}).get(k, [])
-        scores[k] = sum(levels) / len(levels) if levels else 3.0
-    
     await callback.message.edit_text(
         "🤔 *Думаю над ответом...*\n\n"
         "_Это займёт около 10-15 секунд_",
         parse_mode='Markdown'
     )
     
-    context_obj = user_contexts.get(user_id)
-    user_name = user_names.get(user_id, callback.from_user.first_name or "друг")
-    mode = context_obj.communication_mode if context_obj else "medium"
-    
-    # Используем гипнотический оркестратор
-    hypno_context = {
-        'confinement_model': data.get('confinement_model'),
-        'scores': scores,
-        'history': data.get('history', [])[-5:]
-    }
-    
-    response = hypno.process(user_id, question, hypno_context)
+    # Используем новую функцию с полным контекстом
+    response = await generate_response_with_full_context(user_id, question, data)
     
     history = data.get("history", [])
     history.append({
@@ -2331,6 +3000,9 @@ async def handle_smart_question(callback: CallbackQuery, state: FSMContext, ques
         "timestamp": datetime.now().isoformat()
     })
     await state.update_data(history=history)
+    
+    context_obj = user_contexts.get(user_id)
+    mode = context_obj.communication_mode if context_obj else "coach"
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="❓ Ещё вопрос", callback_data="smart_questions")],
@@ -2372,6 +3044,8 @@ async def show_help(callback: CallbackQuery, state: FSMContext):
 async def handle_help_category(callback: CallbackQuery, state: FSMContext, category: str):
     """Обработчик категорий помощи"""
     user_id = callback.from_user.id
+    context = user_contexts.get(user_id)
+    address = context.get_address() if context else "родной"
     
     category_texts = {
         "relations": "🗣 *Отношения*\n\nРасскажи, что происходит в отношениях. Я помогу разобраться.",
@@ -2383,14 +3057,21 @@ async def handle_help_category(callback: CallbackQuery, state: FSMContext, categ
         "care": "🍏 *Забота о себе*\n\nКак ты заботишься о себе?"
     }
     
-    text = category_texts.get(category, "Чем я могу помочь?")
+    base_text = category_texts.get(category, "Чем я могу помочь?")
+    
+    # Добавляем контекст
+    if context and context.weather_cache:
+        weather = context.weather_cache
+        base_text += f"\n\n{context.get_greeting()} {context.get_address()}!\n"
+        base_text += f"{weather['icon']} {weather['description']}, {weather['temp']}°C"
+    
+    base_text += f"\n\n👇 Напиши своим текстом:"
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="✏️ Написать", callback_data="ask_question")],
         [InlineKeyboardButton(text="◀️ Назад", callback_data="show_help")]
     ])
     
-    await callback.message.edit_text(text, parse_mode='Markdown', reply_markup=keyboard)
+    await callback.message.edit_text(base_text, parse_mode='Markdown', reply_markup=keyboard)
     await state.set_state(TestStates.awaiting_question)
     await state.update_data(question_context=category)
 
@@ -2402,6 +3083,8 @@ async def handle_help_category(callback: CallbackQuery, state: FSMContext, categ
 async def show_tale(callback: CallbackQuery, state: FSMContext):
     """Показывает случайную сказку"""
     user_id = callback.from_user.id
+    context = user_contexts.get(user_id)
+    address = context.get_address() if context else "родной"
     
     tale = tales.get_tale_for_issue("рост")
     
@@ -2410,8 +3093,10 @@ async def show_tale(callback: CallbackQuery, state: FSMContext):
         [InlineKeyboardButton(text="◀️ НАЗАД", callback_data="show_results")]
     ])
     
+    intro = f"📖 *{tale['title']}*\n\n{address}, эта сказка для тебя:\n\n"
+    
     await callback.message.edit_text(
-        f"📖 *{tale['title']}*\n\n{tale['text'][:4000]}",
+        intro + tale['text'][:4000],
         parse_mode='Markdown',
         reply_markup=keyboard
     )
@@ -2435,12 +3120,13 @@ async def more_info(callback: CallbackQuery, state: FSMContext):
         f"  - Милтон-модель\n"
         f"  - Якорение\n"
         f"• 🎙 Голосовые сообщения\n"
-        f"• 🌍 Контекст (город, погода, время)\n\n"
+        f"• 🌍 Контекст (город, погода, время, возраст, пол)\n\n"
         f"💬 *ОДНАЖДЫ ТЫ ПРОСТО ПЕРЕСТАНЕШЬ БЫТЬ ПРОБЛЕМОЙ ДЛЯ САМОГО СЕБЯ.*"
     )
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="👤 СВЯЗАТЬСЯ С ПСИХОЛОГОМ", url="https://t.me/meysternlp")],
+        [InlineKeyboardButton(text="🔄 ПРОЙТИ ТЕСТ ЗАНОВО", callback_data="restart_test")],
         [InlineKeyboardButton(text="◀️ НАЗАД", callback_data="show_results")]
     ])
     
@@ -2462,21 +3148,59 @@ async def cmd_start(message: Message, state: FSMContext):
     
     if user_id not in user_contexts:
         user_contexts[user_id] = UserContext(user_id)
+        user_contexts[user_id].name = user_name
     
     stats.register_start(user_id)
     
-    welcome_text = (
-        f"👋 *Привет, {user_name}!*\n\n"
-        f"Я — твой второй мозг. Персональный навигатор по жизни.\n\n"
-        f"🔮 *Что я умею:*\n"
-        f"• Помогать с отношениями, деньгами и самоощущением\n"
-        f"• Строить твой психологический профиль\n"
-        f"• Находить скрытые связи и петли в поведении\n"
-        f"• Создавать пошаговые маршруты к твоим целям\n\n"
-        f"⏱ *Сначала нужно узнать тебя* — пройди тест (12 минут).\n"
-        f"Без профиля мои советы будут общими, как в интернете.\n\n"
-        f"👇 *Выбери, с какой интонацией будем общаться:*"
-    )
+    context = user_contexts[user_id]
+    
+    # Проверяем, нужно ли собрать контекст
+    if not context.city or not context.gender or not context.age:
+        welcome_text = (
+            f"👋 *Привет, {user_name}!*\n\n"
+            f"Я — Фреди, твой виртуальный психолог.\n"
+            f"Оцифрованная версия Андрея Мейстера, если хочешь — его цифровой слепок.\n\n"
+            f"🎭 Короче, я — это он, только батарейка дольше держит и пожрать не прошу.\n\n"
+            f"🔮 Чтобы я мог давать *реально персонализированные* советы — \n"
+            f"с учётом твоего города, погоды, времени суток, возраста и даже пола —\n"
+            f"давай сначала немного познакомимся.\n\n"
+            f"⏱ Это займёт 1 минуту. Потом — тест (12 минут), и я буду знать о тебе всё."
+        )
+        
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="👍 Давай познакомимся", callback_data="start_context")],
+            [InlineKeyboardButton(text="⏭ Пропустить (буду отвечать общо)", callback_data="skip_context")]
+        ])
+        
+        await message.answer(welcome_text, reply_markup=keyboard, parse_mode='Markdown')
+    else:
+        # Контекст уже есть, показываем главное меню
+        await show_main_menu(message, context)
+
+
+async def show_main_menu(message: Message, context: UserContext):
+    """Показывает главное меню"""
+    address = context.get_address()
+    
+    # Обновляем погоду
+    await context.update_weather()
+    
+    day_context = context.get_day_context()
+    
+    welcome_text = f"{context.get_greeting(context.name)}\n\n"
+    
+    if context.weather_cache:
+        weather = context.weather_cache
+        welcome_text += f"{weather['icon']} {weather['description']}, {weather['temp']}°C\n"
+    
+    if day_context['is_weekend']:
+        welcome_text += f"🏖 Сегодня выходной, {address}! Как настроение?\n\n"
+    elif 9 <= day_context['hour'] < 18:
+        welcome_text += f"💼 Рабочее время, {address}. Чем займёмся?\n\n"
+    else:
+        welcome_text += f"🏡 Личное время, {address}. Есть что обсудить?\n\n"
+    
+    welcome_text += f"👇 *Выбери действие:*"
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [
@@ -2498,8 +3222,16 @@ async def choose_mode(callback: CallbackQuery, state: FSMContext, mode: str):
     if user_id not in user_contexts:
         user_contexts[user_id] = UserContext(user_id)
     
-    user_contexts[user_id].communication_mode = mode
-    mode_info = COMMUNICATION_MODES[mode]
+    # Преобразуем старые режимы в новые
+    mode_map = {
+        "hard": "trainer",
+        "medium": "coach",
+        "soft": "friend"
+    }
+    new_mode = mode_map.get(mode, mode)
+    
+    user_contexts[user_id].communication_mode = new_mode
+    mode_info = COMMUNICATION_MODES[new_mode]
     
     await callback.message.edit_text(
         f"{mode_info['emoji']} *Режим выбран:* {mode_info['name']}\n\n"
@@ -2510,26 +3242,32 @@ async def choose_mode(callback: CallbackQuery, state: FSMContext, mode: str):
     
     await asyncio.sleep(1)
     
-    intro_text = (
-        f"🧠 *ВИРТУАЛЬНЫЙ ПСИХОЛОГ - МАТРИЦА ПОВЕДЕНИЙ 4×6*\n\n"
-        f"🔍 *ЧТО ТЕБЯ ЖДЕТ:*\n\n"
-        f"**ЭТАП 1: КОНФИГУРАЦИЯ ВОСПРИЯТИЯ**\n"
-        f"Линза, через которую ты смотришь на мир. Определим, куда направлено твое внимание и какая тревога доминирует.\n\n"
-        f"**ЭТАП 2: КОНФИГУРАЦИЯ МЫШЛЕНИЯ**\n"
-        f"Как ты обрабатываешь информацию, какие связи видишь, какой объем можешь удержать.\n\n"
-        f"**ЭТАП 3: КОНФИГУРАЦИЯ ПОВЕДЕНИЯ**\n"
-        f"Твои автоматические реакции и закрепленные стратегии.\n\n"
-        f"**ЭТАП 4: ТОЧКА РОСТА**\n"
-        f"Где находится рычаг — место, где минимальное усилие дает максимальные изменения.\n\n"
-        f"⏱ *Всего 12 минут*\n\n"
-        f"👇 *Начинаем?*"
-    )
-    
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🚀 НАЧАТЬ ТЕСТ", callback_data="start_test")]
-    ])
-    
-    await callback.message.answer(intro_text, reply_markup=keyboard, parse_mode='Markdown')
+    # Проверяем, нужен ли сбор контекста
+    context = user_contexts[user_id]
+    if not context.city or not context.gender or not context.age:
+        await start_context(callback, state)
+    else:
+        # Сразу показываем введение в тест
+        intro_text = (
+            f"🧠 *ВИРТУАЛЬНЫЙ ПСИХОЛОГ - МАТРИЦА ПОВЕДЕНИЙ 4×6*\n\n"
+            f"🔍 *ЧТО ТЕБЯ ЖДЕТ:*\n\n"
+            f"**ЭТАП 1: КОНФИГУРАЦИЯ ВОСПРИЯТИЯ**\n"
+            f"Линза, через которую ты смотришь на мир. Определим, куда направлено твое внимание и какая тревога доминирует.\n\n"
+            f"**ЭТАП 2: КОНФИГУРАЦИЯ МЫШЛЕНИЯ**\n"
+            f"Как ты обрабатываешь информацию, какие связи видишь, какой объем можешь удержать.\n\n"
+            f"**ЭТАП 3: КОНФИГУРАЦИЯ ПОВЕДЕНИЯ**\n"
+            f"Твои автоматические реакции и закрепленные стратегии.\n\n"
+            f"**ЭТАП 4: ТОЧКА РОСТА**\n"
+            f"Где находится рычаг — место, где минимальное усилие дает максимальные изменения.\n\n"
+            f"⏱ *Всего 12 минут*\n\n"
+            f"👇 *Начинаем?*"
+        )
+        
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="🚀 НАЧАТЬ ТЕСТ", callback_data="start_test")]
+        ])
+        
+        await callback.message.answer(intro_text, reply_markup=keyboard, parse_mode='Markdown')
 
 
 async def show_benefits(callback: CallbackQuery):
@@ -2549,7 +3287,8 @@ async def show_benefits(callback: CallbackQuery):
         f"• 🧠 Конфайнмент-модель (9 элементов)\n"
         f"• 💡 Конкретные шаги для изменений\n"
         f"• 🎙 Голосовые ответы на вопросы\n"
-        f"• 📖 Терапевтические сказки"
+        f"• 📖 Терапевтические сказки\n"
+        f"• 🌍 Учёт твоего города, погоды, времени, возраста и пола"
     )
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
@@ -2588,7 +3327,7 @@ async def ask_pretest(callback: CallbackQuery, state: FSMContext):
     await callback.message.edit_text(
         "❓ *Задай свой вопрос*\n\n"
         "Я отвечу, но без твоего профиля ответ будет общим. "
-        "После теста смогу дать персональную рекомендацию.\n\n"
+        "После теста смогу дать персональную рекомендацию с учётом твоего города, погоды и возраста.\n\n"
         "_Напиши вопрос текстом или голосом._",
         parse_mode='Markdown'
     )
@@ -2601,7 +3340,7 @@ async def handle_pretest_question(message: Message, state: FSMContext):
     user_id = message.from_user.id
     user_name = user_names.get(user_id, message.from_user.first_name or "друг")
     context_obj = user_contexts.get(user_id)
-    mode = context_obj.communication_mode if context_obj else "medium"
+    mode = context_obj.communication_mode if context_obj else "coach"
     
     question = message.text
     
@@ -2618,19 +3357,20 @@ async def handle_pretest_question(message: Message, state: FSMContext):
     thinking = await message.answer("🤔 *Думаю...*", parse_mode='Markdown')
     await asyncio.sleep(1)
     
-    mode_prompt = COMMUNICATION_MODES.get(mode, COMMUNICATION_MODES["medium"])["prompt"]
+    mode_config = COMMUNICATION_MODES.get(mode, COMMUNICATION_MODES["coach"])
     
     prompt = f"""Ответь на вопрос человека. Ты еще не знаешь его профиль, поэтому ответь общо, но полезно.
 Затем мягко предложи пройти тест для точного ответа.
 
 Вопрос: {question}
 
-Стиль: {mode_prompt}"""
+Стиль: {mode_config['prompt']}"""
     
     response = await call_deepseek(prompt, max_tokens=400)
     
     if not response:
-        response = f"Спасибо за вопрос, {user_name}. Чтобы ответить точнее, мне нужно знать твой профиль. Пройди тест — это займёт 12 минут."
+        address = context_obj.get_address() if context_obj else "друг"
+        response = f"Спасибо за вопрос, {address}. Чтобы ответить точнее, мне нужно знать твой профиль. Пройди тест — это займёт 12 минут."
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="🔪 НАЧАТЬ ТЕСТ", callback_data="start_test")],
@@ -2651,7 +3391,7 @@ async def handle_ask_question(callback: CallbackQuery, state: FSMContext):
     ])
     await callback.message.edit_text(
         "✏️ *ЗАДАЙ ВОПРОС*\n\n"
-        "Напиши, что тебя беспокоит. Я помню твой профиль.",
+        "Напиши, что тебя беспокоит. Я помню твой профиль и контекст.",
         parse_mode='Markdown',
         reply_markup=keyboard
     )
@@ -2663,25 +3403,20 @@ async def handle_question_message(message: Message, state: FSMContext):
     user_id = message.from_user.id
     data = await state.get_data()
     
-    scores = {}
-    for k in VECTORS:
-        levels = data.get("behavioral_levels", {}).get(k, [])
-        scores[k] = sum(levels) / len(levels) if levels else 3.0
+    if not is_test_completed(data):
+        await message.answer(
+            "Сначала нужно пройти тест. Используй /start",
+            parse_mode='Markdown'
+        )
+        return
     
     thinking = await message.answer("🤔 *Думаю над ответом...*", parse_mode='Markdown')
     
+    # Используем новую функцию с полным контекстом
+    response = await generate_response_with_full_context(user_id, message.text, data)
+    
     context_obj = user_contexts.get(user_id)
-    user_name = user_names.get(user_id, message.from_user.first_name or "друг")
-    mode = context_obj.communication_mode if context_obj else "medium"
-    
-    # Используем гипнотический оркестратор
-    hypno_context = {
-        'confinement_model': data.get('confinement_model'),
-        'scores': scores,
-        'history': data.get('history', [])[-5:]
-    }
-    
-    response = hypno.process(user_id, message.text, hypno_context)
+    mode = context_obj.communication_mode if context_obj else "coach"
     
     history = data.get("history", [])
     history.append({
@@ -2759,22 +3494,11 @@ async def handle_voice_message(message: Message, state: FSMContext):
             )
             return
         
-        scores = {}
-        for k in VECTORS:
-            levels = data.get("behavioral_levels", {}).get(k, [])
-            scores[k] = sum(levels) / len(levels) if levels else 3.0
+        # Используем новую функцию с полным контекстом
+        response = await generate_response_with_full_context(user_id, recognized_text, data)
         
         context_obj = user_contexts.get(user_id)
-        mode = context_obj.communication_mode if context_obj else "medium"
-        
-        # Используем гипнотический оркестратор
-        hypno_context = {
-            'confinement_model': data.get('confinement_model'),
-            'scores': scores,
-            'history': data.get('history', [])[-5:]
-        }
-        
-        response = hypno.process(user_id, recognized_text, hypno_context)
+        mode = context_obj.communication_mode if context_obj else "coach"
         
         history = data.get("history", [])
         history.append({
@@ -2849,6 +3573,26 @@ async def callback_handler(callback: CallbackQuery, state: FSMContext):
             await choose_mode(callback, state, "medium")
         elif data == "mode_soft":
             await choose_mode(callback, state, "soft")
+        
+        # Контекст
+        elif data == "start_context":
+            await start_context(callback, state)
+        elif data == "skip_context":
+            await skip_context(callback, state)
+        elif data == "set_gender_male":
+            await set_gender_male(callback, state)
+        elif data == "set_gender_female":
+            await set_gender_female(callback, state)
+        
+        # Выбор режима после теста
+        elif data == "show_mode_selection":
+            await show_mode_selection(callback, state)
+        elif data == "set_mode_coach":
+            await set_mode_coach(callback, state)
+        elif data == "set_mode_friend":
+            await set_mode_friend(callback, state)
+        elif data == "set_mode_trainer":
+            await set_mode_trainer(callback, state)
         
         # Навигация
         elif data == "show_benefits":
@@ -2963,8 +3707,11 @@ async def cmd_apistatus(message: Message):
     text += f"• Yandex TTS: {yandex_status}\n"
     text += f"• OpenWeather: {weather_status}\n\n"
     
+    if OPENWEATHER_API_KEY:
+        text += f"🌍 Погода будет автоматически подгружаться для пользователей\n"
+    
     if YANDEX_API_KEY:
-        text += f"🎙 Голоса: Оксана (забота), Филипп (ирония), Эрмил (мягкий)\n"
+        text += f"🎙 Голоса: Оксана (коуч), Эрмил (друг), Филипп (тренер)\n"
     
     await message.answer(text, parse_mode='Markdown')
 
@@ -2975,53 +3722,66 @@ async def cmd_test_yandex(message: Message):
         await message.answer("⛔ Только для администраторов")
         return
     
-    test_text = "Привет! Это тестовое голосовое сообщение."
+    test_text = "Привет, братишка! Это тестовое голосовое сообщение."
     status = await message.answer("🎧 Тестирую Yandex TTS...")
     
-    audio = await text_to_speech(test_text, "medium")
+    # Тестируем все режимы
+    results = []
+    for mode in ["coach", "friend", "trainer"]:
+        audio = await text_to_speech(test_text, mode)
+        if audio:
+            audio_file = BufferedInputFile(audio, filename=f"test_{mode}.ogg")
+            await message.answer_voice(
+                audio_file,
+                caption=f"🎙 Режим: {COMMUNICATION_MODES[mode]['name']}",
+                parse_mode='Markdown'
+            )
+            results.append(f"✅ {COMMUNICATION_MODES[mode]['name']}")
+        else:
+            results.append(f"❌ {COMMUNICATION_MODES[mode]['name']}")
+        await asyncio.sleep(0.5)
     
-    if audio:
-        audio_file = BufferedInputFile(audio, filename="test.ogg")
-        await message.answer_voice(
-            audio_file,
-            caption="✅ Yandex SpeechKit работает!"
-        )
-        await status.delete()
-    else:
-        await status.edit_text("❌ Yandex SpeechKit не работает.")
+    await status.delete()
+    await message.answer("📊 *Результаты:*\n" + "\n".join(results), parse_mode='Markdown')
 
 
-async def cmd_test_voices(message: Message):
-    """Команда /test_voices"""
+async def cmd_test_weather(message: Message):
+    """Команда /test_weather - тест погоды"""
     if message.from_user.id not in ADMIN_IDS:
         await message.answer("⛔ Только для администраторов")
         return
     
-    if not YANDEX_API_KEY:
-        await message.answer("❌ YANDEX_API_KEY не настроен")
+    if not OPENWEATHER_API_KEY:
+        await message.answer("❌ OPENWEATHER_API_KEY не настроен")
         return
     
-    test_text = "Ну, допустим, вы действительно так считаете."
-    status = await message.answer("🎧 Тестирую голоса...")
+    test_city = "Москва"
+    url = f"http://api.openweathermap.org/data/2.5/weather?q={test_city}&appid={OPENWEATHER_API_KEY}&units=metric&lang=ru"
     
-    modes_to_test = [
-        ("hard", "🔴 Жесткий режим"),
-        ("medium", "🟡 Средний режим"),
-        ("soft", "🟢 Мягкий режим"),
-    ]
-    
-    for mode_key, description in modes_to_test:
-        audio = await text_to_speech(test_text, mode_key)
-        if audio:
-            audio_file = BufferedInputFile(audio, filename=f"{mode_key}.ogg")
-            await message.answer_voice(
-                audio_file,
-                caption=f"🎙 *{description}*",
-                parse_mode='Markdown'
-            )
-        await asyncio.sleep(0.5)
-    
-    await status.delete()
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    temp = data['main']['temp']
+                    feels_like = data['main']['feels_like']
+                    desc = data['weather'][0]['description']
+                    humidity = data['main']['humidity']
+                    wind = data['wind']['speed']
+                    
+                    text = f"✅ *Погода работает!*\n\n"
+                    text += f"📍 Город: {test_city}\n"
+                    text += f"🌡 Температура: {temp}°C (ощущается как {feels_like}°C)\n"
+                    text += f"☁️ Описание: {desc}\n"
+                    text += f"💧 Влажность: {humidity}%\n"
+                    text += f"💨 Ветер: {wind} м/с"
+                    
+                    await message.answer(text, parse_mode='Markdown')
+                else:
+                    error_text = await response.text()
+                    await message.answer(f"❌ Ошибка {response.status}: {error_text[:200]}")
+    except Exception as e:
+        await message.answer(f"❌ Ошибка: {e}")
 
 
 async def cmd_tale(message: Message):
@@ -3035,7 +3795,7 @@ async def cmd_tale(message: Message):
     
     text = message.text.replace('/tale', '').strip()
     if not text:
-        text = "страх"
+        text = "рост"
     
     tale = tales.get_tale_for_issue(text)
     
@@ -3046,6 +3806,30 @@ async def cmd_tale(message: Message):
         )
     else:
         await message.answer("Сказка не найдена")
+
+
+async def cmd_context(message: Message, state: FSMContext):
+    """Команда /context - принудительный сбор контекста"""
+    user_id = message.from_user.id
+    
+    if user_id not in user_contexts:
+        user_contexts[user_id] = UserContext(user_id)
+    
+    context = user_contexts[user_id]
+    
+    # Сбрасываем контекст
+    context.city = None
+    context.gender = None
+    context.age = None
+    context.weather_cache = {}
+    
+    await message.answer("🔄 *Давай обновим твой контекст*", parse_mode='Markdown')
+    await asyncio.sleep(0.5)
+    
+    await start_context(
+        CallbackQuery(id="fake", from_user=message.from_user, message=message, data="start_context", chat_instance=""),
+        state
+    )
 
 
 # ============================================
@@ -3060,6 +3844,11 @@ async def check_api_on_startup():
         logger.info("✅ DeepSeek API работает")
     else:
         logger.warning("❌ DeepSeek API не отвечает")
+    
+    if OPENWEATHER_API_KEY:
+        logger.info("✅ OpenWeather API ключ найден")
+    else:
+        logger.warning("❌ OpenWeather API ключ не найден")
 
 
 async def main():
@@ -3084,9 +3873,12 @@ async def main():
     dp.message.register(cmd_apistatus, Command("apistatus"))
     dp.message.register(cmd_test_yandex, Command("test_yandex"))
     dp.message.register(cmd_test_voices, Command("test_voices"))
+    dp.message.register(cmd_test_weather, Command("test_weather"))
     dp.message.register(cmd_tale, Command("tale"))
+    dp.message.register(cmd_context, Command("context"))
     
     # Регистрируем обработчики сообщений с состояниями
+    dp.message.register(handle_context_message, TestStates.awaiting_context)
     dp.message.register(handle_pretest_question, TestStates.pretest_question)
     dp.message.register(handle_question_message, TestStates.awaiting_question)
     dp.message.register(handle_voice_message, F.voice)
@@ -3096,23 +3888,25 @@ async def main():
     dp.callback_query.register(callback_handler)
     
     if DEEPSEEK_API_KEY:
-        logger.info("DeepSeek API ключ найден")
+        logger.info("✅ DeepSeek API ключ найден")
         asyncio.create_task(check_api_on_startup())
     else:
-        logger.warning("DeepSeek API ключ не найден")
+        logger.warning("❌ DeepSeek API ключ не найден")
     
     logger.info("Бот запущен...")
     print("\n" + "="*80)
     print("🚀 ВИРТУАЛЬНЫЙ ПСИХОЛОГ - МАТРИЦА ПОВЕДЕНИЙ 4×6 v8.0")
     print("="*80)
     print(f"👤 Ваш Telegram ID: {ADMIN_IDS[0] if ADMIN_IDS else 'не указан'}")
-    print("📊 Команды: /stats, /apistatus, /test_yandex, /test_voices, /test_mot, /tasks, /tale")
+    print("📊 Команды: /stats, /apistatus, /test_yandex, /test_voices, /test_weather, /tale, /context")
     print("🎙 Распознавание: " + ("✅ Deepgram" if DEEPGRAM_API_KEY else "❌ нет"))
     print("🎙 Синтез речи: " + ("✅ Yandex" if YANDEX_API_KEY else "❌ нет"))
     print("🌍 Погода: " + ("✅ OpenWeather" if OPENWEATHER_API_KEY else "❌ нет"))
     print("🔄 Конфайнмент-моделирование: ✅")
     print("🧠 4-этапный тест: ✅")
     print("🧠 ГИПНОТЕРАПЕВТИЧЕСКИЙ МОДУЛЬ: ✅")
+    print("👤 Полный контекст: город, погода, возраст, пол")
+    print("🎭 Режимы: 🔵 КОУЧ | 🟢 ДРУГ | 🔴 ТРЕНЕР")
     print("📅 Мотивация: через 5 мин и 24 часа")
     print("="*80 + "\n")
     
