@@ -28,7 +28,13 @@ from aiogram.fsm.storage.memory import MemoryStorage
 
 # Импорты из наших новых модулей
 from config import (
-    TELEGRAM_TOKEN, ADMIN_IDS, COMMUNICATION_MODES
+    TELEGRAM_TOKEN, 
+    ADMIN_IDS, 
+    COMMUNICATION_MODES,
+    DEEPSEEK_API_KEY,
+    DEEPGRAM_API_KEY,
+    YANDEX_API_KEY,
+    OPENWEATHER_API_KEY
 )
 from models import (
     UserContext, ReminderManager, DestinationManager, Statistics,
