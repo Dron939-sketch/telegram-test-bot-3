@@ -2174,17 +2174,20 @@ async def show_ai_analysis(callback: CallbackQuery, state: FSMContext):
 async def show_saved_psychologist_thought(callback: CallbackQuery, thought: str):
     """Показывает сохраненные мысли психолога"""
     
+    # Очищаем текст от Markdown, чтобы избежать ошибок
+    clean_thought = clean_markdown(thought)
+    
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="🎯 ВЫБРАТЬ ЦЕЛЬ", callback_data="show_destinations")],
         [InlineKeyboardButton(text="◀️ К ПОРТРЕТУ", callback_data="show_results")]
     ])
     
-    await callback.message.edit_text(
-        f"🧠 *МЫСЛИ ПСИХОЛОГА*\n\n{thought}",
+    # Отправляем новым сообщением, а не редактируем старое
+    await callback.message.answer(
+        f"🧠 *МЫСЛИ ПСИХОЛОГА*\n\n{clean_thought}",
         reply_markup=keyboard,
         parse_mode='Markdown'
     )
-
 
 # ============================================
 # SMART QUESTIONS
