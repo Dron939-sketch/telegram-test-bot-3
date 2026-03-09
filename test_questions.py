@@ -5,6 +5,9 @@
 Содержит все вопросы для 4 этапов тестирования и связанные с ними данные
 """
 
+from typing import Dict, List, Any, Optional, Union
+
+
 # ============================================
 # ЭТАП 1: КОНФИГУРАЦИЯ ВОСПРИЯТИЯ (8 вопросов)
 # ============================================
@@ -815,7 +818,7 @@ STAGE_4_QUESTIONS = [
 # ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ДЛЯ РАБОТЫ С ВОПРОСАМИ
 # ============================================
 
-def get_stage1_question(index: int) -> dict:
+def get_stage1_question(index: int) -> Optional[Dict[str, Any]]:
     """Возвращает вопрос этапа 1 по индексу"""
     if 0 <= index < len(STAGE_1_QUESTIONS):
         return STAGE_1_QUESTIONS[index]
@@ -827,12 +830,12 @@ def get_stage1_total() -> int:
     return len(STAGE_1_QUESTIONS)
 
 
-def get_stage2_questions(perception_type: str) -> list:
+def get_stage2_questions(perception_type: str) -> List[Dict[str, Any]]:
     """Возвращает список вопросов для этапа 2 по типу восприятия"""
     return STAGE_2_QUESTIONS.get(perception_type, STAGE_2_QUESTIONS["DEFAULT"])
 
 
-def get_stage2_question(perception_type: str, index: int) -> dict:
+def get_stage2_question(perception_type: str, index: int) -> Optional[Dict[str, Any]]:
     """Возвращает вопрос этапа 2 по типу восприятия и индексу"""
     questions = get_stage2_questions(perception_type)
     if 0 <= index < len(questions):
@@ -853,7 +856,7 @@ def get_stage2_score(perception_type: str, question_index: int, option: str) -> 
     return 1  # значение по умолчанию
 
 
-def get_stage3_question(index: int) -> dict:
+def get_stage3_question(index: int) -> Optional[Dict[str, Any]]:
     """Возвращает вопрос этапа 3 по индексу"""
     if 0 <= index < len(STAGE_3_QUESTIONS):
         return STAGE_3_QUESTIONS[index]
@@ -865,7 +868,7 @@ def get_stage3_total() -> int:
     return len(STAGE_3_QUESTIONS)
 
 
-def get_stage4_question(index: int) -> dict:
+def get_stage4_question(index: int) -> Optional[Dict[str, Any]]:
     """Возвращает вопрос этапа 4 по индексу"""
     if 0 <= index < len(STAGE_4_QUESTIONS):
         return STAGE_4_QUESTIONS[index]
@@ -877,17 +880,17 @@ def get_stage4_total() -> int:
     return len(STAGE_4_QUESTIONS)
 
 
-def get_question_text(question: dict) -> str:
+def get_question_text(question: Dict[str, Any]) -> str:
     """Возвращает текст вопроса"""
     return question.get("text", "")
 
 
-def get_question_options(question: dict) -> dict:
+def get_question_options(question: Dict[str, Any]) -> Dict[str, Any]:
     """Возвращает словарь опций вопроса"""
     return question.get("options", {})
 
 
-def get_option_text(question: dict, option_key: str) -> str:
+def get_option_text(question: Dict[str, Any], option_key: str) -> str:
     """Возвращает текст опции по ключу"""
     options = get_question_options(question)
     option = options.get(option_key, {})
@@ -896,7 +899,7 @@ def get_option_text(question: dict, option_key: str) -> str:
     return str(option)
 
 
-def get_option_value(question: dict, option_key: str) -> Any:
+def get_option_value(question: Dict[str, Any], option_key: str) -> Any:
     """Возвращает значение опции (баллы, тип Дилтса и т.д.)"""
     options = get_question_options(question)
     option = options.get(option_key, {})
