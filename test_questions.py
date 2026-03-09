@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 МОДУЛЬ ВОПРОСОВ ДЛЯ ТЕСТА
-Содержит все вопросы для 4 этапов тестирования и связанные с ними данные
+Содержит все вопросы для 5 этапов тестирования, уточняющие вопросы и связанные данные
 """
 
 from typing import Dict, List, Any, Optional, Union
@@ -815,7 +815,497 @@ STAGE_4_QUESTIONS = [
 
 
 # ============================================
-# ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ДЛЯ РАБОТЫ С ВОПРОСАМИ
+# ЭТАП 5: ГЛУБИННЫЕ ПАТТЕРНЫ (10 вопросов)
+# ============================================
+
+STAGE_5_QUESTIONS = [
+    {
+        "id": 1,
+        "text": "В детстве, когда я расстраивался, мои родители обычно...",
+        "options": {
+            "a": {
+                "text": "Утешали и обнимали меня",
+                "pattern": "secure"
+            },
+            "b": {
+                "text": "Говорили 'не плачь, будь сильным'",
+                "pattern": "avoidant"
+            },
+            "c": {
+                "text": "Реагировали по-разному — никогда не знал, чего ждать",
+                "pattern": "anxious"
+            },
+            "d": {
+                "text": "Оставляли меня одного 'остыть'",
+                "pattern": "dismissive"
+            }
+        },
+        "target": "attachment"
+    },
+    {
+        "id": 2,
+        "text": "Когда случается что-то плохое, я обычно...",
+        "options": {
+            "a": {
+                "text": "Ищу, кто виноват",
+                "pattern": "projection"
+            },
+            "b": {
+                "text": "Объясняю всё логически",
+                "pattern": "rationalization"
+            },
+            "c": {
+                "text": "Стараюсь не думать об этом",
+                "pattern": "denial"
+            },
+            "d": {
+                "text": "Злюсь и раздражаюсь",
+                "pattern": "regression"
+            }
+        },
+        "target": "defense"
+    },
+    {
+        "id": 3,
+        "text": "В отношениях я чаще всего боюсь, что...",
+        "options": {
+            "a": {
+                "text": "Меня бросят",
+                "pattern": "abandonment"
+            },
+            "b": {
+                "text": "Мной будут управлять",
+                "pattern": "control"
+            },
+            "c": {
+                "text": "Меня не поймут",
+                "pattern": "misunderstanding"
+            },
+            "d": {
+                "text": "Я не справлюсь",
+                "pattern": "inadequacy"
+            }
+        },
+        "target": "fear"
+    },
+    {
+        "id": 4,
+        "text": "Какое утверждение ближе всего тебе?",
+        "options": {
+            "a": {
+                "text": "Я недостаточно хорош",
+                "pattern": "not_good_enough"
+            },
+            "b": {
+                "text": "Людям нельзя доверять",
+                "pattern": "no_trust"
+            },
+            "c": {
+                "text": "Мир опасен",
+                "pattern": "world_dangerous"
+            },
+            "d": {
+                "text": "Я должен быть идеальным",
+                "pattern": "perfectionism"
+            }
+        },
+        "target": "belief"
+    },
+    {
+        "id": 5,
+        "text": "Когда я злюсь, я обычно...",
+        "options": {
+            "a": {
+                "text": "Выплёскиваю на окружающих",
+                "pattern": "externalize"
+            },
+            "b": {
+                "text": "Подавляю и молчу",
+                "pattern": "suppress"
+            },
+            "c": {
+                "text": "Ухожу в себя",
+                "pattern": "withdraw"
+            },
+            "d": {
+                "text": "Ищу, как решить проблему",
+                "pattern": "constructive"
+            }
+        },
+        "target": "anger_style"
+    },
+    {
+        "id": 6,
+        "text": "Мои друзья сказали бы, что я...",
+        "options": {
+            "a": {
+                "text": "Слишком эмоциональный",
+                "pattern": "emotional"
+            },
+            "b": {
+                "text": "Слишком рациональный",
+                "pattern": "rational"
+            },
+            "c": {
+                "text": "Надёжный, но закрытый",
+                "pattern": "reliable_closed"
+            },
+            "d": {
+                "text": "Душа компании",
+                "pattern": "soul_company"
+            }
+        },
+        "target": "social_role"
+    },
+    {
+        "id": 7,
+        "text": "В стрессе я...",
+        "options": {
+            "a": {
+                "text": "Суечусь и паникую",
+                "pattern": "panic"
+            },
+            "b": {
+                "text": "Замираю и тупею",
+                "pattern": "freeze"
+            },
+            "c": {
+                "text": "Становлюсь сверхсобранным",
+                "pattern": "hyperfocus"
+            },
+            "d": {
+                "text": "Ищу поддержку у других",
+                "pattern": "seek_support"
+            }
+        },
+        "target": "stress_response"
+    },
+    {
+        "id": 8,
+        "text": "Что для тебя самое важное в жизни?",
+        "options": {
+            "a": {
+                "text": "Безопасность и стабильность",
+                "pattern": "security"
+            },
+            "b": {
+                "text": "Свобода и независимость",
+                "pattern": "freedom"
+            },
+            "c": {
+                "text": "Любовь и близость",
+                "pattern": "love"
+            },
+            "d": {
+                "text": "Достижения и успех",
+                "pattern": "achievement"
+            }
+        },
+        "target": "core_value"
+    },
+    {
+        "id": 9,
+        "text": "Когда меня критикуют, я...",
+        "options": {
+            "a": {
+                "text": "Обижаюсь и закрываюсь",
+                "pattern": "shutdown"
+            },
+            "b": {
+                "text": "Атакую в ответ",
+                "pattern": "counterattack"
+            },
+            "c": {
+                "text": "Анализирую, правы ли они",
+                "pattern": "analyze"
+            },
+            "d": {
+                "text": "Соглашаюсь, чтобы не спорить",
+                "pattern": "appease"
+            }
+        },
+        "target": "criticism_response"
+    },
+    {
+        "id": 10,
+        "text": "Моя главная внутренняя проблема...",
+        "options": {
+            "a": {
+                "text": "Страх быть покинутым",
+                "pattern": "abandonment_fear"
+            },
+            "b": {
+                "text": "Страх неудачи",
+                "pattern": "failure_fear"
+            },
+            "c": {
+                "text": "Страх быть собой",
+                "pattern": "authenticity_fear"
+            },
+            "d": {
+                "text": "Страх конфликтов",
+                "pattern": "conflict_fear"
+            }
+        },
+        "target": "core_issue"
+    }
+]
+
+
+# ============================================
+# УТОЧНЯЮЩИЕ ВОПРОСЫ
+# ============================================
+
+CLARIFYING_QUESTIONS = {
+    "СБ": [
+        {
+            "level": 2,
+            "text": "Ты сказал, что избегаешь конфликтов. А что именно происходит в момент ссоры?",
+            "options": {
+                "1": "Просто ухожу, не хочу скандала",
+                "2": "Замираю и не могу слова сказать",
+                "3": "Внешне спокоен, внутри всё кипит",
+                "4": "Пытаюсь перевести в шутку"
+            }
+        },
+        {
+            "level": 4,
+            "text": "Ты внешне спокоен в конфликтах. А что ты чувствуешь внутри?",
+            "options": {
+                "1": "Пустоту и отстранённость",
+                "2": "Злость и раздражение",
+                "3": "Страх и тревогу",
+                "4": "Ничего особенного"
+            }
+        }
+    ],
+    "ТФ": [
+        {
+            "level": 2,
+            "text": "С деньгами 'как повезёт' — это про удачу или про отсутствие плана?",
+            "options": {
+                "1": "Про удачу — верю в случай",
+                "2": "Про отсутствие плана — не умею планировать",
+                "3": "Про лень — не хочу заморачиваться",
+                "4": "Про страх — боюсь ошибиться"
+            }
+        }
+    ],
+    "УБ": [
+        {
+            "level": 2,
+            "text": "Ты веришь в знаки и судьбу. А бывало, что твои предсказания не сбывались?",
+            "options": {
+                "1": "Да, часто",
+                "2": "Иногда",
+                "3": "Редко",
+                "4": "Всегда сбываются"
+            }
+        }
+    ],
+    "ЧВ": [
+        {
+            "level": 2,
+            "text": "Ты подстраиваешься под других. А помнишь, когда в последний раз ты делал то, что хотел именно ты?",
+            "options": {
+                "1": "Недавно",
+                "2": "Давно",
+                "3": "Очень давно",
+                "4": "Не помню такого"
+            }
+        }
+    ]
+}
+
+DISCREPANCY_QUESTIONS = {
+    "people": {
+        "text": "Ты сказал, что про людей не совсем точно. Расскажи подробнее:",
+        "options": {
+            "1": "Я вообще не завишу от чужого мнения",
+            "2": "Завишу, но меньше, чем описано",
+            "3": "Мне всё равно, что думают другие",
+            "4": "Другое"
+        }
+    },
+    "money": {
+        "text": "С деньгами у тебя действительно проблемы? Какие именно?",
+        "options": {
+            "1": "Не хватает на базовые нужды",
+            "2": "Не могу накопить",
+            "3": "Не знаю, как заработать больше",
+            "4": "Боюсь вкладывать и рисковать"
+        }
+    },
+    "signs": {
+        "text": "Про знаки и судьбу — ты считаешь, что анализируешь достаточно?",
+        "options": {
+            "1": "Да, я всё анализирую",
+            "2": "Анализирую, но могу и знаки заметить",
+            "3": "Больше анализирую, чем верю в знаки",
+            "4": "Другое"
+        }
+    },
+    "relations": {
+        "text": "В отношениях ты уверен в себе? Расскажи:",
+        "options": {
+            "1": "Знаю, чего хочу, и добиваюсь",
+            "2": "Знаю, но боюсь проявлять",
+            "3": "Не знаю, чего хочу",
+            "4": "Мне всё равно"
+        }
+    }
+}
+
+
+# ============================================
+# ФУНКЦИИ ДЛЯ ЭТАПА 5
+# ============================================
+
+def get_stage5_question(index: int) -> Optional[Dict[str, Any]]:
+    """Возвращает вопрос 5-го этапа по индексу"""
+    if 0 <= index < len(STAGE_5_QUESTIONS):
+        return STAGE_5_QUESTIONS[index]
+    return None
+
+
+def get_stage5_total() -> int:
+    """Возвращает общее количество вопросов 5-го этапа"""
+    return len(STAGE_5_QUESTIONS)
+
+
+def analyze_stage5_results(answers: List[Dict]) -> Dict:
+    """Анализирует результаты 5-го этапа"""
+    patterns = {
+        "attachment": None,
+        "defense_mechanisms": [],
+        "core_fears": [],
+        "core_beliefs": [],
+        "stress_response": None,
+        "core_values": [],
+        "anger_style": None,
+        "social_role": None,
+        "criticism_response": None,
+        "core_issue": None
+    }
+    
+    for answer in answers:
+        target = answer.get("target")
+        pattern = answer.get("pattern")
+        
+        if target == "attachment":
+            patterns["attachment"] = pattern
+        elif target == "defense":
+            patterns["defense_mechanisms"].append(pattern)
+        elif target == "fear":
+            patterns["core_fears"].append(pattern)
+        elif target == "belief":
+            patterns["core_beliefs"].append(pattern)
+        elif target == "anger_style":
+            patterns["anger_style"] = pattern
+        elif target == "social_role":
+            patterns["social_role"] = pattern
+        elif target == "stress_response":
+            patterns["stress_response"] = pattern
+        elif target == "core_value":
+            patterns["core_values"].append(pattern)
+        elif target == "criticism_response":
+            patterns["criticism_response"] = pattern
+        elif target == "core_issue":
+            patterns["core_issue"] = pattern
+    
+    return patterns
+
+
+def get_deep_patterns_description(patterns: Dict) -> str:
+    """Возвращает понятное описание глубинных паттернов"""
+    desc = []
+    
+    # Тип привязанности
+    attachment_desc = {
+        "secure": "✅ У тебя надёжный тип привязанности — ты уверен в отношениях и не боишься близости.",
+        "anxious": "⚠️ Тревожный тип привязанности: ты часто боишься, что тебя бросят, нуждаешься в подтверждениях любви.",
+        "avoidant": "⚠️ Избегающий тип привязанности: ты держишь дистанцию, боишься близости, надеясь только на себя.",
+        "dismissive": "⚠️ Отстранённый тип: ты обесцениваешь отношения, считая, что лучше быть одному."
+    }
+    if patterns.get("attachment"):
+        desc.append(f"🔗 *Тип привязанности:*\n{attachment_desc.get(patterns['attachment'], '')}\n")
+    
+    # Защитные механизмы
+    if patterns.get("defense_mechanisms"):
+        defense_desc = "🛡 *Защитные механизмы:*\n"
+        defense_map = {
+            "projection": "• Проекция — приписываешь другим свои чувства",
+            "rationalization": "• Рационализация — ищешь логические оправдания",
+            "denial": "• Отрицание — не замечаешь проблем",
+            "regression": "• Регрессия — ведёшь себя по-детски в стрессе"
+        }
+        for d in patterns["defense_mechanisms"][:2]:
+            defense_desc += f"  {defense_map.get(d, d)}\n"
+        desc.append(defense_desc)
+    
+    # Базовые убеждения
+    if patterns.get("core_beliefs"):
+        belief_desc = "💭 *Базовые убеждения:*\n"
+        belief_map = {
+            "not_good_enough": "• «Я недостаточно хорош»",
+            "no_trust": "• «Людям нельзя доверять»",
+            "world_dangerous": "• «Мир опасен»",
+            "perfectionism": "• «Я должен быть идеальным»"
+        }
+        for b in patterns["core_beliefs"][:2]:
+            belief_desc += f"  {belief_map.get(b, b)}\n"
+        desc.append(belief_desc)
+    
+    # Реакция на стресс
+    stress_map = {
+        "panic": "• Паника и суета",
+        "freeze": "• Ступор и замирание",
+        "hyperfocus": "• Сверхсобранность",
+        "seek_support": "• Поиск поддержки"
+    }
+    if patterns.get("stress_response"):
+        desc.append(f"🌪 *Реакция на стресс:*\n  {stress_map.get(patterns['stress_response'], patterns['stress_response'])}\n")
+    
+    return "\n".join(desc)
+
+
+# ============================================
+# ФУНКЦИИ ДЛЯ УТОЧНЯЮЩИХ ВОПРОСОВ
+# ============================================
+
+def get_clarifying_questions(discrepancies: list, current_levels: dict) -> list:
+    """Подбирает уточняющие вопросы на основе расхождений"""
+    questions = []
+    
+    for item in discrepancies:
+        if isinstance(item, str) and item in ["people", "money", "signs", "relations"]:
+            # Общие расхождения
+            q_data = DISCREPANCY_QUESTIONS.get(item, {})
+            if q_data:
+                questions.append({
+                    "type": "discrepancy",
+                    "target": item,
+                    "text": q_data.get("text", ""),
+                    "options": q_data.get("options", {})
+                })
+        elif item in CLARIFYING_QUESTIONS:
+            # Векторные расхождения
+            level = current_levels.get(item, 3)
+            for q in CLARIFYING_QUESTIONS[item]:
+                if q.get("level") == level:
+                    questions.append({
+                        "type": "vector",
+                        "vector": item,
+                        "text": q.get("text", ""),
+                        "options": q.get("options", {})
+                    })
+                    break
+    
+    return questions[:5]  # Не больше 5 уточняющих вопросов
+
+
+# ============================================
+# ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ (существующие)
 # ============================================
 
 def get_stage1_question(index: int) -> Optional[Dict[str, Any]]:
@@ -920,7 +1410,10 @@ __all__ = [
     'STAGE_2_QUESTIONS',
     'STAGE_3_QUESTIONS',
     'STAGE_4_QUESTIONS',
+    'STAGE_5_QUESTIONS',
     'STAGE_2_SCORING',
+    'CLARIFYING_QUESTIONS',
+    'DISCREPANCY_QUESTIONS',
     
     # Функции для этапа 1
     'get_stage1_question',
@@ -940,6 +1433,15 @@ __all__ = [
     # Функции для этапа 4
     'get_stage4_question',
     'get_stage4_total',
+    
+    # Функции для этапа 5
+    'get_stage5_question',
+    'get_stage5_total',
+    'analyze_stage5_results',
+    'get_deep_patterns_description',
+    
+    # Функции для уточняющих вопросов
+    'get_clarifying_questions',
     
     # Общие функции
     'get_question_text',
