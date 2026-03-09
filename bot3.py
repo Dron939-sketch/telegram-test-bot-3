@@ -104,12 +104,12 @@ class TestStates(StatesGroup):
     results = State()
     awaiting_question = State()
     pretest_question = State()
-    awaiting_context = State()  # 👈 НОВОЕ состояние для сбора контекста
-    mode_selection = State()     # 👈 НОВОЕ состояние для выбора режима
+    awaiting_context = State()
+    mode_selection = State()
 
 
 # ============================================
-# РЕЖИМЫ ОБЩЕНИЯ (ОБНОВЛЕНЫ)
+# РЕЖИМЫ ОБЩЕНИЯ
 # ============================================
 
 COMMUNICATION_MODES = {
@@ -158,7 +158,7 @@ COMMUNICATION_MODES["soft"] = COMMUNICATION_MODES["friend"]
 
 
 # ============================================
-# КЛАСС UserContext (РАСШИРЕННЫЙ)
+# КЛАСС UserContext
 # ============================================
 
 class UserContext:
@@ -180,7 +180,7 @@ class UserContext:
         self.holidays_today = []
         self.working_hours = True
         self.user_preferences = {}
-        self.awaiting_context = None  # для пошагового сбора
+        self.awaiting_context = None
         
     def get_greeting(self, user_name: str = "") -> str:
         """Персонализированное приветствие с учётом времени суток, пола и погоды"""
@@ -196,7 +196,6 @@ class UserContext:
         else:
             greeting = "Доброй ночи"
         
-        # Определяем обращение
         address = self.get_address()
         
         base = f"{greeting}"
@@ -206,7 +205,6 @@ class UserContext:
             base += f" {address}"
         base += "!"
         
-        # Добавляем погодный контекст
         if self.weather_cache:
             temp = self.weather_cache.get('temp')
             weather_desc = self.weather_cache.get('description', '')
@@ -272,9 +270,7 @@ class UserContext:
         if field == "city":
             self.city = text.strip()
             self.awaiting_context = None
-            # Обновляем погоду
             await self.update_weather()
-            # Спрашиваем дальше
             question, keyboard = await self.ask_for_context()
             return True, question, keyboard
                 
@@ -689,13 +685,11 @@ def get_priority_order(scores: dict) -> list:
 
 def is_test_completed(user_data: dict) -> bool:
     """Проверяет, завершен ли тест"""
-    # Проверяем наличие всех ключевых данных
     required_fields = ["perception_type", "thinking_level", "behavioral_levels", "dilts_counts"]
     for field in required_fields:
         if field not in user_data:
             return False
     
-    # Проверяем, что по каждому вектору есть ответы
     behavioral_levels = user_data.get("behavioral_levels", {})
     for vector in VECTORS:
         if len(behavioral_levels.get(vector, [])) < 1:
@@ -810,7 +804,6 @@ async def text_to_speech(text: str, mode: str = "coach") -> Optional[bytes]:
     voice = mode_config.get("voice", "oksana")
     emotion = mode_config.get("voice_emotion", "neutral")
     
-    # Настройка скорости под режим
     if mode == "coach":
         speed = "1.0"
     elif mode == "friend":
@@ -936,10 +929,8 @@ async def call_deepseek(prompt: str, system_message: str = "", max_tokens: int =
 async def generate_response_with_full_context(user_id: int, user_message: str, state_data: dict) -> str:
     """Генерирует ответ с учётом полного контекста пользователя"""
     
-    # Получаем контекст пользователя
     user_context = user_contexts.get(user_id)
     
-    # Получаем режим
     mode = "coach"
     if user_context:
         mode = user_context.communication_mode
@@ -948,26 +939,21 @@ async def generate_response_with_full_context(user_id: int, user_message: str, s
     
     mode_config = COMMUNICATION_MODES.get(mode, COMMUNICATION_MODES["coach"])
     
-    # Получаем профиль
     profile_data = state_data.get("profile_data", {})
     profile_code = profile_data.get('display_name', 'не определен')
     
-    # Собираем полный контекст для AI
     full_context = ""
     if user_context:
         full_context = user_context.get_prompt_context()
     
-    # Определяем обращение
     address = user_context.get_address() if user_context else "родной"
     
-    # Собираем историю
     history = state_data.get("history", [])
     history_text = ""
     for entry in history[-5:]:
         role = "Клиент" if entry["role"] == "user" else "Психолог"
         history_text += f"{role}: {entry['text']}\n"
     
-    # Собираем промпт
     base_prompt = f"""Ты — Фреди, виртуальный психолог, оцифрованная версия Андрея Мейстера.
 Ты общаешься с пользователем как с {address}.
 
@@ -988,11 +974,9 @@ async def generate_response_with_full_context(user_id: int, user_message: str, s
 
 ОТВЕТ (учитывая пол, возраст, погоду, время суток и стиль {mode_config['name']}):"""
     
-    # Отправляем в DeepSeek
     response = await call_deepseek(base_prompt, max_tokens=500)
     
     if not response:
-        # Fallback с учётом контекста
         if user_context and user_context.weather_cache:
             weather = user_context.weather_cache
             if weather['temp'] < 0 and "грусть" in user_message.lower():
@@ -1450,7 +1434,6 @@ class DelayedTaskManager:
                         lvl = level(score)
                         profile = LEVEL_PROFILES.get(vector, {}).get(lvl, {})
                         
-                        # Получаем обращение
                         context = user_contexts.get(user_id)
                         address = context.get_address() if context else "друг"
                         
@@ -1613,7 +1596,7 @@ def get_help_keyboard() -> InlineKeyboardMarkup:
 
 
 # ============================================
-# НОВЫЕ ФУНКЦИИ ДЛЯ СБОРА КОНТЕКСТА
+# ФУНКЦИИ ДЛЯ СБОРА КОНТЕКСТА
 # ============================================
 
 async def start_context(callback: CallbackQuery, state: FSMContext):
@@ -1635,7 +1618,6 @@ async def start_context(callback: CallbackQuery, state: FSMContext):
         )
         await state.set_state(TestStates.awaiting_context)
     else:
-        # Вся информация уже есть
         await show_context_complete(callback, state, context)
 
 
@@ -1710,14 +1692,12 @@ async def handle_context_message(message: Message, state: FSMContext):
     
     if success:
         if next_question:
-            # Есть следующий вопрос
             await message.answer(
                 f"📝 {next_question}",
                 reply_markup=keyboard,
                 parse_mode='Markdown'
             )
         else:
-            # Вопросы закончились
             await show_context_complete(message, state, context)
     else:
         await message.answer(next_question or "Пожалуйста, ответьте корректно.")
@@ -1729,10 +1709,8 @@ async def show_context_complete(message_or_callback, state: FSMContext, context:
     """Показывает итоговый экран после сбора контекста"""
     address = context.get_address()
     
-    # Обновляем погоду
     await context.update_weather()
     
-    # Формируем итоговое сообщение
     summary = f"✅ *Отлично, {address}! Теперь я знаю о тебе:*\n\n"
     
     if context.city:
@@ -1772,7 +1750,7 @@ async def show_context_complete(message_or_callback, state: FSMContext, context:
 
 
 # ============================================
-# НОВЫЕ ФУНКЦИИ ДЛЯ ВЫБОРА РЕЖИМА
+# ФУНКЦИИ ДЛЯ ВЫБОРА РЕЖИМА
 # ============================================
 
 async def show_mode_selection(callback: CallbackQuery, state: FSMContext):
@@ -2020,7 +1998,7 @@ async def ask_stage_1_question(callback: CallbackQuery, state: FSMContext):
     for option_id, option in question["options"].items():
         unique_callback = generate_unique_callback("stage1", user_id, current, option_id)
         keyboard.append([
-            InlineKeyboardButton(option["text"], callback_data=unique_callback)
+            InlineKeyboardButton(text=option["text"], callback_data=unique_callback)
         ])
     
     reply_markup = InlineKeyboardMarkup(inline_keyboard=keyboard)
@@ -2189,7 +2167,7 @@ async def ask_stage_2_question(callback: CallbackQuery, state: FSMContext):
     for level_num, answer_text in question["options"].items():
         unique_callback = generate_unique_callback("stage2", user_id, current, level_num, measures)
         keyboard.append([
-            InlineKeyboardButton(answer_text, callback_data=unique_callback)
+            InlineKeyboardButton(text=answer_text, callback_data=unique_callback)
         ])
     
     reply_markup = InlineKeyboardMarkup(inline_keyboard=keyboard)
@@ -2371,7 +2349,7 @@ async def ask_stage_3_question(callback: CallbackQuery, state: FSMContext):
     for option_id, option_text in question["options"].items():
         unique_callback = generate_unique_callback("stage3", user_id, current, option_id, strategy)
         keyboard.append([
-            InlineKeyboardButton(option_text, callback_data=unique_callback)
+            InlineKeyboardButton(text=option_text, callback_data=unique_callback)
         ])
     
     reply_markup = InlineKeyboardMarkup(inline_keyboard=keyboard)
@@ -2546,7 +2524,7 @@ async def ask_stage_4_question(callback: CallbackQuery, state: FSMContext):
     for option_id, option in question["options"].items():
         unique_callback = generate_unique_callback("stage4", user_id, current, option_id)
         keyboard.append([
-            InlineKeyboardButton(option["text"], callback_data=unique_callback)
+            InlineKeyboardButton(text=option["text"], callback_data=unique_callback)
         ])
     
     reply_markup = InlineKeyboardMarkup(inline_keyboard=keyboard)
@@ -2985,7 +2963,6 @@ async def handle_smart_question(callback: CallbackQuery, state: FSMContext, ques
         parse_mode='Markdown'
     )
     
-    # Используем новую функцию с полным контекстом
     response = await generate_response_with_full_context(user_id, question, data)
     
     history = data.get("history", [])
@@ -3059,7 +3036,6 @@ async def handle_help_category(callback: CallbackQuery, state: FSMContext, categ
     
     base_text = category_texts.get(category, "Чем я могу помочь?")
     
-    # Добавляем контекст
     if context and context.weather_cache:
         weather = context.weather_cache
         base_text += f"\n\n{context.get_greeting()} {context.get_address()}!\n"
@@ -3154,7 +3130,6 @@ async def cmd_start(message: Message, state: FSMContext):
     
     context = user_contexts[user_id]
     
-    # Проверяем, нужно ли собрать контекст
     if not context.city or not context.gender or not context.age:
         welcome_text = (
             f"👋 *Привет, {user_name}!*\n\n"
@@ -3174,7 +3149,6 @@ async def cmd_start(message: Message, state: FSMContext):
         
         await message.answer(welcome_text, reply_markup=keyboard, parse_mode='Markdown')
     else:
-        # Контекст уже есть, показываем главное меню
         await show_main_menu(message, context)
 
 
@@ -3182,7 +3156,6 @@ async def show_main_menu(message: Message, context: UserContext):
     """Показывает главное меню"""
     address = context.get_address()
     
-    # Обновляем погоду
     await context.update_weather()
     
     day_context = context.get_day_context()
@@ -3222,7 +3195,6 @@ async def choose_mode(callback: CallbackQuery, state: FSMContext, mode: str):
     if user_id not in user_contexts:
         user_contexts[user_id] = UserContext(user_id)
     
-    # Преобразуем старые режимы в новые
     mode_map = {
         "hard": "trainer",
         "medium": "coach",
@@ -3242,12 +3214,10 @@ async def choose_mode(callback: CallbackQuery, state: FSMContext, mode: str):
     
     await asyncio.sleep(1)
     
-    # Проверяем, нужен ли сбор контекста
     context = user_contexts[user_id]
     if not context.city or not context.gender or not context.age:
         await start_context(callback, state)
     else:
-        # Сразу показываем введение в тест
         intro_text = (
             f"🧠 *ВИРТУАЛЬНЫЙ ПСИХОЛОГ - МАТРИЦА ПОВЕДЕНИЙ 4×6*\n\n"
             f"🔍 *ЧТО ТЕБЯ ЖДЕТ:*\n\n"
@@ -3412,7 +3382,6 @@ async def handle_question_message(message: Message, state: FSMContext):
     
     thinking = await message.answer("🤔 *Думаю над ответом...*", parse_mode='Markdown')
     
-    # Используем новую функцию с полным контекстом
     response = await generate_response_with_full_context(user_id, message.text, data)
     
     context_obj = user_contexts.get(user_id)
@@ -3494,7 +3463,6 @@ async def handle_voice_message(message: Message, state: FSMContext):
             )
             return
         
-        # Используем новую функцию с полным контекстом
         response = await generate_response_with_full_context(user_id, recognized_text, data)
         
         context_obj = user_contexts.get(user_id)
@@ -3555,6 +3523,24 @@ async def handle_unknown_message(message: Message):
         "Используй кнопки для навигации:",
         reply_markup=keyboard
     )
+
+
+# ============================================
+# ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ДЛЯ НАВИГАЦИИ
+# ============================================
+
+async def back_to_results(callback: CallbackQuery, state: FSMContext):
+    """Возврат к результатам"""
+    await show_results_screen(callback, state)
+
+
+async def cmd_test_voices(message: Message):
+    """Команда /test_voices"""
+    if message.from_user.id not in ADMIN_IDS:
+        await message.answer("⛔ Только для администраторов")
+        return
+    
+    await message.answer("Используй /test_yandex для теста голосов")
 
 
 # ============================================
@@ -3667,6 +3653,8 @@ async def callback_handler(callback: CallbackQuery, state: FSMContext):
         elif data == "restart_test":
             await state.clear()
             await back_to_intro(callback)
+        elif data == "back_to_results":
+            await back_to_results(callback, state)
     
     except TelegramBadRequest as e:
         if "message is not modified" in str(e).lower():
@@ -3725,7 +3713,6 @@ async def cmd_test_yandex(message: Message):
     test_text = "Привет, братишка! Это тестовое голосовое сообщение."
     status = await message.answer("🎧 Тестирую Yandex TTS...")
     
-    # Тестируем все режимы
     results = []
     for mode in ["coach", "friend", "trainer"]:
         audio = await text_to_speech(test_text, mode)
@@ -3817,7 +3804,6 @@ async def cmd_context(message: Message, state: FSMContext):
     
     context = user_contexts[user_id]
     
-    # Сбрасываем контекст
     context.city = None
     context.gender = None
     context.age = None
@@ -3867,7 +3853,6 @@ async def main():
     await bot.delete_webhook(drop_pending_updates=True)
     print("✅ Вебхук удален")
     
-    # Регистрируем обработчики команд
     dp.message.register(cmd_start, Command("start"))
     dp.message.register(cmd_stats, Command("stats"))
     dp.message.register(cmd_apistatus, Command("apistatus"))
@@ -3877,14 +3862,12 @@ async def main():
     dp.message.register(cmd_tale, Command("tale"))
     dp.message.register(cmd_context, Command("context"))
     
-    # Регистрируем обработчики сообщений с состояниями
     dp.message.register(handle_context_message, TestStates.awaiting_context)
     dp.message.register(handle_pretest_question, TestStates.pretest_question)
     dp.message.register(handle_question_message, TestStates.awaiting_question)
     dp.message.register(handle_voice_message, F.voice)
     dp.message.register(handle_unknown_message)
     
-    # Регистрируем callback хендлер
     dp.callback_query.register(callback_handler)
     
     if DEEPSEEK_API_KEY:
