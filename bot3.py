@@ -114,6 +114,7 @@ class TestStates(StatesGroup):
     stage_2 = State()
     stage_3 = State()
     stage_4 = State()
+    stage_5 = State()
     results = State()
     awaiting_question = State()
     pretest_question = State()
@@ -121,11 +122,12 @@ class TestStates(StatesGroup):
     mode_selection = State()
     
     # НОВЫЕ состояния
-    stage_5 = State()
     profile_confirmation = State()
     clarifying_selection = State()
     clarifying_test = State()
     alternative_test = State()
+    viewing_confinement = State()
+    viewing_intervention = State()
 
 
 # ============================================
@@ -140,7 +142,8 @@ COMMUNICATION_MODES = {
         "prompt": "Ты коуч, который задаёт открытые вопросы, помогает клиенту осознать свои цели и найти ресурсы. Ты не даёшь готовых ответов, а направляешь. Используй больше вопросов, поддерживай, но не навязывай.",
         "emoji": "🔮",
         "voice_emotion": "neutral",
-        "voice": "oksana"
+        "voice": "filipp",
+        "question_style": "open"
     },
     "friend": {
         "name": "ДРУГ",
@@ -149,7 +152,8 @@ COMMUNICATION_MODES = {
         "prompt": "Ты близкий друг, который принимает без осуждения. Говори тепло, с эмпатией. Используй больше отражения чувств, поддерживай, показывай, что ты рядом. Можно использовать личные обращения.",
         "emoji": "💚",
         "voice_emotion": "good",
-        "voice": "ermil"
+        "voice": "ermil",
+        "question_style": "reflective"
     },
     "trainer": {
         "name": "ТРЕНЕР",
@@ -158,7 +162,8 @@ COMMUNICATION_MODES = {
         "prompt": "Ты спортивный тренер или наставник, который даёт чёткие инструкции. Говори коротко, по делу, без воды. Фокус на действиях, дисциплине, результате. Можно использовать командный тон.",
         "emoji": "⚡",
         "voice_emotion": "strict",
-        "voice": "filipp"
+        "voice": "filipp",
+        "question_style": "closed"
     }
 }
 
@@ -212,7 +217,7 @@ class UserContext:
         base = f"{greeting}"
         if user_name:
             base += f", {user_name}"
-        if address:
+        if address and self.communication_mode == "friend":
             base += f" {address}"
         base += "!"
         
@@ -255,9 +260,9 @@ class UserContext:
         
         if not self.gender:
             self.awaiting_context = "gender"
-            return "👤 Ты братишка или сестрёнка? (Напиши М или Ж)", InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="👨 Братишка", callback_data="set_gender_male")],
-                [InlineKeyboardButton(text="👩 Сестрёнка", callback_data="set_gender_female")],
+            return "👤 Укажи свой пол (М или Ж)", InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="👨 Мужской", callback_data="set_gender_male")],
+                [InlineKeyboardButton(text="👩 Женский", callback_data="set_gender_female")],
                 [InlineKeyboardButton(text="⏭ Пропустить", callback_data="skip_context")]
             ])
         
@@ -286,9 +291,9 @@ class UserContext:
                 
         elif field == "gender":
             gender_lower = text.lower().strip()
-            if gender_lower in ['м', 'муж', 'мужчина', 'male', 'братишка']:
+            if gender_lower in ['м', 'муж', 'мужчина', 'male']:
                 self.gender = "male"
-            elif gender_lower in ['ж', 'жен', 'женщина', 'female', 'сестрёнка']:
+            elif gender_lower in ['ж', 'жен', 'женщина', 'female']:
                 self.gender = "female"
             else:
                 self.gender = "other"
@@ -389,7 +394,7 @@ class UserContext:
         if self.gender:
             gender_text = "мужской" if self.gender == "male" else "женский" if self.gender == "female" else "другой"
             lines.append(f"Пол пользователя: {gender_text}")
-            lines.append(f"Обращение: {self.get_address()}")
+            lines.append(f"Обращение: {self.get_address() if self.communication_mode == 'friend' else 'вы'}")
         if self.age:
             lines.append(f"Возраст: {self.age} лет ({self.get_age_stage()})")
         if self.city:
@@ -563,7 +568,7 @@ class UserContext:
 
 
 # ============================================
-# ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ (ПОЛНЫЕ)
+# ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
 # ============================================
 
 def level(score: float) -> int:
@@ -704,7 +709,7 @@ def get_priority_order(scores: dict) -> list:
 
 def is_test_completed(user_data: dict) -> bool:
     """Проверяет, завершен ли тест"""
-    required_fields = ["perception_type", "thinking_level", "behavioral_levels", "dilts_counts"]
+    required_fields = ["perception_type", "thinking_level", "behavioral_levels", "dilts_counts", "deep_patterns"]
     for field in required_fields:
         if field not in user_data:
             return False
@@ -767,7 +772,7 @@ def calculate_profile_confidence(profile: dict) -> float:
 
 
 # ============================================
-# API ФУНКЦИИ (ПОЛНЫЕ)
+# API ФУНКЦИИ
 # ============================================
 
 async def speech_to_text(voice_file_path: str) -> str:
@@ -845,7 +850,7 @@ async def text_to_speech(text: str, mode: str = "coach") -> Optional[bytes]:
     }
     
     mode_config = COMMUNICATION_MODES.get(mode, COMMUNICATION_MODES["coach"])
-    voice = mode_config.get("voice", "oksana")
+    voice = mode_config.get("voice", "filipp")
     emotion = mode_config.get("voice_emotion", "neutral")
     
     if mode == "coach":
@@ -990,7 +995,7 @@ async def generate_response_with_full_context(user_id: int, user_message: str, s
     if user_context:
         full_context = user_context.get_prompt_context()
     
-    address = user_context.get_address() if user_context else "родной"
+    address = user_context.get_address() if user_context and mode == "friend" else "вы"
     
     history = state_data.get("history", [])
     history_text = ""
@@ -1026,15 +1031,15 @@ async def generate_response_with_full_context(user_id: int, user_message: str, s
             if weather['temp'] < 0 and "грусть" in user_message.lower():
                 response = f"Слушай, {address}, погода {weather['icon']} действительно может влиять на настроение. Расскажи подробнее?"
             else:
-                response = f"Я слышу тебя, {address}. Что именно тебя беспокоит?"
+                response = f"Я слышу вас. Что именно вас беспокоит?"
         else:
-            response = f"Я слышу тебя, {address}. Расскажи подробнее?"
+            response = f"Я слышу вас. Расскажите подробнее?"
     
     return response
 
 
 # ============================================
-# КОНФАЙНМЕНТ-МОДЕЛИРОВАНИЕ (ПОЛНОЕ)
+# КОНФАЙНМЕНТ-МОДЕЛИРОВАНИЕ
 # ============================================
 
 class ConfinementElement:
@@ -1104,7 +1109,8 @@ class ConfinementModel9:
         self.source_scores = {}
         self.source_history = []
     
-    def build_from_profile(self, scores: dict, history: list = None) -> 'ConfinementModel9':
+    def build_from_profile(self, scores: dict, history: list = None, user_context: UserContext = None) -> 'ConfinementModel9':
+        """Строит модель из психологического профиля"""
         self.source_scores = scores
         self.source_history = history or []
         
@@ -1126,7 +1132,20 @@ class ConfinementModel9:
         self._identify_key_confinement()
         self._calculate_closure()
         
+        # Добавляем возрастные особенности
+        if user_context and user_context.age:
+            self._apply_age_adjustments(user_context.age)
+        
         return self
+    
+    def _apply_age_adjustments(self, age: int):
+        """Корректирует модель с учётом возраста"""
+        if age < 25:
+            if self.elements[5]:
+                self.elements[5].description += " Поиск себя — нормально для твоего возраста."
+        elif age > 50:
+            if self.elements[9]:
+                self.elements[9].description += " Это может быть связано с жизненным опытом."
     
     def _extract_main_symptom(self) -> ConfinementElement:
         min_vector = min(self.source_scores.items(), key=lambda x: level(x[1]))
@@ -1357,7 +1376,44 @@ class ConfinementModel9:
 
 
 # ============================================
-# СТАТИСТИКА (ПОЛНАЯ)
+# ФУНКЦИИ ДЛЯ РАБОТЫ С КОНФАЙНМЕНТ-МОДЕЛЬЮ
+# ============================================
+
+def format_confinement_report(model: ConfinementModel9) -> str:
+    """Форматирует отчёт по конфайнмент-модели"""
+    if not model.elements[1]:
+        return "Модель ещё не построена"
+    
+    lines = []
+    lines.append("🧠 *КОНФАЙНМЕНТ-МОДЕЛЬ*\n")
+    
+    # Результат
+    result = model.elements[1]
+    lines.append(f"🎯 *Главный симптом:* {result.description}\n")
+    
+    # Ключевой конфайнмент
+    if model.key_confinement:
+        elem = model.key_confinement['element']
+        lines.append(f"⛓ *Ключевое ограничение:*")
+        lines.append(f"Элемент {model.key_confinement['id']}: {elem.name}")
+        lines.append(f"{elem.description[:100]}...\n")
+    
+    # Петли
+    if model.loops:
+        strongest = max(model.loops, key=lambda x: x['strength'])
+        lines.append(f"🔄 *Главная петля:*")
+        lines.append(strongest['description'])
+        lines.append(f"Сила: {strongest['strength']:.1%}\n")
+    
+    # Замыкание
+    closure_status = "✅ замкнута" if model.is_closed else "🔄 не замкнута"
+    lines.append(f"📊 *Система:* {closure_status}")
+    
+    return "\n".join(lines)
+
+
+# ============================================
+# СТАТИСТИКА
 # ============================================
 
 class Statistics:
@@ -1449,7 +1505,7 @@ stats = Statistics()
 
 
 # ============================================
-# МЕНЕДЖЕР ОТЛОЖЕННЫХ ЗАДАЧ (ПОЛНЫЙ)
+# МЕНЕДЖЕР ОТЛОЖЕННЫХ ЗАДАЧ
 # ============================================
 
 class DelayedTaskManager:
@@ -1576,70 +1632,6 @@ task_manager = DelayedTaskManager()
 
 
 # ============================================
-# ФУНКЦИИ РЕЗУЛЬТАТОВ
-# ============================================
-
-def get_human_readable_profile(scores: dict, model=None, perception_type="не определен", thinking_level=5, dominant_dilts="BEHAVIOR") -> str:
-    """Возвращает портрет пользователя понятным языком"""
-    lines = []
-    
-    if scores:
-        min_vector = min(scores.items(), key=lambda x: level(x[1]))
-        vector, score = min_vector
-        lvl = level(score)
-        profile = LEVEL_PROFILES.get(vector, {}).get(lvl, {})
-    else:
-        vector = "СБ"
-        profile = {}
-    
-    lines.append("🧠 *ТВОЙ ПСИХОЛОГИЧЕСКИЙ ПОРТРЕТ*\n")
-    lines.append(f"🔍 *Тип восприятия:* {perception_type}\n")
-    lines.append(f"🧠 *Уровень мышления:* {thinking_level}/9\n")
-    lines.append(f"🎯 *Твой главный тормоз*")
-    lines.append(f"{profile.get('quote', 'Пока не определено')}\n")
-    lines.append(f"📜 *Откуда это взялось*")
-    lines.append(f"{profile.get('pain_origin', 'Из твоего опыта')}\n")
-    lines.append(f"💸 *Чем ты платишь*")
-    costs = profile.get('pain_costs', ['Энергией', 'Временем', 'Возможностями'])
-    for cost in costs[:3]:
-        lines.append(f"• {cost}")
-    lines.append("")
-    
-    if model and hasattr(model, 'key_confinement') and model.key_confinement:
-        elem = model.key_confinement.get('element')
-        if elem and hasattr(elem, 'description'):
-            lines.append(f"⛓ *Что держит систему*")
-            lines.append(f"{elem.description[:100]}\n")
-    
-    if model and hasattr(model, 'loops') and model.loops:
-        strongest = max(model.loops, key=lambda x: x.get('strength', 0))
-        lines.append(f"🔄 *Главная ловушка*")
-        lines.append(f"{strongest.get('description', 'Не определено')}")
-        lines.append(f"Сила: {strongest.get('strength', 0):.1%}\n")
-    
-    dilts_desc = DILTS_LEVELS.get(dominant_dilts, "⚡ Поведение")
-    lines.append(f"🎯 *Твоя точка роста:* {dilts_desc}")
-    
-    return "\n".join(lines)
-
-
-def get_help_keyboard() -> InlineKeyboardMarkup:
-    """Клавиатура с категориями помощи"""
-    buttons = [
-        [InlineKeyboardButton(text="🗣 Отношения", callback_data="help_cat_relations"),
-         InlineKeyboardButton(text="💰 Деньги", callback_data="help_cat_money")],
-        [InlineKeyboardButton(text="🧠 Самоощущение", callback_data="help_cat_self"),
-         InlineKeyboardButton(text="📚 Знания", callback_data="help_cat_knowledge")],
-        [InlineKeyboardButton(text="💪 Поддержка", callback_data="help_cat_support"),
-         InlineKeyboardButton(text="🎨 Муза", callback_data="help_cat_muse")],
-        [InlineKeyboardButton(text="🍏 Забота о себе", callback_data="help_cat_care")],
-        [InlineKeyboardButton(text="✏️ Написать самому", callback_data="ask_question")],
-        [InlineKeyboardButton(text="◀️ НАЗАД", callback_data="show_results")]
-    ]
-    return InlineKeyboardMarkup(inline_keyboard=buttons)
-
-
-# ============================================
 # ФУНКЦИИ ДЛЯ ПРОСТОГО ОПИСАНИЯ ПРОФИЛЯ
 # ============================================
 
@@ -1735,6 +1727,70 @@ def convert_to_simple_language(scores: dict, perception_type: str, thinking_leve
 
 
 # ============================================
+# ФУНКЦИИ РЕЗУЛЬТАТОВ
+# ============================================
+
+def get_human_readable_profile(scores: dict, model=None, perception_type="не определен", thinking_level=5, dominant_dilts="BEHAVIOR") -> str:
+    """Возвращает портрет пользователя понятным языком"""
+    lines = []
+    
+    if scores:
+        min_vector = min(scores.items(), key=lambda x: level(x[1]))
+        vector, score = min_vector
+        lvl = level(score)
+        profile = LEVEL_PROFILES.get(vector, {}).get(lvl, {})
+    else:
+        vector = "СБ"
+        profile = {}
+    
+    lines.append("🧠 *ТВОЙ ПСИХОЛОГИЧЕСКИЙ ПОРТРЕТ*\n")
+    lines.append(f"🔍 *Тип восприятия:* {perception_type}\n")
+    lines.append(f"🧠 *Уровень мышления:* {thinking_level}/9\n")
+    lines.append(f"🎯 *Твой главный тормоз*")
+    lines.append(f"{profile.get('quote', 'Пока не определено')}\n")
+    lines.append(f"📜 *Откуда это взялось*")
+    lines.append(f"{profile.get('pain_origin', 'Из твоего опыта')}\n")
+    lines.append(f"💸 *Чем ты платишь*")
+    costs = profile.get('pain_costs', ['Энергией', 'Временем', 'Возможностями'])
+    for cost in costs[:3]:
+        lines.append(f"• {cost}")
+    lines.append("")
+    
+    if model and hasattr(model, 'key_confinement') and model.key_confinement:
+        elem = model.key_confinement.get('element')
+        if elem and hasattr(elem, 'description'):
+            lines.append(f"⛓ *Что держит систему*")
+            lines.append(f"{elem.description[:100]}\n")
+    
+    if model and hasattr(model, 'loops') and model.loops:
+        strongest = max(model.loops, key=lambda x: x.get('strength', 0))
+        lines.append(f"🔄 *Главная ловушка*")
+        lines.append(f"{strongest.get('description', 'Не определено')}")
+        lines.append(f"Сила: {strongest.get('strength', 0):.1%}\n")
+    
+    dilts_desc = DILTS_LEVELS.get(dominant_dilts, "⚡ Поведение")
+    lines.append(f"🎯 *Твоя точка роста:* {dilts_desc}")
+    
+    return "\n".join(lines)
+
+
+def get_help_keyboard() -> InlineKeyboardMarkup:
+    """Клавиатура с категориями помощи"""
+    buttons = [
+        [InlineKeyboardButton(text="🗣 Отношения", callback_data="help_cat_relations"),
+         InlineKeyboardButton(text="💰 Деньги", callback_data="help_cat_money")],
+        [InlineKeyboardButton(text="🧠 Самоощущение", callback_data="help_cat_self"),
+         InlineKeyboardButton(text="📚 Знания", callback_data="help_cat_knowledge")],
+        [InlineKeyboardButton(text="💪 Поддержка", callback_data="help_cat_support"),
+         InlineKeyboardButton(text="🎨 Муза", callback_data="help_cat_muse")],
+        [InlineKeyboardButton(text="🍏 Забота о себе", callback_data="help_cat_care")],
+        [InlineKeyboardButton(text="✏️ Написать самому", callback_data="ask_question")],
+        [InlineKeyboardButton(text="◀️ НАЗАД", callback_data="show_results")]
+    ]
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+
+# ============================================
 # НОВЫЕ ФУНКЦИИ: ПОКАЗ ПРЕДВАРИТЕЛЬНОГО ПРОФИЛЯ
 # ============================================
 
@@ -1744,7 +1800,7 @@ async def show_preliminary_profile(callback: CallbackQuery, state: FSMContext):
     data = await state.get_data()
     user_id = callback.from_user.id
     context = user_contexts.get(user_id)
-    address = context.get_address() if context and context.gender else "родной"
+    address = context.get_address() if context and context.gender else ""
     
     # Получаем данные из теста
     scores = {}
@@ -1767,7 +1823,7 @@ async def show_preliminary_profile(callback: CallbackQuery, state: FSMContext):
     # Текст портрета
     text = f"""
 ╔══════════════════════════════════════════════════════════════╗
-║              🔮 КАКИМ Я ВИЖУ ТЕБЯ, {address}                  ║
+║              🔮 КАКИМ Я ВИЖУ ТЕБЯ                            ║
 ╚══════════════════════════════════════════════════════════════╝
 
 ┌──────────────────────────────────────────────────────────────┐
@@ -1804,7 +1860,7 @@ async def show_preliminary_profile(callback: CallbackQuery, state: FSMContext):
 
 
 ┌──────────────────────────────────────────────────────────────┐
-│  👇 ЭТО ТЫ, {address}?                                        │
+│  👇 ЭТО ТЫ?                                                  │
 ├──────────────────────────────────────────────────────────────┤
 │                                                               │
 │  ┌────────────────────────────────────────────────────────┐  │
@@ -1945,7 +2001,6 @@ async def clarify_next(callback: CallbackQuery, state: FSMContext):
     if not questions:
         # Если нет специальных вопросов, показываем общие
         await callback.answer("Зададим общие уточняющие вопросы")
-        # TODO: показать общие вопросы
         return
     
     await state.update_data(
@@ -2220,7 +2275,7 @@ async def show_final_profile(callback: CallbackQuery, state: FSMContext):
     user_id = callback.from_user.id
     data = await state.get_data()
     context = user_contexts.get(user_id)
-    address = context.get_address() if context and context.gender else "родной"
+    address = context.get_address() if context and context.gender else ""
     
     # Получаем все данные
     scores = {}
@@ -2239,10 +2294,19 @@ async def show_final_profile(callback: CallbackQuery, state: FSMContext):
     # Получаем описание глубинных паттернов
     deep_desc = get_deep_patterns_description(deep_patterns) if deep_patterns else ""
     
+    # Получаем конфайнмент-модель
+    model_data = data.get('confinement_model')
+    model = None
+    if model_data:
+        try:
+            model = ConfinementModel9.from_dict(model_data)
+        except Exception as e:
+            logger.error(f"Ошибка при создании модели из данных: {e}")
+    
     # Формируем финальный текст
     text = f"""
 ╔══════════════════════════════════════════════════════════════╗
-║              🎯 ТВОЙ ТОЧНЫЙ ПОРТРЕТ, {address}                ║
+║              🎯 ТВОЙ ТОЧНЫЙ ПОРТРЕТ                          ║
 ╚══════════════════════════════════════════════════════════════╝
 
 ┌──────────────────────────────────────────────────────────────┐
@@ -2291,11 +2355,9 @@ async def show_final_profile(callback: CallbackQuery, state: FSMContext):
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="🧠 МЫСЛИ ПСИХОЛОГА", callback_data="ai_analysis")],
-        [InlineKeyboardButton(text="🎯 ЧЕМ ПОМОЧЬ", callback_data="show_help"),
-         InlineKeyboardButton(text="❓ ЗАДАТЬ ВОПРОС", callback_data="smart_questions")],
-        [InlineKeyboardButton(text="📖 СКАЗКА", callback_data="show_tale"),
-         InlineKeyboardButton(text="✨ ЕЩЁ", callback_data="more_info")],
-        [InlineKeyboardButton(text="⚙️ ВЫБРАТЬ СТИЛЬ ОБЩЕНИЯ", callback_data="show_mode_selection")]
+        [InlineKeyboardButton(text="🔄 МОДЕЛЬ", callback_data="show_confinement")],
+        [InlineKeyboardButton(text="📖 СКАЗКА", callback_data="show_tale")],
+        [InlineKeyboardButton(text="⚙️ ВЫБРАТЬ РЕЖИМ", callback_data="show_mode_selection")]
     ])
     
     await callback.message.edit_text(text, reply_markup=keyboard, parse_mode='Markdown')
@@ -2303,20 +2365,111 @@ async def show_final_profile(callback: CallbackQuery, state: FSMContext):
 
 
 # ============================================
-# ОБРАБОТЧИКИ ЭТАПА 1 (ПОЛНЫЕ)
+# НОВЫЙ ОБРАБОТЧИК ДЛЯ КОНФАЙНМЕНТ-МОДЕЛИ
+# ============================================
+
+async def show_confinement(callback: CallbackQuery, state: FSMContext):
+    """Показывает конфайнмент-модель"""
+    data = await state.get_data()
+    model_data = data.get('confinement_model')
+    
+    if not model_data:
+        await callback.message.edit_text(
+            "⚠️ Модель ещё не построена",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="◀️ НАЗАД", callback_data="show_results")]
+            ])
+        )
+        return
+    
+    model = ConfinementModel9.from_dict(model_data)
+    text = format_confinement_report(model)
+    
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="💡 ИНТЕРВЕНЦИЯ", callback_data="show_intervention")],
+        [InlineKeyboardButton(text="◀️ НАЗАД", callback_data="show_results")]
+    ])
+    
+    await callback.message.edit_text(text, reply_markup=keyboard, parse_mode='Markdown')
+    await state.set_state(TestStates.viewing_confinement)
+
+
+async def show_intervention(callback: CallbackQuery, state: FSMContext):
+    """Показывает интервенцию для работы с конфайнментом"""
+    data = await state.get_data()
+    model_data = data.get('confinement_model')
+    
+    if not model_data:
+        await callback.answer("Модель не найдена")
+        return
+    
+    model = ConfinementModel9.from_dict(model_data)
+    
+    if not model.key_confinement:
+        await callback.message.edit_text(
+            "Ключевой конфайнмент не определён",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="◀️ НАЗАД", callback_data="show_confinement")]
+            ])
+        )
+        return
+    
+    elem = model.key_confinement['element']
+    
+    text = f"""
+💡 *ИНТЕРВЕНЦИЯ ДЛЯ РАБОТЫ С КОНФАЙНМЕНТОМ*
+
+🎯 *Цель:* {elem.name}
+
+📌 *Описание:*
+{elem.description[:200]}
+
+⚡ *Что делать:*
+
+1. Начни замечать, когда проявляется этот паттерн
+2. Каждый день записывай один пример
+3. Через неделю проанализируй записи
+4. Подумай, что можно сделать по-другому
+
+✅ *Отметь выполнение, когда сделаешь*
+"""
+    
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="✅ Я СДЕЛАЛ", callback_data="intervention_done")],
+        [InlineKeyboardButton(text="◀️ НАЗАД", callback_data="show_confinement")]
+    ])
+    
+    await callback.message.edit_text(text, reply_markup=keyboard, parse_mode='Markdown')
+    await state.set_state(TestStates.viewing_intervention)
+
+
+async def intervention_done(callback: CallbackQuery, state: FSMContext):
+    """Отмечает выполнение интервенции"""
+    await callback.message.edit_text(
+        "🎉 *Отлично!* Я горжусь тобой.\n\n"
+        "Каждый маленький шаг приближает к большим изменениям.",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="🔄 К МОДЕЛИ", callback_data="show_confinement")],
+            [InlineKeyboardButton(text="🧠 К ПОРТРЕТУ", callback_data="show_results")]
+        ])
+    )
+
+
+# ============================================
+# ОБРАБОТЧИКИ ЭТАПА 1
 # ============================================
 
 async def show_stage_1_intro(callback: CallbackQuery, state: FSMContext):
     """Экран перед ЭТАПОМ 1"""
     user_id = callback.from_user.id
     context = user_contexts.get(user_id)
-    address = context.get_address() if context and context.gender else "родной"
+    address = context.get_address() if context and context.gender else ""
     
     await state.set_state(TestStates.stage_1)
     
     intro_text = (
         f"🧠 *ЭТАП 1: КОНФИГУРАЦИЯ ВОСПРИЯТИЯ*\n\n"
-        f"Восприятие — это линза, через которую ты смотришь на мир, {address}.\n\n"
+        f"Восприятие — это линза, через которую ты смотришь на мир.\n\n"
         f"Она сформирована культурой, нормами, ценностями и опытом, который тебя строил. Это определило, что ты замечаешь автоматически, а что остаётся за кадром.\n\n"
         f"🔍 *Что мы исследуем:*\n"
         f"• Куда направлено твое внимание — вовне или внутрь\n"
@@ -2466,7 +2619,7 @@ async def finish_stage_1(callback: CallbackQuery, state: FSMContext):
 
 
 # ============================================
-# ОБРАБОТЧИКИ ЭТАПА 2 (ПОЛНЫЕ)
+# ОБРАБОТЧИКИ ЭТАПА 2
 # ============================================
 
 async def show_stage_2_intro(callback: CallbackQuery, state: FSMContext):
@@ -2653,7 +2806,7 @@ async def finish_stage_2(callback: CallbackQuery, state: FSMContext):
 
 
 # ============================================
-# ОБРАБОТЧИКИ ЭТАПА 3 (ПОЛНЫЕ)
+# ОБРАБОТЧИКИ ЭТАПА 3
 # ============================================
 
 async def show_stage_3_intro(callback: CallbackQuery, state: FSMContext):
@@ -2831,7 +2984,7 @@ async def finish_stage_3(callback: CallbackQuery, state: FSMContext):
 
 
 # ============================================
-# ОБРАБОТЧИКИ ЭТАПА 4 (ПОЛНЫЕ)
+# ОБРАБОТЧИКИ ЭТАПА 4
 # ============================================
 
 async def show_stage_4_intro(callback: CallbackQuery, state: FSMContext):
@@ -2980,6 +3133,16 @@ async def finish_stage_4(callback: CallbackQuery, state: FSMContext):
     profile_data = calculate_profile_final(data)
     await state.update_data(profile_data=profile_data)
     
+    # Строим конфайнмент-модель
+    scores = {}
+    for vector in ["СБ", "ТФ", "УБ", "ЧВ"]:
+        levels = data.get("behavioral_levels", {}).get(vector, [])
+        scores[vector] = sum(levels) / len(levels) if levels else 3
+    
+    model = ConfinementModel9(user_id)
+    model.build_from_profile(scores, data.get('history', []), user_contexts.get(user_id))
+    await state.update_data(confinement_model=model.to_dict())
+    
     logger.info(f"✅ User {user_id}: Stage 4 complete, profile={profile_data.get('display_name', 'unknown')}")
     
     # Показываем предварительный профиль вместо финального
@@ -2987,7 +3150,71 @@ async def finish_stage_4(callback: CallbackQuery, state: FSMContext):
 
 
 # ============================================
-# SMART QUESTIONS (ПОЛНЫЕ)
+# AI АНАЛИЗ (ТОЛЬКО ОПИСАНИЕ, БЕЗ СОВЕТОВ)
+# ============================================
+
+async def show_ai_analysis(callback: CallbackQuery, state: FSMContext):
+    """Показывает мысли психолога (только описание, без советов)"""
+    user_id = callback.from_user.id
+    data = await state.get_data()
+    
+    scores = {}
+    for k in VECTORS:
+        levels = data.get("behavioral_levels", {}).get(k, [])
+        scores[k] = sum(levels) / len(levels) if levels else 3.0
+    
+    perception_type = data.get("perception_type", "не определен")
+    thinking_level = data.get("thinking_level", 5)
+    
+    # Конвертируем в простые описания
+    simple = convert_to_simple_language(scores, perception_type, thinking_level)
+    
+    # Формируем текст только из описаний
+    text = f"""🧠 *МЫСЛИ ПСИХОЛОГА*
+
+{simple['attention_desc']}
+
+{simple['thinking_desc']}
+
+*В ситуациях давления:* {simple['sb_desc']}
+
+*В отношениях с деньгами:* {simple['tf_desc']}
+
+*В понимании мира:* {simple['ub_desc']}
+
+*В отношениях с людьми:* {simple['chv_desc']}"""
+    
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🔄 МОДЕЛЬ", callback_data="show_confinement")],
+        [InlineKeyboardButton(text="◀️ К ПОРТРЕТУ", callback_data="show_results")]
+    ])
+    
+    await callback.message.edit_text(text, reply_markup=keyboard, parse_mode='Markdown')
+
+
+async def show_saved_ai_analysis(callback: CallbackQuery, analysis_text: str):
+    """Показывает сохраненный AI анализ"""
+    def escape_markdown(text):
+        text = text.replace('**', '‼BOLD‼')
+        dangerous = '_*[]()~`>+=|{}!'
+        for char in dangerous:
+            text = text.replace(char, f'\\{char}')
+        text = text.replace('‼BOLD‼', '**')
+        return text
+    
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🔄 МОДЕЛЬ", callback_data="show_confinement")],
+        [InlineKeyboardButton(text="◀️ К ПОРТРЕТУ", callback_data="show_results")]
+    ])
+    
+    safe_text = escape_markdown(analysis_text)
+    full_text = f"🧠 *МЫСЛИ ПСИХОЛОГА*\n\n{safe_text}"
+    
+    await callback.message.edit_text(full_text, parse_mode='Markdown', reply_markup=keyboard)
+
+
+# ============================================
+# SMART QUESTIONS
 # ============================================
 
 def generate_smart_questions(scores):
@@ -3146,179 +3373,6 @@ async def handle_smart_question(callback: CallbackQuery, state: FSMContext, ques
 
 
 # ============================================
-# AI АНАЛИЗ И РЕКОМЕНДАЦИИ (ПОЛНЫЕ)
-# ============================================
-
-async def show_ai_analysis(callback: CallbackQuery, state: FSMContext):
-    """Показывает AI анализ профиля"""
-    user_id = callback.from_user.id
-    data = await state.get_data()
-    
-    scores = {}
-    for k in VECTORS:
-        levels = data.get("behavioral_levels", {}).get(k, [])
-        scores[k] = sum(levels) / len(levels) if levels else 3.0
-    
-    if data.get("ai_analysis"):
-        await show_saved_ai_analysis(callback, data["ai_analysis"])
-        return
-    
-    await callback.message.edit_text(
-        "🧠 *Анализирую ваш профиль...*\n\n_Это займёт около 20 секунд_",
-        parse_mode='Markdown'
-    )
-    
-    bottleneck_key = get_priority_order(scores)[0]
-    bottleneck_lvl = level(scores[bottleneck_key])
-    bottleneck_profile = LEVEL_PROFILES.get(bottleneck_key, {}).get(bottleneck_lvl, {})
-    bottleneck_vec = VECTORS[bottleneck_key]
-    
-    prompt = f"""ТЫ — ПСИХОЛОГ. Напиши психологический портрет.
-
-УЗКОЕ МЕСТО:
-- Вектор: {bottleneck_vec['name']}
-- Уровень: {bottleneck_lvl}/6
-- Архетип: {bottleneck_profile.get('archetype', '')}
-
-НАПИШИ:
-1. Суть проблемы (2-3 предложения)
-2. Откуда это взялось (2 предложения)
-3. Первый шаг (3 конкретных действия)
-4. Цитата-напутствие
-
-СТИЛЬ: Как старший товарищ — честно, с заботой, без воды."""
-    
-    system_message = "Ты психолог. Пиши коротко, метафорично."
-    response = await call_deepseek(prompt, system_message, max_tokens=1000)
-    
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="❓ ВОПРОСЫ", callback_data="smart_questions")],
-        [InlineKeyboardButton(text="💡 ЧТО ДЕЛАТЬ", callback_data="ai_recommendations")],
-        [InlineKeyboardButton(text="◀️ НАЗАД", callback_data="show_results")]
-    ])
-    
-    if response:
-        await state.update_data(ai_analysis=response)
-        await show_saved_ai_analysis(callback, response)
-    else:
-        fallback_text = FALLBACK_ANALYSIS[bottleneck_key][bottleneck_lvl]
-        await callback.message.edit_text(
-            f"🧠 *МЫСЛИ ПСИХОЛОГА*\n\n{fallback_text}",
-            parse_mode='Markdown',
-            reply_markup=keyboard
-        )
-
-
-async def show_saved_ai_analysis(callback: CallbackQuery, analysis_text: str):
-    """Показывает сохраненный AI анализ"""
-    def escape_markdown(text):
-        text = text.replace('**', '‼BOLD‼')
-        dangerous = '_*[]()~`>+=|{}!'
-        for char in dangerous:
-            text = text.replace(char, f'\\{char}')
-        text = text.replace('‼BOLD‼', '**')
-        return text
-    
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="❓ ВОПРОСЫ", callback_data="smart_questions")],
-        [InlineKeyboardButton(text="💡 ЧТО ДЕЛАТЬ", callback_data="ai_recommendations")],
-        [InlineKeyboardButton(text="◀️ НАЗАД", callback_data="show_results")]
-    ])
-    
-    safe_text = escape_markdown(analysis_text)
-    full_text = f"🧠 *МЫСЛИ ПСИХОЛОГА*\n\n{safe_text}"
-    
-    await callback.message.edit_text(full_text, parse_mode='Markdown', reply_markup=keyboard)
-
-
-async def show_ai_recommendations(callback: CallbackQuery, state: FSMContext):
-    """Показывает AI рекомендации"""
-    user_id = callback.from_user.id
-    data = await state.get_data()
-    
-    scores = {}
-    for k in VECTORS:
-        levels = data.get("behavioral_levels", {}).get(k, [])
-        scores[k] = sum(levels) / len(levels) if levels else 3.0
-    
-    if data.get("ai_recommendations"):
-        await show_saved_recommendations(callback, data["ai_recommendations"])
-        return
-    
-    await callback.message.edit_text(
-        "💡 *Подбираю рекомендации...*\n\n_Это займёт около 15-20 секунд_",
-        parse_mode='Markdown'
-    )
-    
-    bottleneck_key = get_priority_order(scores)[0]
-    bottleneck_lvl = level(scores[bottleneck_key])
-    bottleneck_vec = VECTORS[bottleneck_key]
-    
-    vectors_context = []
-    for key in VECTORS:
-        lvl = level(scores[key])
-        vec = VECTORS[key]
-        profile = LEVEL_PROFILES.get(key, {}).get(lvl, {})
-        vectors_context.append(f"{vec['name']}: {lvl}/6 — {profile.get('archetype', '')}")
-    
-    prompt = f"""ТЫ — ПСИХОЛОГ. Напиши персональные рекомендации.
-
-ПРОФИЛЬ:
-{chr(10).join(vectors_context)}
-
-УЗКОЕ МЕСТО: {bottleneck_vec['name']} (уровень {bottleneck_lvl}/6)
-
-НАПИШИ 3 БЛОКА:
-⚡ ЧТО ДЕЛАТЬ СЕГОДНЯ (3 микро-действия)
-📌 ЧТО ДЕЛАТЬ НА ЭТОЙ НЕДЕЛЕ (3 задачи)
-🔥 ЧТО ДЕЛАТЬ В ЭТОМ МЕСЯЦЕ (2-3 шага)
-
-Коротко, конкретно, по делу. Каждый пункт с •"""
-    
-    system_message = "Ты психолог. Пиши коротко, конкретно."
-    response = await call_deepseek(prompt, system_message, max_tokens=800)
-    
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="❓ ЕЩЁ ВОПРОС", callback_data="smart_questions")],
-        [InlineKeyboardButton(text="🧠 МЫСЛИ ПСИХОЛОГА", callback_data="ai_analysis")],
-        [InlineKeyboardButton(text="◀️ НАЗАД", callback_data="show_results")]
-    ])
-    
-    if response:
-        await state.update_data(ai_recommendations=response)
-        await show_saved_recommendations(callback, response)
-    else:
-        fallback_text = FALLBACK_ANALYSIS[bottleneck_key][bottleneck_lvl]
-        await callback.message.edit_text(
-            f"💡 *ПЛАН ДЕЙСТВИЙ*\n\n{fallback_text}",
-            parse_mode='Markdown',
-            reply_markup=keyboard
-        )
-
-
-async def show_saved_recommendations(callback: CallbackQuery, recommendations_text: str):
-    """Показывает сохраненные рекомендации"""
-    def escape_markdown(text):
-        text = text.replace('**', '‼BOLD‼')
-        dangerous = '_*[]()~`>+=|{}!'
-        for char in dangerous:
-            text = text.replace(char, f'\\{char}')
-        text = text.replace('‼BOLD‼', '**')
-        return text
-    
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="❓ ЕЩЁ ВОПРОС", callback_data="smart_questions")],
-        [InlineKeyboardButton(text="🧠 МЫСЛИ ПСИХОЛОГА", callback_data="ai_analysis")],
-        [InlineKeyboardButton(text="◀️ НАЗАД", callback_data="show_results")]
-    ])
-    
-    safe_text = escape_markdown(recommendations_text)
-    full_text = f"💡 *ПЛАН ДЕЙСТВИЙ*\n\n{safe_text}"
-    
-    await callback.message.edit_text(full_text, parse_mode='Markdown', reply_markup=keyboard)
-
-
-# ============================================
 # ОБРАБОТЧИКИ ПОМОЩИ
 # ============================================
 
@@ -3337,7 +3391,7 @@ async def handle_help_category(callback: CallbackQuery, state: FSMContext, categ
     """Обработчик категорий помощи"""
     user_id = callback.from_user.id
     context = user_contexts.get(user_id)
-    address = context.get_address() if context and context.gender else "родной"
+    address = context.get_address() if context and context.gender and context.communication_mode == "friend" else ""
     
     category_texts = {
         "relations": "🗣 *Отношения*\n\nРасскажи, что происходит в отношениях. Я помогу разобраться.",
@@ -3375,7 +3429,7 @@ async def show_tale(callback: CallbackQuery, state: FSMContext):
     """Показывает случайную сказку"""
     user_id = callback.from_user.id
     context = user_contexts.get(user_id)
-    address = context.get_address() if context and context.gender else "родной"
+    address = context.get_address() if context and context.gender and context.communication_mode == "friend" else ""
     
     tale = tales.get_tale_for_issue("рост")
     
@@ -3393,35 +3447,8 @@ async def show_tale(callback: CallbackQuery, state: FSMContext):
     )
 
 
-async def more_info(callback: CallbackQuery, state: FSMContext):
-    """Показывает дополнительную информацию"""
-    text = (
-        "🧠 *ФРЕДИ 8.5 — ПОЛНАЯ ВЕРСИЯ*\n\n"
-        "⚡ *НОВОЕ В ЭТОЙ ВЕРСИИ:*\n"
-        "• 🧠 5-й этап: глубинные паттерны\n"
-        "• 🔄 Система коррекции профиля\n"
-        "• 🎯 Точность портрета до 95%\n"
-        "• 💬 Простой язык без терминов\n\n"
-        "🎭 *РЕЖИМЫ ОБЩЕНИЯ:*\n"
-        "🔮 КОУЧ | 💚 ДРУГ | ⚡ ТРЕНЕР\n\n"
-        "🌍 *КОНТЕКСТ:*\n"
-        "• Город и погода\n"
-        "• Время суток и день недели\n"
-        "• Возраст и пол\n\n"
-        "💬 *ОДНАЖДЫ ТЫ ПРОСТО ПЕРЕСТАНЕШЬ БЫТЬ ПРОБЛЕМОЙ ДЛЯ САМОГО СЕБЯ.*"
-    )
-    
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="👤 СВЯЗАТЬСЯ С ПСИХОЛОГОМ", url="https://t.me/meysternlp")],
-        [InlineKeyboardButton(text="🔄 ПРОЙТИ ТЕСТ ЗАНОВО", callback_data="restart_test")],
-        [InlineKeyboardButton(text="◀️ НАЗАД", callback_data="show_results")]
-    ])
-    
-    await callback.message.edit_text(text, parse_mode='Markdown', reply_markup=keyboard)
-
-
 # ============================================
-# ОБРАБОТЧИКИ КОНТЕКСТА (ПОЛНЫЕ)
+# ОБРАБОТЧИКИ КОНТЕКСТА
 # ============================================
 
 async def start_context(callback: CallbackQuery, state: FSMContext):
@@ -3436,9 +3463,9 @@ async def start_context(callback: CallbackQuery, state: FSMContext):
     question, keyboard = await context.ask_for_context()
     
     if question:
-        address = context.get_address() if context.gender else "родной"
+        address = context.get_address() if context.gender else ""
         await callback.message.edit_text(
-            f"📝 *Давай знакомиться, {address}!*\n\n{question}",
+            f"📝 *Давай знакомиться*{f', {address}' if address else ''}!\n\n{question}",
             reply_markup=keyboard,
             parse_mode='Markdown'
         )
@@ -3455,10 +3482,10 @@ async def skip_context(callback: CallbackQuery, state: FSMContext):
     if context:
         context.awaiting_context = None
     
-    address = context.get_address() if context and context.gender else "родной"
+    address = context.get_address() if context and context.gender else ""
     
     await callback.message.edit_text(
-        f"⏭ Хорошо, {address}, будем общаться без привязки к месту и времени.\n\n"
+        f"⏭ Хорошо{f', {address}' if address else ''}, будем общаться без привязки к месту и времени.\n\n"
         "Но помни: с контекстом советы точнее 😉\n"
         "Можешь в любой момент рассказать о себе — просто напиши /context",
         parse_mode='Markdown'
@@ -3478,7 +3505,7 @@ async def set_gender_male(callback: CallbackQuery, state: FSMContext):
         if question:
             address = context.get_address()
             await callback.message.edit_text(
-                f"📝 *Давай знакомиться, {address}!*\n\n{question}",
+                f"📝 *Давай знакомиться{f', {address}' if address else ''}!*\n\n{question}",
                 reply_markup=keyboard,
                 parse_mode='Markdown'
             )
@@ -3499,7 +3526,7 @@ async def set_gender_female(callback: CallbackQuery, state: FSMContext):
         if question:
             address = context.get_address()
             await callback.message.edit_text(
-                f"📝 *Давай знакомиться, {address}!*\n\n{question}",
+                f"📝 *Давай знакомиться{f', {address}' if address else ''}!*\n\n{question}",
                 reply_markup=keyboard,
                 parse_mode='Markdown'
             )
@@ -3522,9 +3549,9 @@ async def handle_context_message(message: Message, state: FSMContext):
     
     if success:
         if next_question:
-            address = context.get_address() if context.gender else "родной"
+            address = context.get_address() if context.gender else ""
             await message.answer(
-                f"📝 *Давай знакомиться, {address}!*\n\n{next_question}",
+                f"📝 *Давай знакомиться*{f', {address}' if address else ''}!\n\n{next_question}",
                 reply_markup=keyboard,
                 parse_mode='Markdown'
             )
@@ -3538,11 +3565,11 @@ async def handle_context_message(message: Message, state: FSMContext):
 
 async def show_context_complete(message_or_callback, state: FSMContext, context: UserContext):
     """Показывает итоговый экран после сбора контекста"""
-    address = context.get_address() if context.gender else "родной"
+    address = context.get_address() if context.gender else ""
     
     await context.update_weather()
     
-    summary = f"✅ *Отлично, {address}! Теперь я знаю о тебе:*\n\n"
+    summary = f"✅ *Отлично{f', {address}' if address else ''}! Теперь я знаю о тебе:*\n\n"
     
     if context.city:
         summary += f"📍 Город: {context.city}\n"
@@ -3554,7 +3581,7 @@ async def show_context_complete(message_or_callback, state: FSMContext, context:
     if context.weather_cache:
         summary += f"{context.weather_cache['icon']} Погода: {context.weather_cache['description']}, {context.weather_cache['temp']}°C\n"
     
-    summary += f"\n🎯 Теперь я буду учитывать это в наших разговорах, {address}!\n\n"
+    summary += f"\n🎯 Теперь я буду учитывать это в наших разговорах{f', {address}' if address else ''}!\n\n"
     summary += "━━━━━━━━━━━━━━━━━━━━\n"
     summary += "🧠 *ЧТО ДАЛЬШЕ?*\n\n"
     summary += "Чтобы я мог помочь по-настоящему, нужно пройти тест (15 минут).\n"
@@ -3577,12 +3604,12 @@ async def show_context_complete(message_or_callback, state: FSMContext, context:
 
 
 # ============================================
-# СТАРТ И НАВИГАЦИЯ (ПОЛНЫЕ)
+# СТАРТ И НАВИГАЦИЯ
 # ============================================
 
 async def show_main_menu(message: Message, context: UserContext):
     """Показывает главное меню до теста"""
-    address = context.get_address() if context and context.gender else "родной"
+    address = context.get_address() if context and context.gender else ""
     
     await context.update_weather()
     
@@ -3595,11 +3622,11 @@ async def show_main_menu(message: Message, context: UserContext):
         welcome_text += f"{weather['icon']} {weather['description']}, {weather['temp']}°C\n"
     
     if day_context['is_weekend']:
-        welcome_text += f"🏖 Сегодня выходной, {address}! Как настроение?\n\n"
+        welcome_text += f"🏖 Сегодня выходной{f', {address}' if address else ''}! Как настроение?\n\n"
     elif 9 <= day_context['hour'] < 18:
-        welcome_text += f"💼 Рабочее время, {address}. Чем займёмся?\n\n"
+        welcome_text += f"💼 Рабочее время{f', {address}' if address else ''}. Чем займёмся?\n\n"
     else:
-        welcome_text += f"🏡 Личное время, {address}. Есть что обсудить?\n\n"
+        welcome_text += f"🏡 Личное время{f', {address}' if address else ''}. Есть что обсудить?\n\n"
     
     welcome_text += f"👇 *Выбери действие:*"
     
@@ -3619,13 +3646,13 @@ async def show_main_menu(message: Message, context: UserContext):
 async def show_main_menu_after_mode(message: Message, context: UserContext):
     """Показывает главное меню после выбора режима"""
     mode_config = COMMUNICATION_MODES.get(context.communication_mode, COMMUNICATION_MODES["coach"])
-    address = context.get_address() if context and context.gender else "родной"
+    address = context.get_address() if context and context.gender else ""
     
     await context.update_weather()
     day_context = context.get_day_context()
     
     text = f"{mode_config['emoji']} *РЕЖИМ {mode_config['display_name']}*\n\n"
-    text += context.get_greeting(context.name) + "\n"
+    text += f"{context.get_greeting(context.name)}\n"
     text += f"📅 Сегодня {day_context['weekday']}, {day_context['day']} {day_context['month']}, {day_context['time_str']}\n"
     
     if context.weather_cache:
@@ -3638,7 +3665,7 @@ async def show_main_menu_after_mode(message: Message, context: UserContext):
     if context.communication_mode == "coach":
         text += "• Задать вопрос — я помогу найти ответ внутри себя\n"
     elif context.communication_mode == "friend":
-        text += "• Расскажи, что у тебя на душе — я рядом\n"
+        text += f"• Расскажи{', ' + address if address else ''}, что у тебя на душе — я рядом\n"
     elif context.communication_mode == "trainer":
         text += "• Ставь задачу — я дам конкретные шаги\n"
     
@@ -3653,8 +3680,7 @@ async def show_main_menu_after_mode(message: Message, context: UserContext):
         [
             InlineKeyboardButton(text="📖 СКАЗКА", callback_data="show_tale"),
             InlineKeyboardButton(text="⚙️ СМЕНИТЬ РЕЖИМ", callback_data="show_mode_selection")
-        ],
-        [InlineKeyboardButton(text="✨ ЕЩЁ", callback_data="more_info")]
+        ]
     ])
     
     await message.answer(text, reply_markup=keyboard, parse_mode='Markdown')
@@ -3721,8 +3747,6 @@ async def show_benefits(callback: CallbackQuery):
         "⚡ *ПОСЛЕ ТЕСТА ТЫ ПОЛУЧИШЬ:*\n\n"
         "✅ Полный психологический портрет\n"
         "✅ Глубинный анализ подсознательных паттернов\n"
-        "✅ Конкретные шаги для изменений\n"
-        "✅ Возможность уточнять и корректировать профиль\n"
         "✅ Выбор стиля общения: 🔮 КОУЧ | 💚 ДРУГ | ⚡ ТРЕНЕР\n\n"
         "⏱ *Всего 15 минут*"
     )
@@ -3816,7 +3840,7 @@ async def show_mode_selection(callback: CallbackQuery, state: FSMContext):
     profile_data = data.get("profile_data", {})
     profile_code = profile_data.get('display_name', 'SA-5_INT')
     
-    address = context.get_address() if context and context.gender else "родной"
+    address = context.get_address() if context and context.gender else ""
     
     current_mode = context.communication_mode if context else "coach"
     mode_display = COMMUNICATION_MODES[current_mode]['display_name']
@@ -3824,7 +3848,7 @@ async def show_mode_selection(callback: CallbackQuery, state: FSMContext):
     text = f"🧠 *ВЫБЕРИ СТИЛЬ ОБЩЕНИЯ*\n\n"
     text += f"📊 Твой профиль: `{profile_code}`\n\n"
     text += f"Сейчас активен режим: {mode_display}\n\n"
-    text += f"Теперь, когда я знаю, кто ты, {address},\n"
+    text += f"Теперь, когда я знаю, кто ты{f', {address}' if address else ''},\n"
     text += "ты можешь выбрать, **КАК** мы будем общаться:\n\n"
     text += "━━━━━━━━━━━━━━━━━━━━\n"
     text += "🔮 *КОУЧ*\n"
@@ -3861,10 +3885,10 @@ async def set_mode_coach(callback: CallbackQuery, state: FSMContext):
     
     await callback.answer("✅ Режим КОУЧ активирован")
     
-    address = context.get_address() if context and context.gender else "родной"
+    address = context.get_address() if context and context.gender else ""
     
     text = f"🔮 *РЕЖИМ КОУЧ АКТИВИРОВАН*\n\n"
-    text += f"Отлично, {address}!\n\n"
+    text += f"Отлично{f', {address}' if address else ''}!\n\n"
     text += "Теперь я буду:\n"
     text += "• Задавать открытые вопросы\n"
     text += "• Помогать находить ответы внутри тебя\n"
@@ -3892,14 +3916,14 @@ async def set_mode_friend(callback: CallbackQuery, state: FSMContext):
     
     await callback.answer("✅ Режим ДРУГ активирован")
     
-    address = context.get_address() if context and context.gender else "родной"
+    address = context.get_address() if context and context.gender else ""
     
     text = f"💚 *РЕЖИМ ДРУГ АКТИВИРОВАН*\n\n"
-    text += f"Приятно познакомиться, {address}!\n\n"
+    text += f"Приятно познакомиться{f', {address}' if address else ''}!\n\n"
     text += "Теперь я буду:\n"
     text += "• Слушать и принимать без осуждения\n"
     text += "• Отражать твои чувства\n"
-    text += "• Быть рядом и поддерживать"
+    text += f"• Быть рядом{f', {address}' if address else ''}"
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="🧠 К ПОРТРЕТУ", callback_data="show_results")],
@@ -3923,10 +3947,10 @@ async def set_mode_trainer(callback: CallbackQuery, state: FSMContext):
     
     await callback.answer("✅ Режим ТРЕНЕР активирован")
     
-    address = context.get_address() if context and context.gender else "родной"
+    address = context.get_address() if context and context.gender else ""
     
     text = f"⚡ *РЕЖИМ ТРЕНЕР АКТИВИРОВАН*\n\n"
-    text += f"Привет, {address}!\n\n"
+    text += f"Привет{f', {address}' if address else ''}!\n\n"
     text += "Теперь я буду:\n"
     text += "• Давать чёткие инструкции\n"
     text += "• Фокусироваться на действиях\n"
@@ -3957,10 +3981,10 @@ async def handle_pretest_question(message: Message, state: FSMContext):
     """Обработка вопроса до теста"""
     user_id = message.from_user.id
     context_obj = user_contexts.get(user_id)
-    address = context_obj.get_address() if context_obj else "друг"
+    address = context_obj.get_address() if context_obj else ""
     
     await message.answer(
-        f"Спасибо за вопрос, {address}. Чтобы ответить точнее, мне нужно знать твой профиль. Пройди тест — это займёт 15 минут."
+        f"Спасибо за вопрос{f', {address}' if address else ''}. Чтобы ответить точнее, мне нужно знать твой профиль. Пройди тест — это займёт 15 минут."
     )
     await state.clear()
 
@@ -4170,7 +4194,7 @@ async def cmd_test_voices(message: Message):
 
 
 # ============================================
-# CALLBACK ХЕНДЛЕР (ПОЛНЫЙ)
+# CALLBACK ХЕНДЛЕР
 # ============================================
 
 async def callback_handler(callback: CallbackQuery, state: FSMContext):
@@ -4281,9 +4305,15 @@ async def callback_handler(callback: CallbackQuery, state: FSMContext):
         elif data.startswith("clarify_answer_"):
             await handle_clarifying_answer(callback, state)
         
-        # Результаты
+        # Результаты и конфайнмент
         elif data == "show_results":
             await show_final_profile(callback, state)
+        elif data == "show_confinement":
+            await show_confinement(callback, state)
+        elif data == "show_intervention":
+            await show_intervention(callback, state)
+        elif data == "intervention_done":
+            await intervention_done(callback, state)
         elif data == "ai_analysis":
             await show_ai_analysis(callback, state)
         elif data == "ai_recommendations":
@@ -4302,8 +4332,6 @@ async def callback_handler(callback: CallbackQuery, state: FSMContext):
             await show_help(callback, state)
         elif data == "show_tale":
             await show_tale(callback, state)
-        elif data == "more_info":
-            await more_info(callback, state)
         elif data == "restart_test":
             await state.clear()
             await back_to_intro(callback)
@@ -4325,7 +4353,7 @@ async def callback_handler(callback: CallbackQuery, state: FSMContext):
 
 
 # ============================================
-# КОМАНДЫ АДМИНИСТРАТОРОВ (ПОЛНЫЕ)
+# КОМАНДЫ АДМИНИСТРАТОРОВ
 # ============================================
 
 async def cmd_stats(message: Message):
@@ -4358,7 +4386,7 @@ async def cmd_apistatus(message: Message):
         text += f"🌍 Погода будет автоматически подгружаться для пользователей\n"
     
     if YANDEX_API_KEY:
-        text += f"🎙 Голоса: Оксана (коуч), Эрмил (друг), Филипп (тренер)\n"
+        text += f"🎙 Голоса: Филипп (коуч/тренер), Эрмил (друг)\n"
     
     await message.answer(text, parse_mode='Markdown')
 
