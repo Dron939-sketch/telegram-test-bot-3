@@ -9,14 +9,27 @@ import aiohttp
 import asyncio
 import tempfile
 import re
+import random
 import time
 from typing import Optional, Dict, List, Any
 
 from config import DEEPSEEK_API_KEY, DEEPGRAM_API_KEY, YANDEX_API_KEY, COMMUNICATION_MODES
-from profiles import VECTORS, LEVEL_PROFILES
-from test_questions import get_deep_patterns_description
+from models import level
 
 logger = logging.getLogger(__name__)
+
+
+# ============================================
+# Вспомогательная функция для определения доминирующего уровня Дилтса
+# ============================================
+
+def determine_dominant_dilts(dilts_counts: dict) -> str:
+    """Определяет доминирующий уровень Дилтса"""
+    if not dilts_counts:
+        return "BEHAVIOR"
+    dominant = max(dilts_counts.items(), key=lambda x: x[1])
+    return dominant[0]
+
 
 # ============================================
 # API ФУНКЦИИ
@@ -244,8 +257,6 @@ async def generate_response_with_full_context(user_id: int, user_message: str, s
     if user_context:
         full_context = user_context.get_prompt_context()
     
-    address = user_context.get_address() if user_context and mode == "friend" else ""
-    
     history = state_data.get("history", [])
     history_text = ""
     for entry in history[-5:]:
@@ -302,10 +313,11 @@ async def generate_ai_profile(user_id: int, state_data: dict) -> Optional[str]:
     """
     
     data = state_data
+    from profiles import VECTORS, LEVEL_PROFILES
     
     # Собираем все данные
     scores = {}
-    for k in ["СБ", "ТФ", "УБ", "ЧВ"]:
+    for k in VECTORS:
         levels = data.get("behavioral_levels", {}).get(k, [])
         scores[k] = sum(levels) / len(levels) if levels else 3.0
     
@@ -460,9 +472,10 @@ async def generate_psychologist_thought(user_id: int, state_data: dict) -> str:
     """Генерирует мысли психолога с использованием конфайнмент-модели"""
     
     data = state_data
+    from profiles import VECTORS
     
     scores = {}
-    for k in ["СБ", "ТФ", "УБ", "ЧВ"]:
+    for k in VECTORS:
         levels = data.get("behavioral_levels", {}).get(k, [])
         scores[k] = sum(levels) / len(levels) if levels else 3.0
     
@@ -540,29 +553,51 @@ async def generate_psychologist_thought(user_id: int, state_data: dict) -> str:
     return response
 
 
-# ============================================
-# ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
-# ============================================
+async def generate_route_ai(user_id: int, state_data: dict, destination: dict) -> Optional[Dict]:
+    """Генерирует маршрут через DeepSeek"""
+    
+    data = state_data
+    mode = data.get("communication_mode", "coach")
+    mode_config = COMMUNICATION_MODES.get(mode, COMMUNICATION_MODES["coach"])
+    
+    profile_data = data.get("profile_data", {})
+    profile_code = profile_data.get('display_name', 'SA-5_INT')
+    deep_patterns = data.get("deep_patterns", {})
+    
+    prompt = f"""ТЫ — НАВИГАТОР. На основе профиля пользователя и выбранной цели, составь пошаговый маршрут.
 
-def level(score: float) -> int:
-    """Дробный балл 1..4 → целый уровень 1..6"""
-    if score <= 1.49:
-        return 1
-    elif score <= 2.00:
-        return 2
-    elif score <= 2.50:
-        return 3
-    elif score <= 3.00:
-        return 4
-    elif score <= 3.50:
-        return 5
-    else:
-        return 6
+=== ДАННЫЕ ПОЛЬЗОВАТЕЛЯ ===
 
+ПРОФИЛЬ: {profile_code}
 
-def determine_dominant_dilts(dilts_counts: dict) -> str:
-    """Определяет доминирующий уровень Дилтса"""
-    if not dilts_counts:
-        return "BEHAVIOR"
-    dominant = max(dilts_counts.items(), key=lambda x: x[1])
-    return dominant[0]
+ГЛУБИННЫЕ ПАТТЕРНЫ:
+{json.dumps(deep_patterns, ensure_ascii=False, indent=2) if deep_patterns else "не определены"}
+
+ВЫБРАННЫЙ РЕЖИМ: {mode_config['name']} - {mode_config['responsibility']}
+
+ВЫБРАННАЯ ЦЕЛЬ: {destination['name']}
+Ориентировочное время: {destination['time']}
+Сложность: {destination.get('difficulty', 'medium')}
+
+=== ЗАДАЧА ===
+Составь маршрут из 3-5 этапов. Для каждого этапа укажи:
+
+📍 ЭТАП [номер]: [Название этапа]
+   • Что делаем: конкретное действие
+   • Домашнее задание: что нужно сделать за неделю
+   • Критерий выполнения: как поймем, что этап пройден
+
+Учитывай профиль пользователя и выбранный режим.
+
+СТИЛЬ: {mode_config['system_prompt'][:200]}
+
+ОБЪЕМ: 1500-2000 символов.
+"""
+    
+    response = await call_deepseek(prompt, max_tokens=1500)
+    
+    if not response:
+        return None
+    
+    # Парсим ответ в структуру
+    return {"full_text": response, "steps": 3}
