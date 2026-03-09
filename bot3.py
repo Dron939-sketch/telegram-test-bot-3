@@ -3547,7 +3547,7 @@ async def cmd_test_voices(message: Message):
 # CALLBACK ХЕНДЛЕР
 # ============================================
 
-aasync def callback_handler(callback: CallbackQuery, state: FSMContext):
+async def callback_handler(callback: CallbackQuery, state: FSMContext):
     """Основной обработчик callback'ов"""
     
     # ВАЖНО: сначала отвечаем на callback, чтобы избежать таймаута
