@@ -12,12 +12,32 @@ from datetime import datetime, timedelta
 from typing import Optional, Dict, List, Any, Tuple
 from collections import defaultdict
 
-# ВАЖНО: добавляем импорты из aiogram
-from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+# ВАЖНО: добавляем все необходимые импорты из aiogram
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, BufferedInputFile
 
 from config import OPENWEATHER_API_KEY, COMMUNICATION_MODES, DESTINATIONS
 
 logger = logging.getLogger(__name__)
+
+
+# ============================================
+# Вспомогательная функция level (ПЕРЕНЕСЕНА В НАЧАЛО)
+# ============================================
+
+def level(score: float) -> int:
+    """Дробный балл 1..4 → целый уровень 1..6"""
+    if score <= 1.49:
+        return 1
+    elif score <= 2.00:
+        return 2
+    elif score <= 2.50:
+        return 3
+    elif score <= 3.00:
+        return 4
+    elif score <= 3.50:
+        return 5
+    else:
+        return 6
 
 
 # ============================================
@@ -309,7 +329,7 @@ class ReminderManager:
         async def send_reminder():
             await asyncio.sleep(delay_minutes * 60)
             
-            # user_contexts будет передан из main
+            # Импортируем здесь, чтобы избежать циклического импорта
             from main import user_contexts
             
             user_context = user_contexts.get(user_id)
@@ -985,23 +1005,3 @@ class ConfinementModel9:
         if data.get('updated_at'):
             model.updated_at = datetime.fromisoformat(data['updated_at'])
         return model
-
-
-# ============================================
-# Вспомогательная функция level
-# ============================================
-
-def level(score: float) -> int:
-    """Дробный балл 1..4 → целый уровень 1..6"""
-    if score <= 1.49:
-        return 1
-    elif score <= 2.00:
-        return 2
-    elif score <= 2.50:
-        return 3
-    elif score <= 3.00:
-        return 4
-    elif score <= 3.50:
-        return 5
-    else:
-        return 6
