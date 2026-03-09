@@ -3547,8 +3547,12 @@ async def cmd_test_voices(message: Message):
 # CALLBACK ХЕНДЛЕР
 # ============================================
 
-async def callback_handler(callback: CallbackQuery, state: FSMContext):
+aasync def callback_handler(callback: CallbackQuery, state: FSMContext):
     """Основной обработчик callback'ов"""
+    
+    # ВАЖНО: сначала отвечаем на callback, чтобы избежать таймаута
+    await callback.answer()
+    
     data = callback.data
     
     try:
@@ -3654,15 +3658,18 @@ async def callback_handler(callback: CallbackQuery, state: FSMContext):
             await state.clear()
             await back_to_intro(callback)
         elif data == "back_to_results":
-            await back_to_results(callback, state)
+            # Функция back_to_results должна быть определена
+            # Если её нет, просто показываем результаты
+            await show_results_screen(callback, state)
     
     except TelegramBadRequest as e:
         if "message is not modified" in str(e).lower():
             logger.info(f"Ignored 'message not modified' error")
         else:
+            logger.error(f"TelegramBadRequest in callback_handler: {e}")
             raise
-    
-    await callback.answer()
+    except Exception as e:
+        logger.error(f"Unexpected error in callback_handler: {e}")
 
 
 # ============================================
