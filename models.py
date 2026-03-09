@@ -7,13 +7,18 @@ import json
 import logging
 import aiohttp
 import asyncio
+import time
 from datetime import datetime, timedelta
 from typing import Optional, Dict, List, Any, Tuple
 from collections import defaultdict
 
+# ВАЖНО: добавляем импорты из aiogram
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+
 from config import OPENWEATHER_API_KEY, COMMUNICATION_MODES, DESTINATIONS
 
 logger = logging.getLogger(__name__)
+
 
 # ============================================
 # КЛАСС UserContext
@@ -93,8 +98,6 @@ class UserContext:
     
     async def ask_for_context(self) -> Tuple[Optional[str], Optional[InlineKeyboardMarkup]]:
         """Возвращает первый вопрос для сбора контекста"""
-        from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-        
         if not self.city:
             self.awaiting_context = "city"
             return "🌆 В каком городе вы находитесь? (Это нужно для погоды)", InlineKeyboardMarkup(inline_keyboard=[
@@ -120,8 +123,6 @@ class UserContext:
     
     async def process_context_answer(self, text: str) -> Tuple[bool, Optional[str], Optional[InlineKeyboardMarkup]]:
         """Обрабатывает ответ на контекстный вопрос"""
-        from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-        
         if not self.awaiting_context:
             return False, None, None
         
@@ -160,8 +161,6 @@ class UserContext:
     
     async def handle_gender_callback(self, gender: str) -> Tuple[Optional[str], Optional[InlineKeyboardMarkup]]:
         """Обрабатывает выбор пола через callback"""
-        from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-        
         self.gender = gender
         self.awaiting_context = None
         question, keyboard = await self.ask_for_context()
@@ -310,7 +309,7 @@ class ReminderManager:
         async def send_reminder():
             await asyncio.sleep(delay_minutes * 60)
             
-            from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+            # user_contexts будет передан из main
             from main import user_contexts
             
             user_context = user_contexts.get(user_id)
@@ -520,6 +519,137 @@ class Statistics:
         
         text += f"\n🕐 Обновлено: {self.data['last_updated']}"
         return text
+
+
+# ============================================
+# КЛАСС DelayedTaskManager
+# ============================================
+
+class DelayedTaskManager:
+    def __init__(self):
+        self.tasks = {}
+        self.bot_instance = None
+    
+    def set_bot(self, bot):
+        self.bot_instance = bot
+    
+    async def schedule_motivation(self, user_id: int, scores: dict, user_name: str, delay_minutes: int = 5):
+        task_id = f"motivation_{user_id}_{datetime.now().timestamp()}"
+        
+        for tid in list(self.tasks.keys()):
+            if tid.startswith(f"motivation_{user_id}"):
+                self.tasks[tid]["task"].cancel()
+                del self.tasks[tid]
+        
+        async def send_motivation():
+            await asyncio.sleep(delay_minutes * 60)
+            if self.bot_instance:
+                try:
+                    from main import user_contexts
+                    from profiles import VECTORS, LEVEL_PROFILES
+                    
+                    if scores:
+                        min_vector = min(scores.items(), key=lambda x: level(x[1]))
+                        vector, score = min_vector
+                        lvl = level(score)
+                        profile = LEVEL_PROFILES.get(vector, {}).get(lvl, {})
+                        
+                        context = user_contexts.get(user_id)
+                        address = context.get_address() if context and context.communication_mode == "friend" else ""
+                        
+                        message_text = (
+                            f"🧠 *ЧЕРЕЗ {delay_minutes} МИНУТ ПОСЛЕ ТЕСТА*\n\n"
+                            f"Слушайте{', ' + address if address else ''}...\n\n"
+                            f"Ваше самое узкое место — {VECTORS[vector]['name']} (уровень {lvl}).\n"
+                            f"{profile.get('pain_origin', '')}\n\n"
+                            f"🎯 *Первый шаг:*\n"
+                            f"{profile.get('immediate_tool', 'Начните с малого.')}\n\n"
+                            f"⚡️ Я с вами на связи."
+                        )
+                    else:
+                        context = user_contexts.get(user_id)
+                        address = context.get_address() if context and context.communication_mode == "friend" else ""
+                        message_text = f"Слушайте{', ' + address if address else ''}...\n\nКак вы? Я рядом."
+                    
+                    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+                        [InlineKeyboardButton(text="❓ ЗАДАТЬ ВОПРОС", callback_data="smart_questions")],
+                        [InlineKeyboardButton(text="🧠 К ПОРТРЕТУ", callback_data="show_results")],
+                        [InlineKeyboardButton(text="🎯 ЧЕМ ПОМОЧЬ", callback_data="show_help")]
+                    ])
+                    
+                    await self.bot_instance.send_message(
+                        user_id,
+                        message_text,
+                        parse_mode='Markdown',
+                        reply_markup=keyboard
+                    )
+                    
+                    context_obj = user_contexts.get(user_id)
+                    mode = context_obj.communication_mode if context_obj else "coach"
+                    
+                    from config import YANDEX_API_KEY
+                    from services import text_to_speech
+                    
+                    if YANDEX_API_KEY:
+                        audio_data = await text_to_speech(message_text, mode)
+                        if audio_data:
+                            audio_file = BufferedInputFile(audio_data, filename="motivation.ogg")
+                            await self.bot_instance.send_voice(
+                                user_id,
+                                audio_file,
+                                caption="🎙 *Мотивационное сообщение*",
+                                parse_mode='Markdown'
+                            )
+                except Exception as e:
+                    logger.error(f"Ошибка при отправке мотивационного сообщения пользователю {user_id}: {e}")
+        
+        task = asyncio.create_task(send_motivation())
+        self.tasks[task_id] = {
+            "task": task,
+            "user_id": user_id,
+            "type": "motivation",
+            "scheduled_time": datetime.now() + timedelta(minutes=delay_minutes)
+        }
+        logger.info(f"📅 Запланировано мотивационное сообщение для пользователя {user_id} через {delay_minutes} минут")
+        return task_id
+    
+    async def schedule_reminder(self, user_id: int, message: str, delay_hours: int = 24):
+        task_id = f"reminder_{user_id}_{datetime.now().timestamp()}"
+        
+        async def send_reminder():
+            await asyncio.sleep(delay_hours * 3600)
+            if self.bot_instance:
+                try:
+                    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+                        [InlineKeyboardButton(text="❓ ЗАДАТЬ ВОПРОС", callback_data="smart_questions")],
+                        [InlineKeyboardButton(text="🧠 К ПОРТРЕТУ", callback_data="show_results")],
+                        [InlineKeyboardButton(text="🔄 ПРОЙТИ ТЕСТ ЗАНОВО", callback_data="restart_test")]
+                    ])
+                    
+                    await self.bot_instance.send_message(
+                        user_id,
+                        message,
+                        parse_mode='Markdown',
+                        reply_markup=keyboard
+                    )
+                except Exception as e:
+                    logger.error(f"Ошибка при отправке напоминания пользователю {user_id}: {e}")
+        
+        task = asyncio.create_task(send_reminder())
+        self.tasks[task_id] = {
+            "task": task,
+            "user_id": user_id,
+            "type": "reminder",
+            "scheduled_time": datetime.now() + timedelta(hours=delay_hours)
+        }
+        return task_id
+    
+    def cancel_user_tasks(self, user_id: int):
+        for task_id in list(self.tasks.keys()):
+            if self.tasks[task_id]["user_id"] == user_id:
+                self.tasks[task_id]["task"].cancel()
+                del self.tasks[task_id]
+        logger.info(f"❌ Отменены все задачи для пользователя {user_id}")
 
 
 # ============================================
@@ -857,7 +987,10 @@ class ConfinementModel9:
         return model
 
 
+# ============================================
 # Вспомогательная функция level
+# ============================================
+
 def level(score: float) -> int:
     """Дробный балл 1..4 → целый уровень 1..6"""
     if score <= 1.49:
