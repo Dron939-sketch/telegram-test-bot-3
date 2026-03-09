@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 ВИРТУАЛЬНЫЙ ПСИХОЛОГ - МАТРИЦА ПОВЕДЕНИЙ 4×6
-ВЕРСИЯ 9.0: ПОЛНАЯ ИНТЕГРАЦИЯ С ГИПНОТЕРАПЕВТИЧЕСКИМ МОДУЛЕМ
+ВЕРСИЯ 8.0: ПОЛНАЯ ИНТЕГРАЦИЯ С ГИПНОТЕРАПЕВТИЧЕСКИМ МОДУЛЕМ
 
 ЭТАП 1: КОНФИГУРАЦИЯ ВОСПРИЯТИЯ — линза, через которую ты смотришь на мир
 ЭТАП 2: КОНФИГУРАЦИЯ МЫШЛЕНИЯ — как ты обрабатываешь информацию
@@ -34,6 +34,17 @@ from aiogram.filters import Command
 from aiogram.exceptions import TelegramBadRequest
 from datetime import datetime, timedelta
 from collections import defaultdict
+
+# Импортируем описания профилей из отдельного файла
+from profiles import (
+    STAGE_1_FEEDBACK,
+    STAGE_2_FEEDBACK,
+    STAGE_3_FEEDBACK,
+    DILTS_LEVELS,
+    FALLBACK_ANALYSIS,
+    VECTORS,
+    LEVEL_PROFILES
+)
 
 # Загружаем переменные окружения
 load_dotenv()
@@ -901,14 +912,6 @@ STAGE_4_QUESTIONS = [
     }
 ]
 
-DILTS_LEVELS = {
-    "ENVIRONMENT": "🌍 Окружение — где и когда",
-    "BEHAVIOR": "⚡ Поведение — что делаю",
-    "CAPABILITIES": "🧠 Способности — как могу",
-    "VALUES": "💭 Ценности — почему важно",
-    "IDENTITY": "🆔 Идентичность — кто я"
-}
-
 # ══════════════════════════════════════════════
 #  КОНТЕКСТ ПОЛЬЗОВАТЕЛЯ
 # ══════════════════════════════════════════════
@@ -966,6 +969,24 @@ class UserContext:
             "minute": now.minute,
             "time_str": now.strftime("%H:%M")
         }
+    
+    def get_full_context(self, user_name: str = "") -> str:
+        """Возвращает полный контекст пользователя"""
+        context_parts = []
+        
+        # Приветствие
+        context_parts.append(self.get_greeting(user_name))
+        
+        # Время и день
+        day_context = self.get_day_context()
+        context_parts.append(f"Сегодня {day_context['weekday']}, {day_context['day']} {day_context['month']}, {day_context['time_str']}")
+        
+        # Возрастной этап
+        age_stage = self.get_age_stage()
+        if age_stage:
+            context_parts.append(f"Возрастной этап: {age_stage}")
+        
+        return "\n".join(context_parts)
     
     async def get_weather(self) -> dict:
         if not self.city or not OPENWEATHER_API_KEY:
@@ -1230,10 +1251,11 @@ async def speech_to_text(voice_file_path: str) -> str:
     
     url = "https://api.deepgram.com/v1/listen"
     params = {
-        "model": "nova-3",
+        "model": "nova-2",
         "language": "ru",
         "punctuate": "true",
         "smart_format": "true",
+        "detect_language": "false"
     }
     
     headers = {
@@ -1303,7 +1325,7 @@ async def text_to_speech(text: str, mode: str = "medium") -> bytes:
         "text": clean_text,
         "voice": voice,
         "emotion": emotion,
-        "speed": 1.0,
+        "speed": "1.0",
         "format": "oggopus",
     }
     
@@ -2267,12 +2289,6 @@ class HypnoOrchestrator:
             elif technique == "possibility":
                 response_parts.append(self.truisms.possibility("ты можешь это сделать"))
             
-            elif technique == "condition":
-                response_parts.append(self.truisms.condition("это имеет значение", "ты готов"))
-            
-            elif technique == "return_question":
-                response_parts.append(self.hq.return_question("ты понимаешь это"))
-            
             elif technique in ["calm", "confidence", "curiosity", "action", "trust", "insight"]:
                 response_parts.append(self.anchoring.get_anchor(technique))
         
@@ -2301,6 +2317,902 @@ class HypnoOrchestrator:
 
 # Инициализация гипнотического оркестратора
 hypno = HypnoOrchestrator()
+
+# ══════════════════════════════════════════════
+#  ФУНКЦИИ ЭТАПОВ
+# ══════════════════════════════════════════════
+
+async def show_stage_1_intro(update, context):
+    """Экран перед ЭТАПОМ 1"""
+    query = update.callback_query
+    user_id = update.effective_user.id
+    
+    context.user_data["conversation_state"] = STAGE_1
+    
+    await query.answer()
+    
+    intro_text = (
+        f"🧠 *ЭТАП 1: КОНФИГУРАЦИЯ ВОСПРИЯТИЯ*\n\n"
+        f"Восприятие — это линза, через которую ты смотришь на мир.\n\n"
+        f"Она сформирована культурой, нормами, ценностями и опытом, который тебя строил. Это определило, что ты замечаешь автоматически, а что остаётся за кадром.\n\n"
+        f"🔍 *Что мы исследуем:*\n"
+        f"• Куда направлено твое внимание — вовне или внутрь\n"
+        f"• Какая тревога доминирует — страх отвержения или страх потери контроля\n\n"
+        f"📊 *Вопросов:* 8\n"
+        f"⏱ *Время:* ~3 минуты\n\n"
+        f"<i>Отвечай честно — это поможет мне лучше понять тебя.</i>"
+    )
+    
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="▶️ Начать исследование", callback_data="start_stage_1")]
+    ])
+    
+    await query.edit_message_text(intro_text, reply_markup=keyboard, parse_mode='Markdown')
+    return STAGE_1
+
+async def start_stage_1(update, context):
+    """Начало ЭТАПА 1"""
+    query = update.callback_query
+    user_id = update.effective_user.id
+    
+    await query.answer()
+    
+    context.user_data["stage1_current"] = 0
+    context.user_data["stage1_last_answered"] = -1
+    context.user_data["stage1_start_time"] = time.time()
+    context.user_data["perception_scores"] = {"EXTERNAL": 0, "INTERNAL": 0, "SYMBOLIC": 0, "MATERIAL": 0}
+    context.user_data["conversation_state"] = STAGE_1
+    
+    return await ask_stage_1_question(update, context)
+
+async def ask_stage_1_question(update, context):
+    """Задаёт вопрос ЭТАПА 1"""
+    query = update.callback_query
+    user_id = update.effective_user.id
+    
+    current = context.user_data.get("stage1_current", 0)
+    total = len(STAGE_1_QUESTIONS)
+    
+    context.user_data["conversation_state"] = STAGE_1
+    
+    if current >= total:
+        return await finish_stage_1(update, context)
+    
+    question = STAGE_1_QUESTIONS[current]
+    progress = calculate_progress(current + 1, total)
+    
+    question_text = (
+        f"🧠 *ЭТАП 1: КОНФИГУРАЦИЯ ВОСПРИЯТИЯ*\n\n"
+        f"<b>{question['text']}</b>\n\n"
+        f"{progress}"
+    )
+    
+    keyboard = []
+    for option_id, option in question["options"].items():
+        unique_callback = generate_unique_callback("stage1", user_id, current, option_id)
+        keyboard.append([
+            InlineKeyboardButton(option["text"], callback_data=unique_callback)
+        ])
+    
+    reply_markup = InlineKeyboardMarkup(inline_keyboard=keyboard)
+    
+    try:
+        await query.edit_message_text(
+            question_text, 
+            reply_markup=reply_markup, 
+            parse_mode='HTML'
+        )
+    except Exception as e:
+        await context.bot.send_message(
+            chat_id=query.message.chat_id,
+            text=question_text,
+            reply_markup=reply_markup,
+            parse_mode='HTML'
+        )
+    
+    return STAGE_1
+
+async def handle_stage_1_answer(update, context):
+    """Обработка ответа ЭТАПА 1"""
+    query = update.callback_query
+    user_id = update.effective_user.id
+    
+    if context.user_data.get("processing", False):
+        return STAGE_1
+    
+    context.user_data["processing"] = True
+    
+    try:
+        parts = query.data.split("_")
+        if len(parts) < 4 or parts[0] != "stage1":
+            return STAGE_1
+        
+        current = int(parts[1])
+        option_id = parts[2]
+        
+        last_answered = context.user_data.get("stage1_last_answered", -1)
+        if current <= last_answered:
+            return STAGE_1
+        
+        question = STAGE_1_QUESTIONS[current]
+        selected_option = question["options"].get(option_id)
+        
+        if not selected_option:
+            return STAGE_1
+        
+        # Сохраняем баллы
+        for axis, score in selected_option.get("scores", {}).items():
+            if axis in ["EXTERNAL", "INTERNAL", "SYMBOLIC", "MATERIAL"]:
+                context.user_data["perception_scores"][axis] += score
+        
+        # Сохраняем ответ для AI
+        if "all_answers" not in context.user_data:
+            context.user_data["all_answers"] = []
+        
+        context.user_data["all_answers"].append({
+            'stage': 1,
+            'question_index': current,
+            'question': question['text'],
+            'answer': selected_option['text'],
+            'option': option_id,
+            'scores': selected_option.get('scores', {})
+        })
+        
+        context.user_data["stage1_last_answered"] = current
+        context.user_data["stage1_current"] = current + 1
+        
+        return await ask_stage_1_question(update, context)
+        
+    except Exception as e:
+        logger.error(f"Ошибка: {e}")
+        return await ask_stage_1_question(update, context)
+    finally:
+        context.user_data["processing"] = False
+
+async def finish_stage_1(update, context):
+    """Завершение ЭТАПА 1"""
+    query = update.callback_query
+    user_id = update.effective_user.id
+    
+    perception_scores = context.user_data.get("perception_scores", {})
+    perception_type = determine_perception_type(perception_scores)
+    context.user_data["perception_type"] = perception_type
+    
+    logger.info(f"✅ User {user_id}: Stage 1 complete, type={perception_type}")
+    
+    result_text = STAGE_1_FEEDBACK.get(perception_type, STAGE_1_FEEDBACK["СОЦИАЛЬНО-ОРИЕНТИРОВАННЫЙ"])
+    
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="▶️ Перейти к этапу 2 — Конфигурация мышления", callback_data="show_stage_2_intro")]
+    ])
+    
+    await query.edit_message_text(result_text.strip(), reply_markup=keyboard, parse_mode='Markdown')
+    return STAGE_2
+
+async def show_stage_2_intro(update, context):
+    """Экран перед ЭТАПОМ 2"""
+    query = update.callback_query
+    user_id = update.effective_user.id
+    
+    context.user_data["conversation_state"] = STAGE_2
+    
+    await query.answer()
+    
+    perception_type = context.user_data.get("perception_type", "СОЦИАЛЬНО-ОРИЕНТИРОВАННЫЙ")
+    questions = STAGE_2_QUESTIONS.get(perception_type, STAGE_2_QUESTIONS["СОЦИАЛЬНО-ОРИЕНТИРОВАННЫЙ"])
+    total_questions = len(questions)
+    
+    intro_text = (
+        f"🧠 *ЭТАП 2: КОНФИГУРАЦИЯ МЫШЛЕНИЯ*\n\n"
+        f"Восприятие определяет, что ты видишь. Мышление — как ты это понимаешь.\n\n"
+        f"Конфигурация мышления определяется задачами: как ты обрабатываешь информацию, какие связи видишь, какой объём можешь удержать.\n\n"
+        f"🎯 *Самое важное:*\n"
+        f"Конфигурация мышления — это траектория с чётким пунктом назначения: результат, к которому ты придёшь. Если ничего не менять — ты попадёшь именно туда.\n\n"
+        f"📊 *Вопросов:* {total_questions}\n"
+        f"⏱ *Время:* ~3-4 минуты\n\n"
+        f"<i>Продолжим исследование?</i>"
+    )
+    
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="▶️ Начать исследование", callback_data="start_stage_2")]
+    ])
+    
+    await query.edit_message_text(intro_text, reply_markup=keyboard, parse_mode='Markdown')
+    return STAGE_2
+
+async def start_stage_2(update, context):
+    """Начало ЭТАПА 2"""
+    query = update.callback_query
+    user_id = update.effective_user.id
+    
+    await query.answer()
+    
+    context.user_data["stage2_current"] = 0
+    context.user_data["stage2_last_answered"] = -1
+    context.user_data["stage2_start_time"] = time.time()
+    context.user_data["stage2_level_scores_dict"] = {"1": 0, "2": 0, "3": 0, "4": 0, "5": 0, "6": 0, "7": 0, "8": 0, "9": 0}
+    context.user_data["strategy_levels"] = {"СБ": [], "ТФ": [], "УБ": [], "ЧВ": []}
+    context.user_data["conversation_state"] = STAGE_2
+    
+    return await ask_stage_2_question(update, context)
+
+async def ask_stage_2_question(update, context):
+    """Задаёт вопрос ЭТАПА 2"""
+    query = update.callback_query
+    user_id = update.effective_user.id
+    
+    perception_type = context.user_data.get("perception_type", "СОЦИАЛЬНО-ОРИЕНТИРОВАННЫЙ")
+    current = context.user_data.get("stage2_current", 0)
+    
+    questions = STAGE_2_QUESTIONS.get(perception_type, STAGE_2_QUESTIONS["СОЦИАЛЬНО-ОРИЕНТИРОВАННЫЙ"])
+    total_questions = len(questions)
+    
+    context.user_data["conversation_state"] = STAGE_2
+    
+    if current >= total_questions:
+        return await finish_stage_2(update, context)
+    
+    question = questions[current]
+    measures = question.get("measures", "thinking")
+    progress = calculate_progress(current + 1, total_questions)
+    
+    question_text = (
+        f"🧠 *ЭТАП 2: КОНФИГУРАЦИЯ МЫШЛЕНИЯ*\n\n"
+        f"<b>{question['text']}</b>\n\n"
+        f"{progress}"
+    )
+    
+    keyboard = []
+    for level_num, answer_text in question["options"].items():
+        unique_callback = generate_unique_callback("stage2", user_id, current, level_num, measures)
+        keyboard.append([
+            InlineKeyboardButton(answer_text, callback_data=unique_callback)
+        ])
+    
+    reply_markup = InlineKeyboardMarkup(inline_keyboard=keyboard)
+    
+    try:
+        await query.edit_message_text(
+            question_text, 
+            reply_markup=reply_markup, 
+            parse_mode='HTML'
+        )
+    except Exception as e:
+        await context.bot.send_message(
+            chat_id=query.message.chat_id,
+            text=question_text,
+            reply_markup=reply_markup,
+            parse_mode='HTML'
+        )
+    
+    return STAGE_2
+
+async def handle_stage_2_answer(update, context):
+    """Обработка ответа ЭТАПА 2"""
+    query = update.callback_query
+    user_id = update.effective_user.id
+    
+    if context.user_data.get("processing", False):
+        return STAGE_2
+    
+    context.user_data["processing"] = True
+    
+    try:
+        parts = query.data.split("_")
+        if len(parts) < 5 or parts[0] != "stage2":
+            return STAGE_2
+        
+        current = int(parts[1])
+        selected_level = parts[2]
+        measures = parts[3]
+        
+        last_answered = context.user_data.get("stage2_last_answered", -1)
+        if current <= last_answered:
+            return STAGE_2
+        
+        perception_type = context.user_data.get("perception_type", "СОЦИАЛЬНО-ОРИЕНТИРОВАННЫЙ")
+        question = STAGE_2_QUESTIONS.get(perception_type, STAGE_2_QUESTIONS["СОЦИАЛЬНО-ОРИЕНТИРОВАННЫЙ"])[current]
+        answer_text = question["options"].get(selected_level, "неизвестно")
+        
+        scoring_table = STAGE_2_SCORING.get(perception_type, {})
+        
+        # Сохраняем для уровня мышления
+        if measures == "thinking" and current in scoring_table and selected_level in scoring_table[current]:
+            points = scoring_table[current][selected_level]
+            context.user_data["stage2_level_scores_dict"][selected_level] += points
+        
+        # Сохраняем для стратегий
+        if measures in ["СБ", "ТФ", "УБ", "ЧВ"]:
+            try:
+                value = int(selected_level)
+                context.user_data["strategy_levels"][measures].append(value)
+            except ValueError:
+                pass
+        
+        # Сохраняем ответ для AI
+        if "all_answers" not in context.user_data:
+            context.user_data["all_answers"] = []
+        
+        context.user_data["all_answers"].append({
+            'stage': 2,
+            'question_index': current,
+            'question': question['text'],
+            'answer': answer_text,
+            'option': selected_level,
+            'measures': measures,
+            'perception_type': perception_type
+        })
+        
+        context.user_data["stage2_last_answered"] = current
+        context.user_data["stage2_current"] = current + 1
+        
+        return await ask_stage_2_question(update, context)
+        
+    except Exception as e:
+        logger.error(f"Ошибка: {e}")
+        return await ask_stage_2_question(update, context)
+    finally:
+        context.user_data["processing"] = False
+
+async def finish_stage_2(update, context):
+    """Завершение ЭТАПА 2"""
+    query = update.callback_query
+    user_id = update.effective_user.id
+    
+    level_scores_dict = context.user_data.get("stage2_level_scores_dict", {})
+    thinking_level = calculate_thinking_level_by_scores(level_scores_dict)
+    context.user_data["thinking_level"] = thinking_level
+    
+    perception_type = context.user_data.get("perception_type", "СОЦИАЛЬНО-ОРИЕНТИРОВАННЫЙ")
+    level_group = get_level_group(thinking_level)
+    
+    logger.info(f"✅ User {user_id}: Stage 2 complete, level={thinking_level}")
+    
+    result_text = STAGE_2_FEEDBACK.get((perception_type, level_group))
+    if not result_text:
+        result_text = STAGE_2_FEEDBACK[("СОЦИАЛЬНО-ОРИЕНТИРОВАННЫЙ", "1-3")]
+    
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="▶️ Перейти к этапу 3 — Конфигурация поведения", callback_data="show_stage_3_intro")]
+    ])
+    
+    await query.edit_message_text(result_text.strip(), reply_markup=keyboard, parse_mode='Markdown')
+    return STAGE_3
+
+async def show_stage_3_intro(update, context):
+    """Экран перед ЭТАПОМ 3"""
+    query = update.callback_query
+    user_id = update.effective_user.id
+    
+    context.user_data["conversation_state"] = STAGE_3
+    
+    await query.answer()
+    
+    intro_text = (
+        f"🧠 *ЭТАП 3: КОНФИГУРАЦИЯ ПОВЕДЕНИЯ*\n\n"
+        f"Восприятие определяет, что ты видишь.\n"
+        f"Мышление — как ты это понимаешь.\n\n"
+        f"Конфигурация поведения — это то, как ты на это реагируешь.\n\n"
+        f"В ней уже встроены стереотипы, роли и паттерны, которые ты когда-то перенял у других.\n\n"
+        f"🔍 *Здесь мы исследуем:*\n"
+        f"• Твои автоматические реакции\n"
+        f"• Как ты действуешь в разных ситуациях\n"
+        f"• Какие стратегии поведения закреплены\n\n"
+        f"📊 *Вопросов:* 8\n"
+        f"⏱ *Время:* ~3 минуты\n\n"
+        f"<i>Продолжим?</i>"
+    )
+    
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="▶️ Начать исследование", callback_data="start_stage_3")]
+    ])
+    
+    await query.edit_message_text(intro_text, reply_markup=keyboard, parse_mode='Markdown')
+    return STAGE_3
+
+async def start_stage_3(update, context):
+    """Начало ЭТАПА 3"""
+    query = update.callback_query
+    user_id = update.effective_user.id
+    
+    await query.answer()
+    
+    context.user_data["stage3_current"] = 0
+    context.user_data["stage3_last_answered"] = -1
+    context.user_data["stage3_start_time"] = time.time()
+    context.user_data["stage3_level_scores"] = []
+    context.user_data["behavioral_levels"] = {"СБ": [], "ТФ": [], "УБ": [], "ЧВ": []}
+    context.user_data["conversation_state"] = STAGE_3
+    
+    return await ask_stage_3_question(update, context)
+
+async def ask_stage_3_question(update, context):
+    """Задаёт вопрос ЭТАПА 3"""
+    query = update.callback_query
+    user_id = update.effective_user.id
+    current = context.user_data.get("stage3_current", 0)
+    total = len(STAGE_3_QUESTIONS)
+    
+    context.user_data["conversation_state"] = STAGE_3
+    
+    if current >= total:
+        return await finish_stage_3(update, context)
+    
+    question = STAGE_3_QUESTIONS[current]
+    strategy = question.get("strategy", "УБ")
+    progress = calculate_progress(current + 1, total)
+    
+    question_text = (
+        f"🧠 *ЭТАП 3: КОНФИГУРАЦИЯ ПОВЕДЕНИЯ*\n\n"
+        f"<b>{question['text']}</b>\n\n"
+        f"{progress}"
+    )
+    
+    keyboard = []
+    for option_id, option_text in question["options"].items():
+        unique_callback = generate_unique_callback("stage3", user_id, current, option_id, strategy)
+        keyboard.append([
+            InlineKeyboardButton(option_text, callback_data=unique_callback)
+        ])
+    
+    reply_markup = InlineKeyboardMarkup(inline_keyboard=keyboard)
+    
+    try:
+        await query.edit_message_text(
+            question_text, 
+            reply_markup=reply_markup, 
+            parse_mode='HTML'
+        )
+    except Exception as e:
+        await context.bot.send_message(
+            chat_id=query.message.chat_id,
+            text=question_text,
+            reply_markup=reply_markup,
+            parse_mode='HTML'
+        )
+    
+    return STAGE_3
+
+async def handle_stage_3_answer(update, context):
+    """Обработка ответа ЭТАПА 3"""
+    query = update.callback_query
+    user_id = update.effective_user.id
+    
+    if context.user_data.get("processing", False):
+        return STAGE_3
+    
+    context.user_data["processing"] = True
+    
+    try:
+        parts = query.data.split("_")
+        if len(parts) < 5 or parts[0] != "stage3":
+            return STAGE_3
+        
+        current = int(parts[1])
+        option_id = parts[2]
+        strategy = parts[3]
+        
+        stage3_current = context.user_data.get("stage3_current", 0)
+        
+        if current < stage3_current:
+            return await ask_stage_3_question(update, context)
+        
+        question = STAGE_3_QUESTIONS[current]
+        option_text = question["options"].get(option_id)
+        
+        if not option_text:
+            return STAGE_3
+        
+        try:
+            level = int(option_id)
+        except ValueError:
+            level = 1
+        
+        # Сохраняем в общий список
+        context.user_data["stage3_level_scores"].append(level)
+        
+        # Сохраняем по стратегиям
+        if strategy in ["СБ", "ТФ", "УБ", "ЧВ"]:
+            context.user_data["behavioral_levels"][strategy].append(level)
+        
+        # Сохраняем ответ для AI
+        if "all_answers" not in context.user_data:
+            context.user_data["all_answers"] = []
+        
+        context.user_data["all_answers"].append({
+            'stage': 3,
+            'question_index': current,
+            'question': question['text'],
+            'answer': option_text,
+            'answer_value': level,
+            'strategy': strategy
+        })
+        
+        if current == stage3_current:
+            context.user_data["stage3_last_answered"] = current
+            context.user_data["stage3_current"] = current + 1
+        
+        return await ask_stage_3_question(update, context)
+        
+    except Exception as e:
+        logger.error(f"Ошибка: {e}")
+        return await ask_stage_3_question(update, context)
+    finally:
+        context.user_data["processing"] = False
+
+async def finish_stage_3(update, context):
+    """Завершение ЭТАПА 3"""
+    query = update.callback_query
+    user_id = update.effective_user.id
+    
+    stage2_level = context.user_data.get("thinking_level", 1)
+    stage3_scores = context.user_data.get("stage3_level_scores", [])
+    
+    final_level = calculate_final_level(stage2_level, stage3_scores)
+    context.user_data["final_level"] = final_level
+    
+    behavior_level = map_to_stage3_feedback_level(final_level)
+    
+    logger.info(f"✅ User {user_id}: Stage 3 complete, final_level={final_level}")
+    
+    result_text = STAGE_3_FEEDBACK.get(behavior_level, STAGE_3_FEEDBACK[1])
+    
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="▶️ Перейти к завершающему этапу", callback_data="show_stage_4_intro")]
+    ])
+    
+    await query.edit_message_text(result_text.strip(), reply_markup=keyboard, parse_mode='Markdown')
+    return STAGE_4
+
+async def show_stage_4_intro(update, context):
+    """Экран перед ЭТАПОМ 4"""
+    query = update.callback_query
+    user_id = update.effective_user.id
+    
+    context.user_data["conversation_state"] = STAGE_4
+    
+    await query.answer()
+    
+    intro_text = (
+        f"🧠 *ЭТАП 4: ТОЧКА РОСТА*\n\n"
+        f"Восприятие — что ты видишь.\n"
+        f"Мышление — как понимаешь.\n"
+        f"Поведение — как реагируешь.\n"
+        f"Всё это — твоя внутренняя система.\n\n"
+        f"🌍 Но она живёт внутри внешней системы — общества, которое постоянно меняется.\n\n"
+        f"⚡ Когда одна система меняется, а другая — нет, возникает напряжение.\n\n"
+        f"🔍 Здесь мы найдём, где именно находится рычаг — место, где минимальное усилие даёт максимальные изменения.\n\n"
+        f"📊 *Вопросов:* 8\n"
+        f"⏱ *Время:* ~3 минуты\n\n"
+        f"<i>Готов найти свою точку роста?</i>"
+    )
+    
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="▶️ Начать исследование", callback_data="start_stage_4")]
+    ])
+    
+    await query.edit_message_text(intro_text, reply_markup=keyboard, parse_mode='Markdown')
+    return STAGE_4
+
+async def start_stage_4(update, context):
+    """Начало ЭТАПА 4"""
+    query = update.callback_query
+    user_id = update.effective_user.id
+    
+    await query.answer()
+    
+    context.user_data["stage4_current"] = 0
+    context.user_data["stage4_last_answered"] = -1
+    context.user_data["stage4_start_time"] = time.time()
+    context.user_data["dilts_counts"] = {"ENVIRONMENT": 0, "BEHAVIOR": 0, "CAPABILITIES": 0, "VALUES": 0, "IDENTITY": 0}
+    context.user_data["conversation_state"] = STAGE_4
+    
+    return await ask_stage_4_question(update, context)
+
+async def ask_stage_4_question(update, context):
+    """Задаёт вопрос ЭТАПА 4"""
+    query = update.callback_query
+    user_id = update.effective_user.id
+    current = context.user_data.get("stage4_current", 0)
+    total = len(STAGE_4_QUESTIONS)
+    
+    context.user_data["conversation_state"] = STAGE_4
+    
+    if current >= total:
+        return await finish_stage_4(update, context)
+    
+    question = STAGE_4_QUESTIONS[current]
+    progress = calculate_progress(current + 1, total)
+    
+    question_text = (
+        f"🧠 *ЭТАП 4: ТОЧКА РОСТА*\n\n"
+        f"<b>{question['text']}</b>\n\n"
+        f"{progress}"
+    )
+    
+    keyboard = []
+    for option_id, option in question["options"].items():
+        unique_callback = generate_unique_callback("stage4", user_id, current, option_id)
+        keyboard.append([
+            InlineKeyboardButton(option["text"], callback_data=unique_callback)
+        ])
+    
+    reply_markup = InlineKeyboardMarkup(inline_keyboard=keyboard)
+    
+    try:
+        await query.edit_message_text(
+            question_text, 
+            reply_markup=reply_markup, 
+            parse_mode='HTML'
+        )
+    except Exception as e:
+        await context.bot.send_message(
+            chat_id=query.message.chat_id,
+            text=question_text,
+            reply_markup=reply_markup,
+            parse_mode='HTML'
+        )
+    
+    return STAGE_4
+
+async def handle_stage_4_answer(update, context):
+    """Обработка ответа ЭТАПА 4"""
+    query = update.callback_query
+    user_id = update.effective_user.id
+    
+    if context.user_data.get("processing", False):
+        return STAGE_4
+    
+    context.user_data["processing"] = True
+    
+    try:
+        parts = query.data.split("_")
+        if len(parts) < 4 or parts[0] != "stage4":
+            return STAGE_4
+        
+        current = int(parts[1])
+        option_id = parts[2]
+        
+        last_answered = context.user_data.get("stage4_last_answered", -1)
+        if current <= last_answered:
+            return STAGE_4
+        
+        question = STAGE_4_QUESTIONS[current]
+        selected_option = question["options"].get(option_id)
+        
+        if not selected_option:
+            return STAGE_4
+        
+        dilts = selected_option.get("dilts", "BEHAVIOR")
+        context.user_data["dilts_counts"][dilts] += 1
+        
+        # Сохраняем ответ для AI
+        if "all_answers" not in context.user_data:
+            context.user_data["all_answers"] = []
+        
+        context.user_data["all_answers"].append({
+            'stage': 4,
+            'question_index': current,
+            'question': question['text'],
+            'answer': selected_option['text'],
+            'option': option_id,
+            'dilts': dilts
+        })
+        
+        context.user_data["stage4_last_answered"] = current
+        context.user_data["stage4_current"] = current + 1
+        
+        return await ask_stage_4_question(update, context)
+        
+    except Exception as e:
+        logger.error(f"Ошибка: {e}")
+        return await ask_stage_4_question(update, context)
+    finally:
+        context.user_data["processing"] = False
+
+async def finish_stage_4(update, context):
+    """Завершение ЭТАПА 4"""
+    query = update.callback_query
+    user_id = update.effective_user.id
+    
+    dilts_counts = context.user_data.get("dilts_counts", {})
+    dominant_dilts = determine_dominant_dilts(dilts_counts)
+    context.user_data["dominant_dilts"] = dominant_dilts
+    
+    profile_data = calculate_profile_final(context.user_data)
+    context.user_data["profile_data"] = profile_data
+    
+    logger.info(f"✅ User {user_id}: Stage 4 complete, profile={profile_data.get('display_name', 'unknown')}")
+    
+    # Строим конфайнмент-модель
+    scores = {}
+    for vector in ["СБ", "ТФ", "УБ", "ЧВ"]:
+        levels = context.user_data.get("behavioral_levels", {}).get(vector, [])
+        scores[vector] = sum(levels) / len(levels) if levels else 3
+    
+    model = ConfinementModel9(user_id)
+    model.build_from_profile(scores, context.user_data.get('history', []))
+    context.user_data['confinement_model'] = model.to_dict()
+    
+    analysis_text = f"""
+🧠 *АНАЛИЗИРУЮ ДАННЫЕ*
+
+<b>Соединяются четыре слоя информации:</b>
+▸ ✅ Конфигурация восприятия — определена
+▸ ✅ Конфигурация мышления — проанализирована
+▸ ✅ Конфигурация поведения — обработана
+▸ ✅ Точка роста — найдена
+
+<b>Формирую твой уникальный профиль...</b>
+
+⏳ Пожалуйста, подожди несколько секунд...
+"""
+    
+    await query.edit_message_text(analysis_text.strip(), parse_mode='HTML')
+    await asyncio.sleep(2)
+    
+    return await show_results_screen(update, context)
+
+# ══════════════════════════════════════════════
+#  ФУНКЦИИ РЕЗУЛЬТАТОВ
+# ══════════════════════════════════════════════
+
+def get_human_readable_profile(scores: dict, model=None, perception_type="не определен", thinking_level=5, dominant_dilts="BEHAVIOR") -> str:
+    """Возвращает портрет пользователя понятным языком"""
+    lines = []
+    
+    # Определяем главный вектор
+    if scores:
+        min_vector = min(scores.items(), key=lambda x: level(x[1]))
+        vector, score = min_vector
+        lvl = level(score)
+        profile = LEVEL_PROFILES.get(vector, {}).get(lvl, {})
+    else:
+        vector = "СБ"
+        profile = {}
+    
+    lines.append(f"🧠 *ТВОЙ ПСИХОЛОГИЧЕСКИЙ ПОРТРЕТ*\n")
+    
+    # Тип восприятия
+    lines.append(f"🔍 *Тип восприятия:* {perception_type}\n")
+    
+    # Уровень мышления
+    lines.append(f"🧠 *Уровень мышления:* {thinking_level}/9\n")
+    
+    # Главный тормоз
+    lines.append(f"🎯 *Твой главный тормоз*")
+    lines.append(f"{profile.get('quote', 'Пока не определено')}\n")
+    
+    # Откуда это взялось
+    lines.append(f"📜 *Откуда это взялось*")
+    lines.append(f"{profile.get('pain_origin', 'Из твоего опыта')}\n")
+    
+    # Чем ты платишь
+    lines.append(f"💸 *Чем ты платишь*")
+    costs = profile.get('pain_costs', ['Энергией', 'Временем', 'Возможностями'])
+    for cost in costs[:3]:
+        lines.append(f"• {cost}")
+    lines.append("")
+    
+    # Конфайнмент если есть
+    if model and hasattr(model, 'key_confinement') and model.key_confinement:
+        elem = model.key_confinement.get('element')
+        if elem and hasattr(elem, 'description'):
+            lines.append(f"⛓ *Что держит систему*")
+            lines.append(f"{elem.description[:100]}\n")
+    
+    # Петли если есть
+    if model and hasattr(model, 'loops') and model.loops:
+        strongest = max(model.loops, key=lambda x: x.get('strength', 0))
+        lines.append(f"🔄 *Главная ловушка*")
+        lines.append(f"{strongest.get('description', 'Не определено')}")
+        lines.append(f"Сила: {strongest.get('strength', 0):.1%}\n")
+    
+    # Точка роста
+    dilts_desc = DILTS_LEVELS.get(dominant_dilts, "⚡ Поведение")
+    lines.append(f"🎯 *Твоя точка роста:* {dilts_desc}")
+    
+    return "\n".join(lines)
+
+def get_help_keyboard() -> InlineKeyboardMarkup:
+    """Клавиатура с категориями помощи"""
+    buttons = [
+        [InlineKeyboardButton(text="🗣 Отношения", callback_data="help_cat_relations"),
+         InlineKeyboardButton(text="💰 Деньги", callback_data="help_cat_money")],
+        [InlineKeyboardButton(text="🧠 Самоощущение", callback_data="help_cat_self"),
+         InlineKeyboardButton(text="🧠 Знания", callback_data="help_cat_knowledge")],
+        [InlineKeyboardButton(text="💪 Поддержка", callback_data="help_cat_support"),
+         InlineKeyboardButton(text="🎨 Муза", callback_data="help_cat_muse")],
+        [InlineKeyboardButton(text="🍏 Забота", callback_data="help_cat_care")],
+        [InlineKeyboardButton(text="✏️ Написать самому", callback_data="ask_question")],
+        [InlineKeyboardButton(text="◀️ К ПОРТРЕТУ", callback_data="show_results")]
+    ]
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+async def show_results_screen(update, context):
+    """Показывает финальный портрет"""
+    query = update.callback_query
+    user_id = update.effective_user.id
+    
+    if user_id not in user_data:
+        await query.message.edit_text("Ошибка: данные пользователя не найдены")
+        return
+    
+    user = user_data[user_id]
+    
+    # Вычисляем средние значения для scores
+    scores = {}
+    for k, v in user.get("scores", {}).items():
+        if v:  # если список не пустой
+            scores[k] = round(sum(v) / len(v), 1)
+        else:
+            scores[k] = 3.0  # значение по умолчанию
+    
+    # Получаем данные из user с проверкой на существование
+    perception_type = user.get("perception_type", "не определен")
+    thinking_level = user.get("thinking_level", 5)
+    dominant_dilts = user.get("dominant_dilts", "BEHAVIOR")
+    
+    if not user.get("logged", False):
+        stats.register_completion(user_id, scores)
+        user["logged"] = True
+        
+        # Мотивационные сообщения
+        user_name = user_names.get(user_id, query.from_user.first_name or "друг")
+        asyncio.create_task(schedule_motivation(user_id, scores, user_name, delay_minutes=5))
+    
+    # Получаем модель для портрета
+    model_data = user.get('confinement_model')
+    model = None
+    if model_data:
+        try:
+            model = ConfinementModel9.from_dict(model_data)
+        except Exception as e:
+            logger.error(f"Ошибка при создании модели из данных: {e}")
+    
+    text = get_human_readable_profile(scores, model, perception_type, thinking_level, dominant_dilts)
+    
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🧠 МЫСЛИ ПСИХОЛОГА", callback_data="ai_analysis")],
+        [InlineKeyboardButton(text="🎯 ЧЕМ ПОМОЧЬ", callback_data="show_help"),
+         InlineKeyboardButton(text="❓ ЗАДАТЬ ВОПРОС", callback_data="smart_questions")],
+        [InlineKeyboardButton(text="📖 СКАЗКА", callback_data="show_tale"),
+         InlineKeyboardButton(text="✨ ЕЩЁ", callback_data="more_info")]
+    ])
+    
+    await query.edit_message_text(text, reply_markup=keyboard, parse_mode='Markdown')
+    return RESULTS
+
+async def schedule_motivation(user_id: int, scores: dict, user_name: str, delay_minutes: int = 5):
+    """Планирует отправку мотивационного сообщения"""
+    await asyncio.sleep(delay_minutes * 60)
+    
+    try:
+        # Определяем слабое место
+        if scores:
+            min_vector = min(scores.items(), key=lambda x: level(x[1]))
+            vector, score = min_vector
+            lvl = level(score)
+            profile = LEVEL_PROFILES.get(vector, {}).get(lvl, {})
+            
+            message_text = (
+                f"🧠 *ЧЕРЕЗ {delay_minutes} МИНУТ ПОСЛЕ ТЕСТА*\n\n"
+                f"Слушай, {user_name}...\n\n"
+                f"Твое самое узкое место — {VECTORS[vector]['name']} (уровень {lvl}).\n"
+                f"{profile.get('pain_origin', '')}\n\n"
+                f"🎯 *Первый шаг:*\n"
+                f"{profile.get('immediate_tool', 'Начни с малого.')}\n\n"
+                f"⚡️ Я с тобой на связи."
+            )
+        else:
+            message_text = f"Слушай, {user_name}...\n\nКак ты? Я рядом."
+        
+        # Здесь нужно отправить сообщение через бота
+        # В реальном коде это делается через task_manager
+        logger.info(f"Мотивационное сообщение для пользователя {user_id} готово к отправке")
+        
+    except Exception as e:
+        logger.error(f"Ошибка в schedule_motivation для пользователя {user_id}: {e}")
 
 # ══════════════════════════════════════════════
 #  КОНФАЙНМЕНТ-МОДЕЛИРОВАНИЕ
@@ -2404,12 +3316,14 @@ class ConfinementModel9:
         vector_emoji = VECTORS[vector]['emoji']
         lvl = level(score)
         level_info = VECTORS[vector]['levels'][lvl]
+        profile = LEVEL_PROFILES.get(vector, {}).get(lvl, {})
         
         element = ConfinementElement(1, f"{vector_emoji} {vector_name}")
-        element.description = level_info['desc']
+        element.description = profile.get('quote', level_info['desc'])
         element.element_type = ConfinementElement.TYPE_RESULT
         element.vector = vector
         element.level = lvl
+        element.archetype = profile.get('archetype')
         element.strength = 1.0
         element.vak = 'kinesthetic'
         return element
@@ -2420,12 +3334,14 @@ class ConfinementModel9:
         level_info = VECTORS[vector]['levels'][lvl]
         vector_name = VECTORS[vector]['name']
         vector_emoji = VECTORS[vector]['emoji']
+        profile = LEVEL_PROFILES.get(vector, {}).get(lvl, {})
         
         element = ConfinementElement(element_id, f"{vector_emoji} {vector_name}")
         element.description = level_info['desc']
         element.element_type = ConfinementElement.TYPE_IMMEDIATE_CAUSE
         element.vector = vector
         element.level = lvl
+        element.archetype = profile.get('archetype')
         element.strength = lvl / 6.0
         
         vak_map = {'СБ': 'kinesthetic', 'ТФ': 'digital', 'УБ': 'visual', 'ЧВ': 'auditory'}
@@ -2464,10 +3380,12 @@ class ConfinementModel9:
         weakest = min(self.source_scores.items(), key=lambda x: level(x[1]))
         vector, score = weakest
         lvl = level(score)
+        profile = LEVEL_PROFILES.get(vector, {}).get(lvl, {})
         
         element = ConfinementElement(5, f"🎭 Идентичность")
-        element.description = "То, кем ты себя считаешь"
+        element.description = profile.get('archetype_desc', "То, кем ты себя считаешь")
         element.element_type = ConfinementElement.TYPE_COMMON_CAUSE
+        element.archetype = profile.get('archetype')
         element.strength = 0.8
         element.vak = 'visual'
         return element
@@ -2619,75 +3537,6 @@ class ConfinementModel9:
         return model
 
 # ══════════════════════════════════════════════
-#  ДАННЫЕ МАТРИЦЫ (только необходимые для расчетов)
-# ══════════════════════════════════════════════
-
-VECTORS = {
-    "СБ": {"name": "Реакция на угрозу", "emoji": "🛡"},
-    "ТФ": {"name": "Добыча ресурсов", "emoji": "💰"},
-    "УБ": {"name": "Понимание мира", "emoji": "🔍"},
-    "ЧВ": {"name": "Отношения с людьми", "emoji": "🤝"}
-}
-
-# ══════════════════════════════════════════════
-#  ФУНКЦИИ ДЛЯ AI АНАЛИЗА
-# ══════════════════════════════════════════════
-
-async def get_ai_analysis(scores: dict, perception_type: str, thinking_level: int, dominant_dilts: str) -> str:
-    """Получает анализ профиля от DeepSeek"""
-    
-    profile_text = f"""
-Тип восприятия: {perception_type}
-Уровень мышления: {thinking_level}/9
-Доминирующий уровень Дилтса: {dominant_dilts}
-
-Баллы по векторам:
-СБ (Реакция на угрозу): {scores.get('СБ', 0)}/6
-ТФ (Добыча ресурсов): {scores.get('ТФ', 0)}/6
-УБ (Понимание мира): {scores.get('УБ', 0)}/6
-ЧВ (Отношения с людьми): {scores.get('ЧВ', 0)}/6
-"""
-    
-    prompt = f"""Ты — психолог. Напиши краткий психологический портрет человека (3-4 предложения) на основе его профиля:
-
-{profile_text}
-
-Напиши, в чем его сильные стороны и основная зона роста. Используй метафоры, говори от второго лица ("ты").
-"""
-    
-    response = await call_deepseek(prompt, max_tokens=300)
-    if response:
-        return response
-    return "Твой профиль сформирован. Чтобы получить детальный анализ, попробуй задать конкретный вопрос."
-
-async def get_ai_recommendations(scores: dict, perception_type: str, thinking_level: int) -> str:
-    """Получает рекомендации от DeepSeek"""
-    
-    # Определяем самое слабое место
-    if scores:
-        min_vector = min(scores.items(), key=lambda x: level(x[1]))
-        vector, score = min_vector
-        lvl = level(score)
-        weak_point = f"{VECTORS[vector]['name']} (уровень {lvl}/6)"
-    else:
-        weak_point = "не определено"
-    
-    prompt = f"""Ты — психолог. Дай 3 конкретных практических рекомендации человеку на основе его профиля:
-
-Тип восприятия: {perception_type}
-Уровень мышления: {thinking_level}/9
-Самое узкое место: {weak_point}
-
-Напиши 3 коротких пункта (по 1 предложению каждый) - что делать сегодня, на этой неделе и в этом месяце.
-Говори от второго лица ("ты").
-"""
-    
-    response = await call_deepseek(prompt, max_tokens=300)
-    if response:
-        return response
-    return "⚡ Сегодня: заметь свою автоматическую реакцию\n📌 На этой неделе: попробуй новый способ реагирования\n🔥 В этом месяце: проанализируй результаты"
-
-# ══════════════════════════════════════════════
 #  СТАТИСТИКА
 # ══════════════════════════════════════════════
 
@@ -2778,477 +3627,163 @@ class Statistics:
 stats = Statistics()
 
 # ══════════════════════════════════════════════
-#  ФУНКЦИИ ЭТАПОВ (исправленные с универсальным параметром)
+#  ФУНКЦИИ ДЛЯ AI АНАЛИЗА
 # ══════════════════════════════════════════════
 
-async def show_stage_1_intro(update_or_callback, context):
-    """Экран перед ЭТАПОМ 1"""
-    # Универсальное получение query
-    if hasattr(update_or_callback, 'callback_query'):
-        query = update_or_callback.callback_query
-    else:
-        query = update_or_callback
-    
-    user_id = query.from_user.id
-    
-    context.user_data["conversation_state"] = STAGE_1
-    
-    await query.answer()
-    
-    intro_text = (
-        f"🧠 *ЭТАП 1: КОНФИГУРАЦИЯ ВОСПРИЯТИЯ*\n\n"
-        f"Восприятие — это линза, через которую ты смотришь на мир.\n\n"
-        f"Она сформирована культурой, нормами, ценностями и опытом, который тебя строил. Это определило, что ты замечаешь автоматически, а что остаётся за кадром.\n\n"
-        f"🔍 *Что мы исследуем:*\n"
-        f"• Куда направлено твое внимание — вовне или внутрь\n"
-        f"• Какая тревога доминирует — страх отвержения или страх потери контроля\n\n"
-        f"📊 *Вопросов:* 8\n"
-        f"⏱ *Время:* ~3 минуты\n\n"
-        f"<i>Отвечай честно — это поможет мне лучше понять тебя.</i>"
-    )
-    
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="▶️ Начать исследование", callback_data="start_stage_1")]
-    ])
-    
-    await query.edit_message_text(intro_text, reply_markup=keyboard, parse_mode='Markdown')
-    return STAGE_1
-
-async def start_stage_1(update_or_callback, context):
-    """Начало ЭТАПА 1"""
-    if hasattr(update_or_callback, 'callback_query'):
-        query = update_or_callback.callback_query
-    else:
-        query = update_or_callback
-    
-    user_id = query.from_user.id
-    
-    await query.answer()
-    
-    context.user_data["stage1_current"] = 0
-    context.user_data["stage1_last_answered"] = -1
-    context.user_data["stage1_start_time"] = time.time()
-    context.user_data["perception_scores"] = {"EXTERNAL": 0, "INTERNAL": 0, "SYMBOLIC": 0, "MATERIAL": 0}
-    context.user_data["conversation_state"] = STAGE_1
-    
-    return await ask_stage_1_question(query, context)
-
-async def ask_stage_1_question(query, context):
-    """Задаёт вопрос ЭТАПА 1"""
-    user_id = query.from_user.id
-    
-    current = context.user_data.get("stage1_current", 0)
-    total = len(STAGE_1_QUESTIONS)
-    
-    context.user_data["conversation_state"] = STAGE_1
-    
-    if current >= total:
-        return await finish_stage_1(query, context)
-    
-    question = STAGE_1_QUESTIONS[current]
-    progress = calculate_progress(current + 1, total)
-    
-    question_text = (
-        f"🧠 *ЭТАП 1: КОНФИГУРАЦИЯ ВОСПРИЯТИЯ*\n\n"
-        f"<b>{question['text']}</b>\n\n"
-        f"{progress}"
-    )
-    
-    keyboard = []
-    for option_id, option in question["options"].items():
-        unique_callback = generate_unique_callback("stage1", user_id, current, option_id)
-        keyboard.append([
-            InlineKeyboardButton(option["text"], callback_data=unique_callback)
-        ])
-    
-    reply_markup = InlineKeyboardMarkup(inline_keyboard=keyboard)
-    
-    try:
-        await query.edit_message_text(
-            question_text, 
-            reply_markup=reply_markup, 
-            parse_mode='HTML'
-        )
-    except Exception as e:
-        await context.bot.send_message(
-            chat_id=query.message.chat_id,
-            text=question_text,
-            reply_markup=reply_markup,
-            parse_mode='HTML'
-        )
-    
-    return STAGE_1
-
-async def handle_stage_1_answer(update_or_callback, context):
-    """Обработка ответа ЭТАПА 1"""
-    if hasattr(update_or_callback, 'callback_query'):
-        query = update_or_callback.callback_query
-    else:
-        query = update_or_callback
-    
-    user_id = query.from_user.id
-    
-    if context.user_data.get("processing", False):
-        return STAGE_1
-    
-    context.user_data["processing"] = True
-    
-    try:
-        parts = query.data.split("_")
-        if len(parts) < 4 or parts[0] != "stage1":
-            context.user_data["processing"] = False
-            return STAGE_1
-        
-        current = int(parts[1])
-        option_id = parts[2]
-        
-        last_answered = context.user_data.get("stage1_last_answered", -1)
-        if current <= last_answered:
-            context.user_data["processing"] = False
-            return STAGE_1
-        
-        question = STAGE_1_QUESTIONS[current]
-        selected_option = question["options"].get(option_id)
-        
-        if not selected_option:
-            context.user_data["processing"] = False
-            return STAGE_1
-        
-        # Сохраняем баллы
-        for axis, score in selected_option.get("scores", {}).items():
-            if axis in ["EXTERNAL", "INTERNAL", "SYMBOLIC", "MATERIAL"]:
-                context.user_data["perception_scores"][axis] += score
-        
-        context.user_data["stage1_last_answered"] = current
-        context.user_data["stage1_current"] = current + 1
-        
-        context.user_data["processing"] = False
-        return await ask_stage_1_question(query, context)
-        
-    except Exception as e:
-        logger.error(f"Ошибка: {e}")
-        context.user_data["processing"] = False
-        return await ask_stage_1_question(query, context)
-
-async def finish_stage_1(query, context):
-    """Завершение ЭТАПА 1"""
-    user_id = query.from_user.id
-    
-    perception_scores = context.user_data.get("perception_scores", {})
-    perception_type = determine_perception_type(perception_scores)
-    context.user_data["perception_type"] = perception_type
-    
-    logger.info(f"✅ User {user_id}: Stage 1 complete, type={perception_type}")
-    
-    # Получаем описание типа через ИИ
-    prompt = f"""Ты — психолог. Опиши тип восприятия "{perception_type}" в 2-3 предложениях, 
-    объясни, что это значит для человека. Говори от второго лица ("ты")."""
-    
-    type_description = await call_deepseek(prompt, max_tokens=200)
-    if not type_description:
-        type_description = "Твой тип восприятия определен. Переходим к следующему этапу."
-    
-    result_text = f"🧠 *ЭТАП 1: КОНФИГУРАЦИЯ ВОСПРИЯТИЯ*\n\n*Твой тип: {perception_type}*\n\n{type_description}\n\n⬇️ *Переходим к этапу 2 — исследуем, как ты мыслишь.*"
-    
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="▶️ Перейти к этапу 2", callback_data="show_stage_2_intro")]
-    ])
-    
-    await query.edit_message_text(result_text, reply_markup=keyboard, parse_mode='Markdown')
-    return STAGE_2
-
-# Аналогично исправляем остальные функции этапов (show_stage_2_intro, start_stage_2, ask_stage_2_question, handle_stage_2_answer, finish_stage_2 и т.д.)
-# Для краткости здесь не привожу все, но принцип тот же - везде используем универсальный параметр и передаем query
-
-async def show_stage_2_intro(update_or_callback, context):
-    """Экран перед ЭТАПОМ 2"""
-    if hasattr(update_or_callback, 'callback_query'):
-        query = update_or_callback.callback_query
-    else:
-        query = update_or_callback
-    
-    user_id = query.from_user.id
-    
-    context.user_data["conversation_state"] = STAGE_2
-    
-    await query.answer()
-    
-    perception_type = context.user_data.get("perception_type", "СОЦИАЛЬНО-ОРИЕНТИРОВАННЫЙ")
-    questions = STAGE_2_QUESTIONS.get(perception_type, STAGE_2_QUESTIONS["СОЦИАЛЬНО-ОРИЕНТИРОВАННЫЙ"])
-    total_questions = len(questions)
-    
-    intro_text = (
-        f"🧠 *ЭТАП 2: КОНФИГУРАЦИЯ МЫШЛЕНИЯ*\n\n"
-        f"Восприятие определяет, что ты видишь. Мышление — как ты это понимаешь.\n\n"
-        f"Конфигурация мышления определяется задачами: как ты обрабатываешь информацию, какие связи видишь, какой объём можешь удержать.\n\n"
-        f"🎯 *Самое важное:*\n"
-        f"Конфигурация мышления — это траектория с чётким пунктом назначения: результат, к которому ты придёшь. Если ничего не менять — ты попадёшь именно туда.\n\n"
-        f"📊 *Вопросов:* {total_questions}\n"
-        f"⏱ *Время:* ~3-4 минуты\n\n"
-        f"<i>Продолжим исследование?</i>"
-    )
-    
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="▶️ Начать исследование", callback_data="start_stage_2")]
-    ])
-    
-    await query.edit_message_text(intro_text, reply_markup=keyboard, parse_mode='Markdown')
-    return STAGE_2
-
-async def start_stage_2(update_or_callback, context):
-    """Начало ЭТАПА 2"""
-    if hasattr(update_or_callback, 'callback_query'):
-        query = update_or_callback.callback_query
-    else:
-        query = update_or_callback
-    
-    await query.answer()
-    
-    context.user_data["stage2_current"] = 0
-    context.user_data["stage2_last_answered"] = -1
-    context.user_data["stage2_start_time"] = time.time()
-    context.user_data["stage2_level_scores_dict"] = {"1": 0, "2": 0, "3": 0, "4": 0, "5": 0, "6": 0, "7": 0, "8": 0, "9": 0}
-    context.user_data["strategy_levels"] = {"СБ": [], "ТФ": [], "УБ": [], "ЧВ": []}
-    context.user_data["conversation_state"] = STAGE_2
-    
-    return await ask_stage_2_question(query, context)
-
-async def ask_stage_2_question(query, context):
-    """Задаёт вопрос ЭТАПА 2"""
-    user_id = query.from_user.id
-    
-    perception_type = context.user_data.get("perception_type", "СОЦИАЛЬНО-ОРИЕНТИРОВАННЫЙ")
-    current = context.user_data.get("stage2_current", 0)
-    
-    questions = STAGE_2_QUESTIONS.get(perception_type, STAGE_2_QUESTIONS["СОЦИАЛЬНО-ОРИЕНТИРОВАННЫЙ"])
-    total_questions = len(questions)
-    
-    context.user_data["conversation_state"] = STAGE_2
-    
-    if current >= total_questions:
-        return await finish_stage_2(query, context)
-    
-    question = questions[current]
-    measures = question.get("measures", "thinking")
-    progress = calculate_progress(current + 1, total_questions)
-    
-    question_text = (
-        f"🧠 *ЭТАП 2: КОНФИГУРАЦИЯ МЫШЛЕНИЯ*\n\n"
-        f"<b>{question['text']}</b>\n\n"
-        f"{progress}"
-    )
-    
-    keyboard = []
-    for level_num, answer_text in question["options"].items():
-        unique_callback = generate_unique_callback("stage2", user_id, current, level_num, measures)
-        keyboard.append([
-            InlineKeyboardButton(answer_text, callback_data=unique_callback)
-        ])
-    
-    reply_markup = InlineKeyboardMarkup(inline_keyboard=keyboard)
-    
-    try:
-        await query.edit_message_text(
-            question_text, 
-            reply_markup=reply_markup, 
-            parse_mode='HTML'
-        )
-    except Exception as e:
-        await context.bot.send_message(
-            chat_id=query.message.chat_id,
-            text=question_text,
-            reply_markup=reply_markup,
-            parse_mode='HTML'
-        )
-    
-    return STAGE_2
-
-async def handle_stage_2_answer(update_or_callback, context):
-    """Обработка ответа ЭТАПА 2"""
-    if hasattr(update_or_callback, 'callback_query'):
-        query = update_or_callback.callback_query
-    else:
-        query = update_or_callback
-    
-    user_id = query.from_user.id
-    
-    if context.user_data.get("processing", False):
-        return STAGE_2
-    
-    context.user_data["processing"] = True
-    
-    try:
-        parts = query.data.split("_")
-        if len(parts) < 5 or parts[0] != "stage2":
-            context.user_data["processing"] = False
-            return STAGE_2
-        
-        current = int(parts[1])
-        selected_level = parts[2]
-        measures = parts[3]
-        
-        last_answered = context.user_data.get("stage2_last_answered", -1)
-        if current <= last_answered:
-            context.user_data["processing"] = False
-            return STAGE_2
-        
-        perception_type = context.user_data.get("perception_type", "СОЦИАЛЬНО-ОРИЕНТИРОВАННЫЙ")
-        question = STAGE_2_QUESTIONS.get(perception_type, STAGE_2_QUESTIONS["СОЦИАЛЬНО-ОРИЕНТИРОВАННЫЙ"])[current]
-        
-        scoring_table = STAGE_2_SCORING.get(perception_type, {})
-        
-        # Сохраняем для уровня мышления
-        if measures == "thinking" and current in scoring_table and selected_level in scoring_table[current]:
-            points = scoring_table[current][selected_level]
-            context.user_data["stage2_level_scores_dict"][selected_level] += points
-        
-        # Сохраняем для стратегий
-        if measures in ["СБ", "ТФ", "УБ", "ЧВ"]:
-            try:
-                value = int(selected_level)
-                context.user_data["strategy_levels"][measures].append(value)
-            except ValueError:
-                pass
-        
-        context.user_data["stage2_last_answered"] = current
-        context.user_data["stage2_current"] = current + 1
-        
-        context.user_data["processing"] = False
-        return await ask_stage_2_question(query, context)
-        
-    except Exception as e:
-        logger.error(f"Ошибка: {e}")
-        context.user_data["processing"] = False
-        return await ask_stage_2_question(query, context)
-
-async def finish_stage_2(query, context):
-    """Завершение ЭТАПА 2"""
-    user_id = query.from_user.id
-    
-    level_scores_dict = context.user_data.get("stage2_level_scores_dict", {})
-    thinking_level = calculate_thinking_level_by_scores(level_scores_dict)
-    context.user_data["thinking_level"] = thinking_level
-    
-    perception_type = context.user_data.get("perception_type", "СОЦИАЛЬНО-ОРИЕНТИРОВАННЫЙ")
-    level_group = get_level_group(thinking_level)
-    
-    logger.info(f"✅ User {user_id}: Stage 2 complete, level={thinking_level}")
-    
-    # Получаем описание через ИИ
-    prompt = f"""Ты — психолог. Опиши уровень мышления {thinking_level}/9 для человека с типом восприятия "{perception_type}".
-    Что это значит? 2-3 предложения, от второго лица ("ты")."""
-    
-    level_description = await call_deepseek(prompt, max_tokens=200)
-    if not level_description:
-        level_description = f"Твой уровень мышления: {thinking_level}/9."
-    
-    result_text = f"🧠 *ЭТАП 2: КОНФИГУРАЦИЯ МЫШЛЕНИЯ*\n\n*Уровень: {thinking_level}/9*\n\n{level_description}\n\n⬇️ *Переходим к этапу 3 — исследуем твое поведение.*"
-    
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="▶️ Перейти к этапу 3", callback_data="show_stage_3_intro")]
-    ])
-    
-    await query.edit_message_text(result_text, reply_markup=keyboard, parse_mode='Markdown')
-    return STAGE_3
-
-# Аналогично для stage_3 и stage_4... (здесь пропущено для краткости, но принцип тот же)
-
-async def show_results_screen(update_or_callback, context):
-    """Показывает финальный портрет"""
-    if hasattr(update_or_callback, 'callback_query'):
-        query = update_or_callback.callback_query
-    else:
-        query = update_or_callback
-    
-    user_id = query.from_user.id
-    
-    user = user_data[user_id]
-    scores = {k: round(mean(v), 1) for k, v in user["scores"].items() if v}
-    
-    perception_type = user.get("perception_type", "не определен")
-    thinking_level = user.get("thinking_level", 5)
-    dominant_dilts = user.get("dominant_dilts", "BEHAVIOR")
-    
-    if not user.get("logged", False):
-        stats.register_completion(user_id, scores)
-        user["logged"] = True
-        
-        # Мотивационные сообщения
-        user_name = user_names.get(user_id, query.from_user.first_name or "друг")
-        asyncio.create_task(schedule_motivation(user_id, scores, user_name, delay_minutes=5))
-    
-    # Получаем анализ от ИИ
-    await query.edit_text("🧠 *Формирую твой психологический портрет...*\n\n_Это займёт несколько секунд_", parse_mode='Markdown')
-    
-    analysis = await get_ai_analysis(scores, perception_type, thinking_level, dominant_dilts)
-    
-    text = f"🧠 *ТВОЙ ПСИХОЛОГИЧЕСКИЙ ПОРТРЕТ*\n\n{analysis}"
-    
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🧠 ДЕТАЛЬНЫЙ АНАЛИЗ", callback_data="ai_analysis"),
-         InlineKeyboardButton(text="💡 РЕКОМЕНДАЦИИ", callback_data="ai_recommendations")],
-        [InlineKeyboardButton(text="🎯 ЧЕМ ПОМОЧЬ", callback_data="show_help"),
-         InlineKeyboardButton(text="❓ ЗАДАТЬ ВОПРОС", callback_data="smart_questions")],
-        [InlineKeyboardButton(text="📖 СКАЗКА", callback_data="show_tale")]
-    ])
-    
-    await query.edit_message_text(text, reply_markup=keyboard, parse_mode='Markdown')
-    return RESULTS
-
-# ══════════════════════════════════════════════
-#  ФУНКЦИИ ДЛЯ AI АНАЛИЗА (обработчики)
-# ══════════════════════════════════════════════
-
-async def show_ai_analysis(update_or_callback, context):
-    """Показывает детальный анализ от ИИ"""
-    if hasattr(update_or_callback, 'callback_query'):
-        query = update_or_callback.callback_query
-    else:
-        query = update_or_callback
-    
-    user_id = query.from_user.id
+async def show_ai_analysis(callback, context):
+    user_id = callback.from_user.id
     user = user_data[user_id]
     
     scores = {k: round(mean(v), 1) for k, v in user["scores"].items() if v}
-    perception_type = user.get("perception_type", "не определен")
-    thinking_level = user.get("thinking_level", 5)
-    dominant_dilts = user.get("dominant_dilts", "BEHAVIOR")
     
-    await query.edit_text("🧠 *Анализирую...*", parse_mode='Markdown')
+    if user.get("ai_analysis"):
+        await show_saved_ai_analysis(callback, user["ai_analysis"])
+        return
     
-    analysis = await get_ai_analysis(scores, perception_type, thinking_level, dominant_dilts)
+    await callback.message.edit_text(
+        "🧠 *Анализирую ваш профиль...*\n\n_Это займёт около 20 секунд_",
+        parse_mode='Markdown'
+    )
+    
+    bottleneck_key = get_priority_order(scores)[0]
+    bottleneck_lvl = level(scores[bottleneck_key])
+    bottleneck_profile = LEVEL_PROFILES.get(bottleneck_key, {}).get(bottleneck_lvl, {})
+    bottleneck_vec = VECTORS[bottleneck_key]
+    
+    prompt = f"""ТЫ — ПСИХОЛОГ. Напиши психологический портрет.
+
+УЗКОЕ МЕСТО:
+- Вектор: {bottleneck_vec['name']}
+- Уровень: {bottleneck_lvl}/6
+- Архетип: {bottleneck_profile.get('archetype', '')}
+
+НАПИШИ:
+1. Суть проблемы (2-3 предложения)
+2. Откуда это взялось (2 предложения)
+3. Первый шаг (3 конкретных действия)
+4. Цитата-напутствие
+
+СТИЛЬ: Как старший товарищ — честно, с заботой, без воды."""
+    
+    system_message = "Ты психолог. Пиши коротко, метафорично."
+    response = await call_deepseek(prompt, system_message, max_tokens=1000)
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="💡 РЕКОМЕНДАЦИИ", callback_data="ai_recommendations")],
+        [InlineKeyboardButton(text="❓ ВОПРОСЫ", callback_data="smart_questions")],
+        [InlineKeyboardButton(text="💡 ЧТО ДЕЛАТЬ", callback_data="ai_recommendations")],
         [InlineKeyboardButton(text="◀️ НАЗАД", callback_data="show_results")]
     ])
     
-    await query.edit_message_text(f"🧠 *ДЕТАЛЬНЫЙ АНАЛИЗ*\n\n{analysis}", reply_markup=keyboard, parse_mode='Markdown')
-
-async def show_ai_recommendations(update_or_callback, context):
-    """Показывает рекомендации от ИИ"""
-    if hasattr(update_or_callback, 'callback_query'):
-        query = update_or_callback.callback_query
+    if response:
+        user["ai_analysis"] = response
+        await show_saved_ai_analysis(callback, response)
     else:
-        query = update_or_callback
-    
-    user_id = query.from_user.id
-    user = user_data[user_id]
-    
-    scores = {k: round(mean(v), 1) for k, v in user["scores"].items() if v}
-    perception_type = user.get("perception_type", "не определен")
-    thinking_level = user.get("thinking_level", 5)
-    
-    await query.edit_text("💡 *Подбираю рекомендации...*", parse_mode='Markdown')
-    
-    recommendations = await get_ai_recommendations(scores, perception_type, thinking_level)
+        fallback_text = FALLBACK_ANALYSIS[bottleneck_key][bottleneck_lvl]
+        await callback.message.edit_text(
+            f"🧠 *МЫСЛИ ПСИХОЛОГА*\n\n{fallback_text}",
+            parse_mode='Markdown',
+            reply_markup=keyboard
+        )
+
+async def show_saved_ai_analysis(callback, analysis_text):
+    def escape_markdown(text):
+        text = text.replace('**', '‼BOLD‼')
+        dangerous = '_*[]()~`>+=|{}!'
+        for char in dangerous:
+            text = text.replace(char, f'\\{char}')
+        text = text.replace('‼BOLD‼', '**')
+        return text
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🧠 АНАЛИЗ", callback_data="ai_analysis")],
+        [InlineKeyboardButton(text="❓ ВОПРОСЫ", callback_data="smart_questions")],
+        [InlineKeyboardButton(text="💡 ЧТО ДЕЛАТЬ", callback_data="ai_recommendations")],
         [InlineKeyboardButton(text="◀️ НАЗАД", callback_data="show_results")]
     ])
     
-    await query.edit_message_text(f"💡 *РЕКОМЕНДАЦИИ*\n\n{recommendations}", reply_markup=keyboard, parse_mode='Markdown')
+    safe_text = escape_markdown(analysis_text)
+    full_text = f"🧠 *МЫСЛИ ПСИХОЛОГА*\n\n{safe_text}"
+    
+    await callback.message.edit_text(full_text, parse_mode='Markdown', reply_markup=keyboard)
+
+async def show_ai_recommendations(callback, context):
+    user_id = callback.from_user.id
+    user = user_data[user_id]
+    
+    scores = {k: round(mean(v), 1) for k, v in user["scores"].items() if v}
+    
+    if user.get("ai_recommendations"):
+        await show_saved_recommendations(callback, user["ai_recommendations"])
+        return
+    
+    await callback.message.edit_text(
+        "💡 *Подбираю рекомендации...*\n\n_Это займёт около 15-20 секунд_",
+        parse_mode='Markdown'
+    )
+    
+    bottleneck_key = get_priority_order(scores)[0]
+    bottleneck_lvl = level(scores[bottleneck_key])
+    bottleneck_vec = VECTORS[bottleneck_key]
+    
+    vectors_context = []
+    for key in VECTORS:
+        lvl = level(scores[key])
+        vec = VECTORS[key]
+        profile = LEVEL_PROFILES.get(key, {}).get(lvl, {})
+        vectors_context.append(f"{vec['name']}: {lvl}/6 — {profile.get('archetype', '')}")
+    
+    prompt = f"""ТЫ — ПСИХОЛОГ. Напиши персональные рекомендации.
+
+ПРОФИЛЬ:
+{chr(10).join(vectors_context)}
+
+УЗКОЕ МЕСТО: {bottleneck_vec['name']} (уровень {bottleneck_lvl}/6)
+
+НАПИШИ 3 БЛОКА:
+⚡ ЧТО ДЕЛАТЬ СЕГОДНЯ (3 микро-действия)
+📌 ЧТО ДЕЛАТЬ НА ЭТОЙ НЕДЕЛЕ (3 задачи)
+🔥 ЧТО ДЕЛАТЬ В ЭТОМ МЕСЯЦЕ (2-3 шага)
+
+Коротко, конкретно, по делу. Каждый пункт с •"""
+    
+    system_message = "Ты психолог. Пиши коротко, конкретно."
+    response = await call_deepseek(prompt, system_message, max_tokens=800)
+    
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="❓ ЕЩЁ ВОПРОС", callback_data="smart_questions")],
+        [InlineKeyboardButton(text="🧠 МЫСЛИ ПСИХОЛОГА", callback_data="ai_analysis")],
+        [InlineKeyboardButton(text="◀️ НАЗАД", callback_data="show_results")]
+    ])
+    
+    if response:
+        user["ai_recommendations"] = response
+        await show_saved_recommendations(callback, response)
+    else:
+        fallback_text = FALLBACK_ANALYSIS[bottleneck_key][bottleneck_lvl]
+        await callback.message.edit_text(
+            f"💡 *ПЛАН ДЕЙСТВИЙ*\n\n{fallback_text}",
+            parse_mode='Markdown',
+            reply_markup=keyboard
+        )
+
+async def show_saved_recommendations(callback, recommendations_text):
+    def escape_markdown(text):
+        text = text.replace('**', '‼BOLD‼')
+        dangerous = '_*[]()~`>+=|{}!'
+        for char in dangerous:
+            text = text.replace(char, f'\\{char}')
+        text = text.replace('‼BOLD‼', '**')
+        return text
+    
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="❓ ЕЩЁ ВОПРОС", callback_data="smart_questions")],
+        [InlineKeyboardButton(text="🧠 МЫСЛИ ПСИХОЛОГА", callback_data="ai_analysis")],
+        [InlineKeyboardButton(text="◀️ НАЗАД", callback_data="show_results")]
+    ])
+    
+    safe_text = escape_markdown(recommendations_text)
+    full_text = f"💡 *ПЛАН ДЕЙСТВИЙ*\n\n{safe_text}"
+    
+    await callback.message.edit_text(full_text, parse_mode='Markdown', reply_markup=keyboard)
 
 # ══════════════════════════════════════════════
 #  ФУНКЦИИ ДЛЯ SMART QUESTIONS
@@ -3299,14 +3834,8 @@ def generate_smart_questions(scores):
     
     return questions[:5]
 
-async def show_smart_questions(update_or_callback, context):
-    """Показывает список вопросов"""
-    if hasattr(update_or_callback, 'callback_query'):
-        query = update_or_callback.callback_query
-    else:
-        query = update_or_callback
-    
-    user_id = query.from_user.id
+async def show_smart_questions(callback, context):
+    user_id = callback.from_user.id
     user = user_data[user_id]
     
     scores = {k: round(mean(v), 1) for k, v in user["scores"].items() if v}
@@ -3330,60 +3859,157 @@ async def show_smart_questions(update_or_callback, context):
         callback_data="show_results"
     )])
     
-    await query.edit_message_text(
+    await callback.message.edit_text(
         f"❓ *ЧТО ТЕБЯ БЕСПОКОИТ?*\n\n"
         f"Выбери вопрос или задай свой. Я помню твой профиль.",
         reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard),
         parse_mode='Markdown'
     )
 
-async def handle_smart_question(update_or_callback, context):
-    """Обрабатывает выбранный вопрос"""
-    if hasattr(update_or_callback, 'callback_query'):
-        query = update_or_callback.callback_query
-    else:
-        query = update_or_callback
-    
-    user_id = query.from_user.id
+async def handle_smart_question(callback, question):
+    user_id = callback.from_user.id
     user = user_data[user_id]
-    
-    idx = int(query.data.split("_")[1]) - 1
-    questions = user.get("smart_questions", [])
-    
-    if idx < 0 or idx >= len(questions):
-        return
-    
-    question = questions[idx]
-    
-    await query.edit_text("🤔 *Думаю над ответом...*", parse_mode='Markdown')
-    
     scores = {k: round(mean(v), 1) for k, v in user["scores"].items() if v}
-    perception_type = user.get("perception_type", "не определен")
-    thinking_level = user.get("thinking_level", 5)
     
-    prompt = f"""Ты — психолог. Ответь на вопрос человека, учитывая его профиль:
-
-Вопрос: {question}
-
-Профиль:
-- Тип восприятия: {perception_type}
-- Уровень мышления: {thinking_level}/9
-- Баллы по векторам:
-  СБ: {scores.get('СБ', 0)}/6, ТФ: {scores.get('ТФ', 0)}/6, УБ: {scores.get('УБ', 0)}/6, ЧВ: {scores.get('ЧВ', 0)}/6
-
-Ответь коротко, 3-4 предложения, от второго лица ("ты"). Будь конкретным и полезным.
-"""
+    await callback.message.edit_text(
+        "🤔 *Думаю над ответом...*\n\n"
+        "_Это займёт около 10-15 секунд_",
+        parse_mode='Markdown'
+    )
     
-    response = await call_deepseek(prompt, max_tokens=300)
+    context_obj = user_contexts.get(user_id)
+    user_name = user_names.get(user_id, callback.from_user.first_name or "друг")
+    mode = context_obj.communication_mode if context_obj else "medium"
+    
+    profile_lines = []
+    for k, v in scores.items():
+        lvl = level(v)
+        p = LEVEL_PROFILES.get(k, {}).get(lvl, {})
+        profile_lines.append(f"{VECTORS[k]['name']}: {lvl}/6 — {p.get('archetype', '')}")
+    profile_summary = "\n".join(profile_lines)
+    
+    context_text = ""
+    if context_obj:
+        context_text = context_obj.get_full_context(user_name)
+        weather = await context_obj.get_weather()
+        if weather:
+            context_text += f"\n{context_obj.get_weather_recommendation(weather)}"
+    
+    history_text = ""
+    if user.get("history"):
+        recent = user["history"][-5:]
+        for entry in recent:
+            role = "Клиент" if entry["role"] == "user" else "Психолог"
+            history_text += f"{role}: {entry['text']}\n"
+    
+    mode_prompt = COMMUNICATION_MODES.get(mode, COMMUNICATION_MODES["medium"])["prompt"]
+    
+    system_prompt = f"""Ты - друг, брат, наставник.
+
+КОНТЕКСТ:
+{context_text if context_text else ""}
+
+ПРОФИЛЬ:
+{profile_summary}
+
+ИСТОРИЯ:
+{history_text if history_text else ""}
+
+СТИЛЬ: {mode_prompt}
+
+Ответь на вопрос коротко, 2-4 предложения, по делу."""
+    
+    prompt = f"Вопрос: {question}"
+    response = await call_deepseek(prompt, system_prompt, max_tokens=300)
+    
     if not response:
-        response = "Чтобы ответить точнее, мне нужно больше информации. Попробуй переформулировать вопрос."
+        bottleneck_key = get_priority_order(scores)[0]
+        bottleneck_lvl = level(scores[bottleneck_key])
+        response = FALLBACK_ANALYSIS[bottleneck_key][bottleneck_lvl]
+    
+    if "history" not in user:
+        user["history"] = []
+    
+    user["history"].append({
+        "role": "user", 
+        "text": question, 
+        "timestamp": datetime.now().isoformat()
+    })
+    user["history"].append({
+        "role": "assistant", 
+        "text": response, 
+        "timestamp": datetime.now().isoformat()
+    })
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="❓ Ещё вопрос", callback_data="smart_questions")],
-        [InlineKeyboardButton(text="🧠 К портрету", callback_data="show_results")]
+        [InlineKeyboardButton(text="🧠 К портрету", callback_data="show_results")],
+        [InlineKeyboardButton(text="🎯 ЧЕМ ПОМОЧЬ", callback_data="show_help")]
     ])
     
-    await query.edit_message_text(f"❓ *{question}*\n\n{response}", reply_markup=keyboard, parse_mode='Markdown')
+    await callback.message.edit_text(
+        f"❓ *{question}*\n\n{response}",
+        parse_mode='Markdown',
+        reply_markup=keyboard
+    )
+    
+    audio_data = await text_to_speech(response, mode)
+    if audio_data:
+        audio_file = BufferedInputFile(audio_data, filename="response.ogg")
+        await callback.message.answer_voice(
+            audio_file,
+            caption="🎙 *Голосовой ответ*",
+            parse_mode='Markdown'
+        )
+
+# ══════════════════════════════════════════════
+#  ФУНКЦИИ ДЛЯ СКАЗОК
+# ══════════════════════════════════════════════
+
+async def show_tale_command(message: types.Message):
+    """Отправляет терапевтическую сказку по запросу"""
+    user_id = message.from_user.id
+    user = user_data.get(user_id, {})
+    
+    if not is_test_completed(user):
+        await message.answer("Сначала пройдите тест")
+        return
+    
+    text = message.text.replace('/tale', '').strip()
+    if not text:
+        text = "страх"
+    
+    tale = hypno.tales.get_tale_for_issue(text)
+    
+    if tale:
+        await message.answer(
+            f"📖 *{tale['title']}*\n\n{tale['text'][:4000]}",
+            parse_mode='Markdown'
+        )
+    else:
+        await message.answer("Сказка не найдена")
+
+async def show_tale_callback(callback, context):
+    """Показывает случайную сказку"""
+    user_id = callback.from_user.id
+    user = user_data.get(user_id, {})
+    
+    if not is_test_completed(user):
+        await callback.message.edit_text("Сначала пройдите тест")
+        return
+    
+    tale = hypno.tales.get_tale_for_issue("рост")
+    
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="📖 ЕЩЁ СКАЗКУ", callback_data="show_tale")],
+        [InlineKeyboardButton(text="◀️ НАЗАД", callback_data="show_results")]
+    ])
+    
+    await callback.message.edit_text(
+        f"📖 *{tale['title']}*\n\n{tale['text'][:4000]}",
+        parse_mode='Markdown',
+        reply_markup=keyboard
+    )
 
 # ══════════════════════════════════════════════
 #  МЕНЕДЖЕР ОТЛОЖЕННЫХ ЗАДАЧ
@@ -3409,24 +4035,29 @@ class DelayedTaskManager:
             await asyncio.sleep(delay_minutes * 60)
             if self.bot_instance:
                 try:
-                    # Получаем мотивационное сообщение через ИИ
+                    # Определяем слабое место
                     if scores:
                         min_vector = min(scores.items(), key=lambda x: level(x[1]))
                         vector, score = min_vector
                         lvl = level(score)
+                        profile = LEVEL_PROFILES.get(vector, {}).get(lvl, {})
                         
-                        prompt = f"""Ты — психолог. Напиши короткое мотивационное сообщение (3-4 предложения) для человека, у которого самое слабое место — {VECTORS[vector]['name']} (уровень {lvl}/6). 
-                        Подбодри его, дай простой первый шаг. Говори от второго лица ("ты"), обращайся по имени {user_name}."""
-                        
-                        message_text = await call_deepseek(prompt, max_tokens=200)
-                        if not message_text:
-                            message_text = f"Слушай, {user_name}...\n\nТвое самое узкое место — {VECTORS[vector]['name']} (уровень {lvl}). Начни с малого: сделай один маленький шаг сегодня. Я с тобой на связи."
+                        message_text = (
+                            f"🧠 *ЧЕРЕЗ {delay_minutes} МИНУТ ПОСЛЕ ТЕСТА*\n\n"
+                            f"Слушай, {user_name}...\n\n"
+                            f"Твое самое узкое место — {VECTORS[vector]['name']} (уровень {lvl}).\n"
+                            f"{profile.get('pain_origin', '')}\n\n"
+                            f"🎯 *Первый шаг:*\n"
+                            f"{profile.get('immediate_tool', 'Начни с малого.')}\n\n"
+                            f"⚡️ Я с тобой на связи."
+                        )
                     else:
                         message_text = f"Слушай, {user_name}...\n\nКак ты? Я рядом."
                     
                     keyboard = InlineKeyboardMarkup(inline_keyboard=[
                         [InlineKeyboardButton(text="❓ ЗАДАТЬ ВОПРОС", callback_data="smart_questions")],
-                        [InlineKeyboardButton(text="🧠 К ПОРТРЕТУ", callback_data="show_results")]
+                        [InlineKeyboardButton(text="🧠 К ПОРТРЕТУ", callback_data="show_results")],
+                        [InlineKeyboardButton(text="🎯 ЧЕМ ПОМОЧЬ", callback_data="show_help")]
                     ])
                     
                     await self.bot_instance.send_message(
@@ -3436,6 +4067,19 @@ class DelayedTaskManager:
                         reply_markup=keyboard
                     )
                     
+                    context_obj = user_contexts.get(user_id)
+                    mode = context_obj.communication_mode if context_obj else "medium"
+                    
+                    if YANDEX_API_KEY:
+                        audio_data = await text_to_speech(message_text, mode)
+                        if audio_data:
+                            audio_file = BufferedInputFile(audio_data, filename="motivation.ogg")
+                            await self.bot_instance.send_voice(
+                                user_id,
+                                audio_file,
+                                caption="🎙 *Мотивационное сообщение*",
+                                parse_mode='Markdown'
+                            )
                 except Exception as e:
                     logger.error(f"Ошибка при отправке мотивационного сообщения пользователю {user_id}: {e}")
         
@@ -3448,18 +4092,56 @@ class DelayedTaskManager:
         }
         logger.info(f"📅 Запланировано мотивационное сообщение для пользователя {user_id} через {delay_minutes} минут")
         return task_id
+    
+    async def schedule_reminder(self, user_id: int, message: str, delay_hours: int = 24):
+        task_id = f"reminder_{user_id}_{datetime.now().timestamp()}"
+        
+        async def send_reminder():
+            await asyncio.sleep(delay_hours * 3600)
+            if self.bot_instance:
+                try:
+                    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+                        [InlineKeyboardButton(text="❓ ЗАДАТЬ ВОПРОС", callback_data="smart_questions")],
+                        [InlineKeyboardButton(text="🧠 К ПОРТРЕТУ", callback_data="show_results")],
+                        [InlineKeyboardButton(text="🔄 ПРОЙТИ ТЕСТ ЗАНОВО", callback_data="restart_test")]
+                    ])
+                    
+                    await self.bot_instance.send_message(
+                        user_id,
+                        message,
+                        parse_mode='Markdown',
+                        reply_markup=keyboard
+                    )
+                except Exception as e:
+                    logger.error(f"Ошибка при отправке напоминания пользователю {user_id}: {e}")
+        
+        task = asyncio.create_task(send_reminder())
+        self.tasks[task_id] = {
+            "task": task,
+            "user_id": user_id,
+            "type": "reminder",
+            "scheduled_time": datetime.now() + timedelta(hours=delay_hours)
+        }
+        return task_id
+    
+    def cancel_user_tasks(self, user_id: int):
+        for task_id in list(self.tasks.keys()):
+            if self.tasks[task_id]["user_id"] == user_id:
+                self.tasks[task_id]["task"].cancel()
+                del self.tasks[task_id]
+        logger.info(f"❌ Отменены все задачи для пользователя {user_id}")
 
 task_manager = DelayedTaskManager()
+
+# ══════════════════════════════════════════════
+#  ОБРАБОТЧИКИ TELEGRAM
+# ══════════════════════════════════════════════
 
 def is_test_completed(user: dict) -> bool:
     """Проверяет, завершен ли тест"""
     if not user or "scores" not in user:
         return False
     return all(len(user.get("scores", {}).get(stage, [])) >= 8 for stage in VECTORS)
-
-# ══════════════════════════════════════════════
-#  ОБРАБОТЧИКИ TELEGRAM
-# ══════════════════════════════════════════════
 
 async def start_command(message: types.Message):
     user_id = message.from_user.id
@@ -3474,6 +4156,8 @@ async def start_command(message: types.Message):
         "current_question": 0,
         "profile_complete": False,
         "logged": False,
+        "ai_analysis": None,
+        "ai_recommendations": None,
         "history": [],
         "awaiting": None,
         "confinement_model": None,
@@ -3486,20 +4170,23 @@ async def start_command(message: types.Message):
         "dilts_counts": {"ENVIRONMENT": 0, "BEHAVIOR": 0, "CAPABILITIES": 0, "VALUES": 0, "IDENTITY": 0},
         "dominant_dilts": None,
         "profile_data": None,
+        "all_answers": [],
         "processing": False
     }
     
     stats.register_start(user_id)
     
+    # Приветствие с выбором режима
     welcome_text = (
         f"👋 *Привет, {user_name}!*\n\n"
         f"Я — твой второй мозг. Персональный навигатор по жизни.\n\n"
         f"🔮 *Что я умею:*\n"
         f"• Помогать с отношениями, деньгами и самоощущением\n"
         f"• Строить твой психологический профиль\n"
-        f"• Находить скрытые связи в поведении\n"
+        f"• Находить скрытые связи и петли в поведении\n"
         f"• Создавать пошаговые маршруты к твоим целям\n\n"
-        f"⏱ *Сначала нужно узнать тебя* — пройди тест (12 минут).\n\n"
+        f"⏱ *Сначала нужно узнать тебя* — пройди тест (12 минут).\n"
+        f"Без профиля мои советы будут общими, как в интернете.\n\n"
         f"👇 *Выбери, с какой интонацией будем общаться:*"
     )
     
@@ -3509,17 +4196,194 @@ async def start_command(message: types.Message):
             InlineKeyboardButton(text="🟡 СРЕДНИЙ", callback_data="mode_medium"),
             InlineKeyboardButton(text="🟢 МЯГКИЙ", callback_data="mode_soft")
         ],
-        [InlineKeyboardButton(text="📖 ЧТО ДАЕТ ТЕСТ", callback_data="show_benefits")]
+        [InlineKeyboardButton(text="📖 ЧТО ДАЕТ ТЕСТ", callback_data="show_benefits")],
+        [InlineKeyboardButton(text="❓ ЗАДАТЬ ВОПРОС", callback_data="ask_pretest")]
     ])
     
     await message.answer(welcome_text, reply_markup=keyboard, parse_mode='Markdown')
 
-async def callback_handler(callback: types.CallbackQuery, context: types.ContextTypes.DEFAULT_TYPE):
-    """Обработчик всех callback-запросов"""
+async def choose_mode(callback, mode):
+    user_id = callback.from_user.id
+    
+    if user_id not in user_contexts:
+        user_contexts[user_id] = UserContext(user_id)
+    
+    user_contexts[user_id].communication_mode = mode
+    mode_info = COMMUNICATION_MODES[mode]
+    
+    await callback.message.edit_text(
+        f"{mode_info['emoji']} *Режим выбран:* {mode_info['name']}\n\n"
+        f"{mode_info['description']}\n\n"
+        f"Теперь давай познакомимся поближе.",
+        parse_mode='Markdown'
+    )
+    
+    await asyncio.sleep(1)
+    
+    # Показываем введение
+    intro_text = (
+        f"🧠 *ВИРТУАЛЬНЫЙ ПСИХОЛОГ - МАТРИЦА ПОВЕДЕНИЙ 4×6*\n\n"
+        f"🔍 *ЧТО ТЕБЯ ЖДЕТ:*\n\n"
+        f"**ЭТАП 1: КОНФИГУРАЦИЯ ВОСПРИЯТИЯ**\n"
+        f"Линза, через которую ты смотришь на мир. Определим, куда направлено твое внимание и какая тревога доминирует.\n\n"
+        f"**ЭТАП 2: КОНФИГУРАЦИЯ МЫШЛЕНИЯ**\n"
+        f"Как ты обрабатываешь информацию, какие связи видишь, какой объем можешь удержать.\n\n"
+        f"**ЭТАП 3: КОНФИГУРАЦИЯ ПОВЕДЕНИЯ**\n"
+        f"Твои автоматические реакции и закрепленные стратегии.\n\n"
+        f"**ЭТАП 4: ТОЧКА РОСТА**\n"
+        f"Где находится рычаг — место, где минимальное усилие дает максимальные изменения.\n\n"
+        f"⏱ *Всего 12 минут*\n\n"
+        f"👇 *Начинаем?*"
+    )
+    
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🚀 НАЧАТЬ ТЕСТ", callback_data="start_test")]
+    ])
+    
+    await callback.message.answer(intro_text, reply_markup=keyboard, parse_mode='Markdown')
+
+async def show_benefits(callback):
+    text = (
+        f"🔍 *ЧТО ТЫ УЗНАЕШЬ О СЕБЕ:*\n\n"
+        f"🛡 **Как ты реагируешь на давление**\n"
+        f"→ Замираешь, убегаешь или атакуешь?\n\n"
+        f"💰 **Твоя стратегия с деньгами**\n"
+        f"→ Просишь, ищешь, зарабатываешь или создаёшь системы?\n\n"
+        f"🔍 **Как ты объясняешь себе неудачи**\n"
+        f"→ Судьба, заговор или твои ошибки?\n\n"
+        f"🤝 **Твой паттерн в отношениях**\n"
+        f"→ Зависимость, подстройка или партнёрство?\n\n"
+        f"⚡ *После теста ты получишь:*\n"
+        f"• Полный психологический портрет\n"
+        f"• 🧠 Конфайнмент-модель (9 элементов)\n"
+        f"• 💡 Конкретные шаги для изменений\n"
+        f"• 🎙 Голосовые ответы на вопросы\n"
+        f"• 📖 Терапевтические сказки"
+    )
+    
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🔪 НАЧАТЬ ТЕСТ", callback_data="start_test")],
+        [InlineKeyboardButton(text="◀️ НАЗАД", callback_data="back_to_intro")]
+    ])
+    
+    await callback.message.edit_text(text, reply_markup=keyboard, parse_mode='Markdown')
+
+async def back_to_intro(callback):
+    user_id = callback.from_user.id
+    user_name = user_names.get(user_id, callback.from_user.first_name or "друг")
+    
+    welcome_text = (
+        f"👋 *Привет, {user_name}!*\n\n"
+        f"👇 *Выбери, с какой интонацией будем общаться:*"
+    )
+    
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(text="🔴 ЖЕСТКИЙ", callback_data="mode_hard"),
+            InlineKeyboardButton(text="🟡 СРЕДНИЙ", callback_data="mode_medium"),
+            InlineKeyboardButton(text="🟢 МЯГКИЙ", callback_data="mode_soft")
+        ],
+        [InlineKeyboardButton(text="📖 ЧТО ДАЕТ ТЕСТ", callback_data="show_benefits")],
+        [InlineKeyboardButton(text="❓ ЗАДАТЬ ВОПРОС", callback_data="ask_pretest")]
+    ])
+    
+    await callback.message.edit_text(welcome_text, reply_markup=keyboard, parse_mode='Markdown')
+
+async def ask_pretest(callback):
+    await callback.message.edit_text(
+        "❓ *Задай свой вопрос*\n\n"
+        "Я отвечу, но без твоего профиля ответ будет общим. "
+        "После теста смогу дать персональную рекомендацию.\n\n"
+        "_Напиши вопрос текстом или голосом._",
+        parse_mode='Markdown'
+    )
+    
+    user_id = callback.from_user.id
+    if user_id in user_data:
+        user_data[user_id]["stage"] = "pretest_question"
+
+async def handle_pretest_question(message: types.Message):
+    user_id = message.from_user.id
+    user = user_data.get(user_id, {})
+    user_name = user_names.get(user_id, message.from_user.first_name or "друг")
+    context_obj = user_contexts.get(user_id)
+    mode = context_obj.communication_mode if context_obj else "medium"
+    
+    question = message.text
+    
+    if "history" not in user:
+        user["history"] = []
+    
+    user["history"].append({
+        "role": "user",
+        "text": question,
+        "timestamp": datetime.now().isoformat(),
+        "type": "pretest"
+    })
+    
+    thinking = await message.answer("🤔 *Думаю...*", parse_mode='Markdown')
+    await asyncio.sleep(1)
+    
+    mode_prompt = COMMUNICATION_MODES.get(mode, COMMUNICATION_MODES["medium"])["prompt"]
+    
+    prompt = f"""Ответь на вопрос человека. Ты еще не знаешь его профиль, поэтому ответь общо, но полезно.
+Затем мягко предложи пройти тест для точного ответа.
+
+Вопрос: {question}
+
+Стиль: {mode_prompt}"""
+    
+    response = await call_deepseek(prompt, max_tokens=400)
+    
+    if not response:
+        response = f"Спасибо за вопрос, {user_name}. Чтобы ответить точнее, мне нужно знать твой профиль. Пройди тест — это займёт 12 минут."
+    
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🔪 НАЧАТЬ ТЕСТ", callback_data="start_test")],
+        [InlineKeyboardButton(text="❓ ЕЩЁ ВОПРОС", callback_data="ask_pretest")],
+        [InlineKeyboardButton(text="◀️ НАЗАД", callback_data="back_to_intro")]
+    ])
+    
+    await thinking.delete()
+    await message.answer(response, reply_markup=keyboard, parse_mode='Markdown')
+    
+    user["stage"] = "introduction"
+
+async def handle_help_category(callback, category: str):
+    """Обработчик категорий помощи"""
+    user_id = callback.from_user.id
+    user = user_data.get(user_id, {})
+    
+    category_texts = {
+        "relations": "🗣 *Отношения*\n\nРасскажи, что происходит в отношениях. Я помогу разобраться.",
+        "money": "💰 *Деньги и ресурсы*\n\nЧто беспокоит в финансовой сфере?",
+        "self": "🧠 *Самоощущение*\n\nРасскажи о том, что чувствуешь.",
+        "knowledge": "🧠 *Знания и развитие*\n\nЧто хочешь понять или освоить?",
+        "support": "💪 *Поддержка*\n\nНужно просто выговориться? Я здесь.",
+        "muse": "🎨 *Муза и творчество*\n\nТворческий блок? Расскажи.",
+        "care": "🍏 *Забота о себе*\n\nКак ты заботишься о себе?"
+    }
+    
+    text = category_texts.get(category, "Чем я могу помочь?")
+    
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="✏️ Написать", callback_data="ask_question")],
+        [InlineKeyboardButton(text="◀️ Назад", callback_data="show_help")]
+    ])
+    
+    await callback.message.edit_text(text, parse_mode='Markdown', reply_markup=keyboard)
+    
+    # Устанавливаем состояние для ожидания вопроса по конкретной категории
+    if user:
+        user["stage"] = "awaiting_question"
+        user["question_context"] = category
+
+async def callback_handler(callback: types.CallbackQuery):
+    await callback.answer()
+    
     user_id = callback.from_user.id
     data = callback.data
     
-    # Инициализация данных пользователя если нет
     if user_id not in user_data:
         user_data[user_id] = {
             "stage": "introduction",
@@ -3528,6 +4392,8 @@ async def callback_handler(callback: types.CallbackQuery, context: types.Context
             "current_question": 0,
             "profile_complete": False,
             "logged": False,
+            "ai_analysis": None,
+            "ai_recommendations": None,
             "history": [],
             "awaiting": None,
             "confinement_model": None,
@@ -3540,6 +4406,7 @@ async def callback_handler(callback: types.CallbackQuery, context: types.Context
             "dilts_counts": {"ENVIRONMENT": 0, "BEHAVIOR": 0, "CAPABILITIES": 0, "VALUES": 0, "IDENTITY": 0},
             "dominant_dilts": None,
             "profile_data": None,
+            "all_answers": [],
             "processing": False
         }
     
@@ -3555,45 +4422,124 @@ async def callback_handler(callback: types.CallbackQuery, context: types.Context
         # Навигация
         elif data == "show_benefits":
             await show_benefits(callback)
+        elif data == "back_to_intro":
+            await back_to_intro(callback)
+        elif data == "ask_pretest":
+            await ask_pretest(callback)
+        
+        # Категории помощи
+        elif data.startswith("help_cat_"):
+            category = data.replace("help_cat_", "")
+            await handle_help_category(callback, category)
         
         # Тест
         elif data == "start_test":
             user_data[user_id]["stage"] = "testing"
-            await show_stage_1_intro(callback, context)
+            await show_stage_1_intro(callback, None)
         
         elif data == "start_stage_1":
-            await start_stage_1(callback, context)
+            await start_stage_1(callback, None)
         
         elif data.startswith("stage1_"):
-            await handle_stage_1_answer(callback, context)
+            await handle_stage_1_answer(callback, None)
         
         elif data == "show_stage_2_intro":
-            await show_stage_2_intro(callback, context)
+            await show_stage_2_intro(callback, None)
         
         elif data == "start_stage_2":
-            await start_stage_2(callback, context)
+            await start_stage_2(callback, None)
         
         elif data.startswith("stage2_"):
-            await handle_stage_2_answer(callback, context)
+            await handle_stage_2_answer(callback, None)
+        
+        elif data == "show_stage_3_intro":
+            await show_stage_3_intro(callback, None)
+        
+        elif data == "start_stage_3":
+            await start_stage_3(callback, None)
+        
+        elif data.startswith("stage3_"):
+            await handle_stage_3_answer(callback, None)
+        
+        elif data == "show_stage_4_intro":
+            await show_stage_4_intro(callback, None)
+        
+        elif data == "start_stage_4":
+            await start_stage_4(callback, None)
+        
+        elif data.startswith("stage4_"):
+            await handle_stage_4_answer(callback, None)
         
         # Результаты
         elif data == "show_results":
-            await show_results_screen(callback, context)
+            await show_results_screen(callback, None)
         
         elif data == "ai_analysis":
-            await show_ai_analysis(callback, context)
+            await show_ai_analysis(callback, None)
         
         elif data == "ai_recommendations":
-            await show_ai_recommendations(callback, context)
+            await show_ai_recommendations(callback, None)
         
         elif data == "smart_questions":
-            await show_smart_questions(callback, context)
+            await show_smart_questions(callback, None)
         
         elif data.startswith("ask_"):
-            await handle_smart_question(callback, context)
+            idx = int(data.split("_")[1]) - 1
+            questions = user_data[user_id].get("smart_questions", [])
+            if 0 <= idx < len(questions):
+                await handle_smart_question(callback, questions[idx])
+        
+        elif data == "ask_question":
+            user_data[user_id]["stage"] = "awaiting_question"
+            keyboard = InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="◀️ Назад", callback_data="show_results")]
+            ])
+            await callback.message.edit_text(
+                "✏️ *ЗАДАЙ ВОПРОС*\n\n"
+                "Напиши, что тебя беспокоит. Я помню твой профиль.",
+                parse_mode='Markdown',
+                reply_markup=keyboard
+            )
+        
+        elif data == "show_help":
+            keyboard = get_help_keyboard()
+            await callback.message.edit_text(
+                "🎯 *ЧЕМ Я МОГУ БЫТЬ ПОЛЕЗЕН*\n\n"
+                "Выбери категорию или напиши сам:",
+                reply_markup=keyboard,
+                parse_mode='Markdown'
+            )
         
         elif data == "show_tale":
-            await show_tale_callback(callback, context)
+            await show_tale_callback(callback, None)
+        
+        elif data == "more_info":
+            text = (
+                f"🧠 *ТВОЙ ВТОРОЙ МОЗГ 8.0*\n\n"
+                f"⚡ *В ЭТОЙ ВЕРСИИ:*\n"
+                f"• 🧠 4 вектора × 6 уровней\n"
+                f"• 🧠 4-этапный тест (восприятие, мышление, поведение, точка роста)\n"
+                f"• 🔄 Конфайнмент-моделирование\n"
+                f"• 🎯 Целевой навигатор\n"
+                f"• 🧠 ГИПНОТЕРАПЕВТИЧЕСКИЙ МОДУЛЬ\n"
+                f"  - Пресуппозиции, трюизмы, псевдологика\n"
+                f"  - Парадоксальные команды\n"
+                f"  - Встроенные внушения\n"
+                f"  - Гипновопросы\n"
+                f"  - Терапевтические сказки\n"
+                f"  - Милтон-модель\n"
+                f"  - Якорение\n"
+                f"• 🎙 Голосовые сообщения\n"
+                f"• 🌍 Контекст (город, погода, время)\n\n"
+                f"💬 *ОДНАЖДЫ ТЫ ПРОСТО ПЕРЕСТАНЕШЬ БЫТЬ ПРОБЛЕМОЙ ДЛЯ САМОГО СЕБЯ.*"
+            )
+            
+            keyboard = InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="👤 СВЯЗАТЬСЯ С ПСИХОЛОГОМ", url="https://t.me/meysternlp")],
+                [InlineKeyboardButton(text="◀️ НАЗАД", callback_data="show_results")]
+            ])
+            
+            await callback.message.edit_text(text, parse_mode='Markdown', reply_markup=keyboard)
         
         elif data == "restart_test":
             old_history = user_data[user_id].get("history", [])
@@ -3605,6 +4551,8 @@ async def callback_handler(callback: types.CallbackQuery, context: types.Context
                 "current_question": 0,
                 "profile_complete": False,
                 "logged": False,
+                "ai_analysis": None,
+                "ai_recommendations": None,
                 "history": old_history[-10:] if old_history else [],
                 "awaiting": None,
                 "confinement_model": None,
@@ -3617,20 +4565,383 @@ async def callback_handler(callback: types.CallbackQuery, context: types.Context
                 "dilts_counts": {"ENVIRONMENT": 0, "BEHAVIOR": 0, "CAPABILITIES": 0, "VALUES": 0, "IDENTITY": 0},
                 "dominant_dilts": None,
                 "profile_data": None,
+                "all_answers": [],
                 "processing": False
             }
-            await start_command(callback.message)
+            await back_to_intro(callback)
+    
+    except TelegramBadRequest as e:
+        if "message is not modified" in str(e).lower():
+            logger.info(f"Ignored 'message not modified' error")
+        else:
+            raise
+
+async def handle_message(message: types.Message):
+    user_id = message.from_user.id
+    
+    if user_id not in user_data:
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="🏠 Меню", callback_data="back_to_intro")]
+        ])
+        await message.answer("Начните с /start", reply_markup=keyboard)
+        return
+    
+    user = user_data[user_id]
+    
+    if user.get("stage") == "pretest_question":
+        await handle_pretest_question(message)
+        return
+    
+    if message.voice:
+        await handle_voice_message(message)
+        return
+    
+    if user.get("stage") == "awaiting_question":
+        # Обрабатываем как вопрос
+        scores = {k: round(mean(v), 1) for k, v in user["scores"].items() if v}
+        
+        if not scores:
+            await message.answer("Сначала пройди тест через /start")
+            return
+        
+        thinking = await message.answer("🤔 *Думаю над ответом...*", parse_mode='Markdown')
+        
+        context_obj = user_contexts.get(user_id)
+        user_name = user_names.get(user_id, message.from_user.first_name or "друг")
+        mode = context_obj.communication_mode if context_obj else "medium"
+        
+        # Собираем контекст для гипно-оркестратора
+        hypno_context = {
+            'confinement_model': user.get('confinement_model'),
+            'scores': scores,
+            'history': user.get('history', [])[-5:]
+        }
+        
+        # Используем гипно-оркестратор
+        response = hypno.process_user_input(
+            user_id=user_id,
+            text=message.text,
+            context=hypno_context
+        )
+        
+        if "history" not in user:
+            user["history"] = []
+        
+        user["history"].append({
+            "role": "user", 
+            "text": message.text, 
+            "timestamp": datetime.now().isoformat()
+        })
+        user["history"].append({
+            "role": "assistant", 
+            "text": response, 
+            "timestamp": datetime.now().isoformat()
+        })
+        
+        await thinking.delete()
+        
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="❓ Ещё вопрос", callback_data="smart_questions")],
+            [InlineKeyboardButton(text="🧠 К портрету", callback_data="show_results")],
+            [InlineKeyboardButton(text="🎯 ЧЕМ ПОМОЧЬ", callback_data="show_help")]
+        ])
+        
+        await message.answer(
+            f"🧠 *Ответ*\n\n{response}",
+            parse_mode='Markdown',
+            reply_markup=keyboard
+        )
+        
+        audio_data = await text_to_speech(response, mode)
+        if audio_data:
+            audio_file = BufferedInputFile(audio_data, filename="response.ogg")
+            await message.answer_voice(
+                audio_file,
+                caption="🎙 *Голосовой ответ*",
+                parse_mode='Markdown'
+            )
+        
+        user["stage"] = "menu"
+    else:
+        # По умолчанию показываем меню
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="🧠 К ПОРТРЕТУ", callback_data="show_results")],
+            [InlineKeyboardButton(text="🎯 ЧЕМ ПОМОЧЬ", callback_data="show_help")],
+            [InlineKeyboardButton(text="❓ ЗАДАТЬ ВОПРОС", callback_data="smart_questions")]
+        ])
+        await message.answer(
+            "Используй кнопки для навигации:",
+            reply_markup=keyboard
+        )
+
+async def handle_voice_message(message: types.Message):
+    user_id = message.from_user.id
+    user = user_data.get(user_id)
+    
+    if not user:
+        await message.answer("Начните с /start")
+        return
+    
+    if not is_test_completed(user):
+        await message.answer(
+            "🎙 *Голосовые сообщения доступны только после завершения теста*",
+            parse_mode='Markdown'
+        )
+        return
+    
+    status_msg = await message.answer("🎤 *Распознаю речь...*", parse_mode='Markdown')
+    
+    temp_file = None
+    try:
+        file_info = await message.bot.get_file(message.voice.file_id)
+        
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.ogg') as tmp:
+            temp_file = tmp.name
+            await message.bot.download_file(file_info.file_path, destination=temp_file)
+        
+        recognized_text = await speech_to_text(temp_file)
+        
+        try:
+            os.unlink(temp_file)
+        except:
+            pass
+        
+        if not recognized_text:
+            await status_msg.edit_text(
+                "❌ *Не удалось распознать речь*\n\n"
+                "Попробуйте еще раз или напишите текстом.",
+                parse_mode='Markdown'
+            )
+            return
+        
+        await status_msg.edit_text(
+            f"📝 *Вы сказали:*\n"
+            f"_{recognized_text}_\n\n"
+            f"🤔 *Думаю над ответом...*",
+            parse_mode='Markdown'
+        )
+        
+        scores = {k: round(mean(v), 1) for k, v in user["scores"].items() if v}
+        context_obj = user_contexts.get(user_id)
+        user_name = user_names.get(user_id, message.from_user.first_name or "друг")
+        mode = context_obj.communication_mode if context_obj else "medium"
+        
+        # Собираем контекст для гипно-оркестратора
+        hypno_context = {
+            'confinement_model': user.get('confinement_model'),
+            'scores': scores,
+            'history': user.get('history', [])[-5:]
+        }
+        
+        # Используем гипно-оркестратор
+        response = hypno.process_user_input(
+            user_id=user_id,
+            text=recognized_text,
+            context=hypno_context
+        )
+        
+        user["history"].append({
+            "role": "user", 
+            "text": recognized_text, 
+            "timestamp": datetime.now().isoformat()
+        })
+        user["history"].append({
+            "role": "assistant", 
+            "text": response, 
+            "timestamp": datetime.now().isoformat()
+        })
+        
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="❓ Ещё вопрос", callback_data="smart_questions")],
+            [InlineKeyboardButton(text="🧠 К ПОРТРЕТУ", callback_data="show_results")],
+            [InlineKeyboardButton(text="🎯 ЧЕМ ПОМОЧЬ", callback_data="show_help")]
+        ])
+        
+        await status_msg.edit_text(
+            f"📝 *Вы сказали:*\n_{recognized_text}_\n\n"
+            f"*Ответ:*\n{response}",
+            parse_mode='Markdown',
+            reply_markup=keyboard
+        )
+        
+        audio_data = await text_to_speech(response, mode)
+        if audio_data:
+            audio_file = BufferedInputFile(audio_data, filename="response.ogg")
+            await message.answer_voice(
+                audio_file,
+                caption="🎙 *Голосовой ответ*",
+                parse_mode='Markdown'
+            )
     
     except Exception as e:
-        logger.error(f"Ошибка в callback_handler: {e}")
-        await callback.message.edit_text("❌ Произошла ошибка. Попробуй еще раз или начни заново с /start")
+        logger.error(f"Ошибка при обработке голосового сообщения: {e}")
+        await status_msg.edit_text(
+            "❌ *Произошла ошибка*\n\n"
+            "Попробуйте еще раз или напишите текстом.",
+            parse_mode='Markdown'
+        )
 
-# Остальные вспомогательные функции (choose_mode, show_benefits, show_tale_callback и т.д.)
-# здесь не приводятся для краткости, но они должны быть аналогично исправлены
+async def stats_command(message: types.Message):
+    if message.from_user.id not in ADMIN_IDS:
+        await message.answer("⛔ Доступ запрещен")
+        return
+    
+    await message.answer(stats.get_stats_text(), parse_mode='Markdown')
+
+async def apistatus_command(message: types.Message):
+    if message.from_user.id not in ADMIN_IDS:
+        await message.answer("⛔ Доступ запрещен")
+        return
+    
+    status_msg = await message.answer("🔄 Проверяю API...")
+    
+    deepseek_status = "✅ работает" if DEEPSEEK_API_KEY else "❌ не настроен"
+    deepgram_status = "✅ работает" if DEEPGRAM_API_KEY else "❌ не настроен"
+    yandex_status = "✅ работает" if YANDEX_API_KEY else "❌ не настроен"
+    weather_status = "✅ работает" if OPENWEATHER_API_KEY else "❌ не настроен"
+    
+    text = f"📊 **Статус API:**\n\n"
+    text += f"• DeepSeek: {deepseek_status}\n"
+    text += f"• Deepgram: {deepgram_status}\n"
+    text += f"• Yandex TTS: {yandex_status}\n"
+    text += f"• OpenWeather: {weather_status}\n\n"
+    
+    if YANDEX_API_KEY:
+        text += f"🎙 Голоса: Оксана (забота), Филипп (ирония), Эрмил (мягкий)\n"
+    
+    await status_msg.edit_text(text, parse_mode='Markdown')
+
+async def test_yandex_command(message: types.Message):
+    if message.from_user.id not in ADMIN_IDS:
+        await message.answer("⛔ Только для администраторов")
+        return
+    
+    test_text = "Привет! Это тестовое голосовое сообщение."
+    status = await message.answer("🎧 Тестирую Yandex TTS...")
+    
+    audio = await text_to_speech(test_text, "medium")
+    
+    if audio:
+        audio_file = BufferedInputFile(audio, filename="test.ogg")
+        await message.answer_voice(
+            audio_file,
+            caption="✅ Yandex SpeechKit работает!"
+        )
+        await status.delete()
+    else:
+        await status.edit_text("❌ Yandex SpeechKit не работает.")
+
+async def test_voices_command(message: types.Message):
+    if message.from_user.id not in ADMIN_IDS:
+        await message.answer("⛔ Только для администраторов")
+        return
+    
+    if not YANDEX_API_KEY:
+        await message.answer("❌ YANDEX_API_KEY не настроен")
+        return
+    
+    test_text = "Ну, допустим, вы действительно так считаете."
+    status = await message.answer("🎧 Тестирую голоса...")
+    
+    modes_to_test = [
+        ("hard", "🔴 Жесткий режим"),
+        ("medium", "🟡 Средний режим"),
+        ("soft", "🟢 Мягкий режим"),
+    ]
+    
+    results = []
+    for mode_key, description in modes_to_test:
+        audio = await text_to_speech(test_text, mode_key)
+        if audio:
+            audio_file = BufferedInputFile(audio, filename=f"{mode_key}.ogg")
+            await message.answer_voice(
+                audio_file,
+                caption=f"🎙 *{description}*",
+                parse_mode='Markdown'
+            )
+            results.append(f"✅ {description}")
+        else:
+            results.append(f"❌ {description}")
+        await asyncio.sleep(0.5)
+    
+    summary = "📊 *РЕЗУЛЬТАТЫ*\n\n" + "\n".join(results)
+    await message.answer(summary, parse_mode='Markdown')
+    await status.delete()
+
+async def test_motivation_command(message: types.Message):
+    if message.from_user.id not in ADMIN_IDS:
+        await message.answer("⛔ Только для администраторов")
+        return
+    
+    test_scores = {
+        "СБ": 2.3,
+        "ТФ": 3.1,
+        "УБ": 2.8,
+        "ЧВ": 3.5
+    }
+    
+    # Определяем слабое место
+    if test_scores:
+        min_vector = min(test_scores.items(), key=lambda x: level(x[1]))
+        vector, score = min_vector
+        lvl = level(score)
+        profile = LEVEL_PROFILES.get(vector, {}).get(lvl, {})
+        
+        mot_text = (
+            f"🧠 *ЧЕРЕЗ 5 МИНУТ ПОСЛЕ ТЕСТА*\n\n"
+            f"Слушай, Тестовый...\n\n"
+            f"Твое самое узкое место — {VECTORS[vector]['name']} (уровень {lvl}).\n"
+            f"{profile.get('pain_origin', '')}\n\n"
+            f"🎯 *Первый шаг:*\n"
+            f"{profile.get('immediate_tool', 'Начни с малого.')}\n\n"
+            f"⚡️ Я с тобой на связи."
+        )
+    else:
+        mot_text = "Слушай, Тестовый...\n\nКак ты? Я рядом."
+    
+    await message.answer(mot_text, parse_mode='Markdown')
+    
+    audio_data = await text_to_speech(mot_text, "medium")
+    if audio_data:
+        audio_file = BufferedInputFile(audio_data, filename="motivation_test.ogg")
+        await message.answer_voice(
+            audio_file,
+            caption="🎙 *Тестовое мотивационное сообщение*",
+            parse_mode='Markdown'
+        )
+
+async def show_tasks_command(message: types.Message):
+    if message.from_user.id not in ADMIN_IDS:
+        await message.answer("⛔ Только для администраторов")
+        return
+    
+    if not task_manager.tasks:
+        await message.answer("📭 Нет запланированных задач")
+        return
+    
+    text = "📋 *ЗАПЛАНИРОВАННЫЕ ЗАДАЧИ*\n\n"
+    for task_id, task_info in task_manager.tasks.items():
+        user_id = task_info["user_id"]
+        task_type = task_info["type"]
+        scheduled = task_info["scheduled_time"].strftime("%d.%m %H:%M")
+        text += f"• {task_type} для {user_id} в {scheduled}\n"
+    
+    await message.answer(text, parse_mode='Markdown')
+
+async def tale_command(message: types.Message):
+    await show_tale_command(message)
 
 # ══════════════════════════════════════════════
 #  ЗАПУСК БОТА
 # ══════════════════════════════════════════════
+
+async def check_api_on_startup():
+    logger.info("Проверяю DeepSeek API...")
+    response = await call_deepseek("Ответь 'OK' одним словом", max_tokens=10)
+    if response:
+        logger.info("✅ DeepSeek API работает")
+    else:
+        logger.warning("❌ DeepSeek API не отвечает")
 
 async def main():
     if not TELEGRAM_TOKEN:
@@ -3646,16 +4957,42 @@ async def main():
     await bot.delete_webhook(drop_pending_updates=True)
     print("✅ Вебхук удален")
     
-    # Регистрируем обработчики
+    # Регистрируем обработчики команд
     dp.message.register(start_command, Command("start"))
+    dp.message.register(stats_command, Command("stats"))
+    dp.message.register(apistatus_command, Command("apistatus"))
+    dp.message.register(test_yandex_command, Command("test_yandex"))
+    dp.message.register(test_voices_command, Command("test_voices"))
+    dp.message.register(test_motivation_command, Command("test_mot"))
+    dp.message.register(show_tasks_command, Command("tasks"))
+    dp.message.register(tale_command, Command("tale"))
+    
+    # Регистрируем callback-обработчик
     dp.callback_query.register(callback_handler)
+    
+    # Регистрируем обработчики сообщений
+    dp.message.register(handle_voice_message, lambda m: m.voice is not None)
+    dp.message.register(handle_message)
+    
+    if DEEPSEEK_API_KEY:
+        logger.info("DeepSeek API ключ найден")
+        asyncio.create_task(check_api_on_startup())
+    else:
+        logger.warning("DeepSeek API ключ не найден")
     
     logger.info("Бот запущен...")
     print("\n" + "="*80)
-    print("🚀 ВИРТУАЛЬНЫЙ ПСИХОЛОГ v9.0 (ИИ-версия)")
+    print("🚀 ВИРТУАЛЬНЫЙ ПСИХОЛОГ - МАТРИЦА ПОВЕДЕНИЙ 4×6 v8.0")
     print("="*80)
     print(f"👤 Ваш Telegram ID: {ADMIN_IDS[0] if ADMIN_IDS else 'не указан'}")
-    print("🧠 Все описания генерируются через DeepSeek AI")
+    print("📊 Команды: /stats, /apistatus, /test_yandex, /test_voices, /test_mot, /tasks, /tale")
+    print("🎙 Распознавание: " + ("✅ Deepgram" if DEEPGRAM_API_KEY else "❌ нет"))
+    print("🎙 Синтез речи: " + ("✅ Yandex" if YANDEX_API_KEY else "❌ нет"))
+    print("🌍 Погода: " + ("✅ OpenWeather" if OPENWEATHER_API_KEY else "❌ нет"))
+    print("🔄 Конфайнмент-моделирование: ✅")
+    print("🧠 4-этапный тест: ✅")
+    print("🧠 ГИПНОТЕРАПЕВТИЧЕСКИЙ МОДУЛЬ: ✅")
+    print("📅 Мотивация: через 5 мин и 24 часа")
     print("="*80 + "\n")
     
     await dp.start_polling(bot, drop_pending_updates=True)
