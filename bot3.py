@@ -103,6 +103,74 @@ hypno = HypnoOrchestrator()
 tales = TherapeuticTales()
 anchoring = Anchoring()
 
+# ============================================
+# ФУНКЦИЯ ДЛЯ БЕЗОПАСНОГО ФОРМАТИРОВАНИЯ ТЕКСТА
+# ============================================
+
+def escape_markdown(text: str) -> str:
+    """
+    Экранирует специальные символы Markdown и исправляет незакрытые теги
+    """
+    if not text:
+        return text
+    
+    # Сначала заменяем корректные теги жирного текста
+    # (оставляем **жирный** как есть)
+    
+    # Экранируем опасные символы, которые не являются частью разметки
+    dangerous_chars = ['_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!']
+    
+    result = []
+    in_bold = False
+    in_italic = False
+    
+    i = 0
+    while i < len(text):
+        char = text[i]
+        
+        # Проверяем на жирный текст (**)
+        if char == '*' and i + 1 < len(text) and text[i + 1] == '*':
+            result.append('**')
+            in_bold = not in_bold
+            i += 2
+            continue
+        
+        # Проверяем на курсив (_)
+        elif char == '_':
+            result.append('_')
+            in_italic = not in_italic
+            i += 1
+            continue
+        
+        # Экранируем опасные символы вне разметки
+        elif char in dangerous_chars and not in_bold and not in_italic:
+            result.append('\\' + char)
+        else:
+            result.append(char)
+        
+        i += 1
+    
+    return ''.join(result)
+
+
+def clean_markdown(text: str) -> str:
+    """
+    Полностью очищает текст от Markdown (для безопасной отправки)
+    """
+    if not text:
+        return text
+    
+    # Удаляем Markdown-разметку
+    text = re.sub(r'\*\*(.*?)\*\*', r'\1', text)  # **жирный**
+    text = re.sub(r'__(.*?)__', r'\1', text)      # __жирный__
+    text = re.sub(r'\*(.*?)\*', r'\1', text)      # *курсив*
+    text = re.sub(r'_(.*?)_', r'\1', text)        # _курсив_
+    text = re.sub(r'`(.*?)`', r'\1', text)        # `код`
+    text = re.sub(r'\[(.*?)\]\(.*?\)', r'\1', text)  # [ссылка](url)
+    text = re.sub(r'!\[(.*?)\]\(.*?\)', r'\1', text) # ![картинка](url)
+    
+    return text
+
 
 # ============================================
 # FSM СОСТОЯНИЯ
@@ -1929,7 +1997,7 @@ async def generate_ai_profile(user_id: int, state: FSMContext) -> Optional[str]:
         "IDENTITY": "Идентичность"
     }
     
-    # Формируем промпт
+    # ВАЖНО: добавляем инструкцию по форматированию
     prompt = f"""ТЫ — ПСИХОЛОГ-АНАЛИТИК. На основе данных теста составь психологический портрет человека.
 
 === ИСХОДНЫЕ ДАННЫЕ ===
@@ -1973,7 +2041,14 @@ async def generate_ai_profile(user_id: int, state: FSMContext) -> Optional[str]:
 
 СТИЛЬ: Как опытный психолог — честно, по-взрослому, без воды, но с заботой.
 
-ОБЪЕМ: Не больше 2000 символов всего. Блоки должны быть четко выделены заголовками с эмодзи.
+!!! ВАЖНОЕ ТРЕБОВАНИЕ К ФОРМАТИРОВАНИЮ !!!
+- Используй ТОЛЬКО **жирный текст** для заголовков блоков
+- Не используй символы #, _ в других местах
+- Каждый пункт в списках начинай с •
+- Не оставляй незакрытые символы **
+- Проверь, что все ** имеют закрывающую пару
+
+ОБЪЕМ: Не больше 2000 символов всего.
 """
     
     response = await call_deepseek(prompt, max_tokens=2000)
@@ -2615,10 +2690,13 @@ async def show_final_profile(callback: CallbackQuery, state: FSMContext):
 async def show_ai_generated_profile(callback: CallbackQuery, state: FSMContext, ai_profile: str):
     """Показывает профиль, сгенерированный ИИ"""
     
+    # Очищаем текст от проблемной Markdown-разметки
+    clean_text = clean_markdown(ai_profile)
+    
     text = f"""
 🧠 *ВАШ ПСИХОЛОГИЧЕСКИЙ ПОРТРЕТ*
 
-{ai_profile}
+{clean_text}
 
 ━━━━━━━━━━━━━━━━━━━━
 👇 *Что дальше?*
@@ -2630,7 +2708,17 @@ async def show_ai_generated_profile(callback: CallbackQuery, state: FSMContext, 
         [InlineKeyboardButton(text="⚙️ ВЫБРАТЬ РЕЖИМ", callback_data="show_mode_selection")]
     ])
     
-    await callback.message.edit_text(text, reply_markup=keyboard, parse_mode='Markdown')
+    try:
+        await callback.message.edit_text(text, reply_markup=keyboard, parse_mode='Markdown')
+    except TelegramBadRequest as e:
+        # Если ошибка с Markdown, пробуем отправить без Markdown
+        if "can't parse entities" in str(e).lower():
+            # Убираем Markdown совсем
+            text_plain = re.sub(r'[*_`]', '', text)
+            await callback.message.edit_text(text_plain, reply_markup=keyboard)
+        else:
+            raise
+    
     await state.set_state(TestStates.profile_generated)
 
 
@@ -4942,19 +5030,35 @@ async def callback_handler(callback: CallbackQuery, state: FSMContext):
         elif data == "back_to_results":
             await back_to_results(callback, state)
         
+        # Отвечаем на callback
         await callback.answer()
     
     except TelegramBadRequest as e:
         if "message is not modified" in str(e).lower():
             logger.info("Ignored 'message not modified' error")
             await callback.answer()
+        elif "can't parse entities" in str(e).lower() or "parse entities" in str(e).lower():
+            # 👇 НОВАЯ ОБРАБОТКА: ошибка парсинга Markdown
+            logger.warning(f"Markdown parsing error, retrying without markdown: {e}")
+            try:
+                # Пробуем получить текущий текст и отправить без Markdown
+                if callback.message and callback.message.text:
+                    # Удаляем все Markdown-символы
+                    clean_text = re.sub(r'[*_`#]', '', callback.message.text)
+                    # Отправляем без parse_mode
+                    await callback.message.edit_text(clean_text, reply_markup=callback.message.reply_markup)
+                else:
+                    # Если не получилось, просто отвечаем
+                    await callback.answer("❌ Ошибка форматирования")
+            except Exception as e2:
+                logger.error(f"Failed to recover from Markdown error: {e2}")
+                await callback.answer("❌ Произошла ошибка")
         else:
             logger.error(f"TelegramBadRequest: {e}")
             await callback.answer()
     except Exception as e:
-        logger.error(f"Error in callback_handler: {e}")
+        logger.error(f"Unexpected error in callback_handler: {e}")
         await callback.answer()
-
 
 # ============================================
 # КОМАНДЫ АДМИНИСТРАТОРОВ
