@@ -8,7 +8,6 @@
 import os
 import json
 import logging
-import aiohttp
 import asyncio
 import tempfile
 import random
@@ -16,7 +15,9 @@ import re
 import time
 from typing import Optional, Dict, List, Any, Tuple, Union
 from statistics import mean
-from dotenv import load_dotenv
+from datetime import datetime, timedelta
+from collections import defaultdict
+
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, BufferedInputFile, CallbackQuery, Message
 from aiogram.filters import Command
@@ -24,10 +25,22 @@ from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.storage.memory import MemoryStorage
-from datetime import datetime, timedelta
-from collections import defaultdict
 
-# Импортируем описания профилей
+# Импорты из наших новых модулей
+from config import (
+    TELEGRAM_TOKEN, ADMIN_IDS, COMMUNICATION_MODES
+)
+from models import (
+    UserContext, ReminderManager, DestinationManager, Statistics,
+    ConfinementModel9, level
+)
+from services import (
+    speech_to_text, text_to_speech, call_deepseek,
+    generate_response_with_full_context, generate_ai_profile,
+    generate_psychologist_thought
+)
+
+# Импортируем описания профилей и вопросы
 from profiles import (
     STAGE_1_FEEDBACK,
     STAGE_2_FEEDBACK,
@@ -37,8 +50,6 @@ from profiles import (
     VECTORS,
     LEVEL_PROFILES
 )
-
-# Импортируем вопросы
 from test_questions import (
     STAGE_1_QUESTIONS,
     STAGE_2_QUESTIONS,
@@ -68,22 +79,7 @@ from test_questions import (
     get_option_value,
     map_to_stage3_feedback_level
 )
-
-# Импортируем гипнотический модуль
 from hypno_module import HypnoOrchestrator, TherapeuticTales, Anchoring
-
-# Загружаем переменные окружения
-load_dotenv()
-
-# Токены API
-TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN", "")
-DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY", "")
-DEEPGRAM_API_KEY = os.environ.get("DEEPGRAM_API_KEY", "")
-YANDEX_API_KEY = os.environ.get("YANDEX_API_KEY", "")
-OPENWEATHER_API_KEY = os.environ.get("OPENWEATHER_API_KEY", "")
-
-# ID администраторов
-ADMIN_IDS = [532205848]
 
 # Настройка логирования
 logging.basicConfig(
@@ -92,32 +88,32 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Хранилища данных
+# Глобальные хранилища
 user_data: Dict[int, Dict[str, Any]] = {}
 user_names: Dict[int, str] = {}
-user_contexts: Dict[int, 'UserContext'] = {}
+user_contexts: Dict[int, UserContext] = {}
 user_routes: Dict[int, Dict[str, Any]] = {}
+
+# Инициализируем менеджеры
+reminder_manager = ReminderManager()
+destination_manager = DestinationManager()
+stats = Statistics()
 
 # Инициализируем гипнотический оркестратор
 hypno = HypnoOrchestrator()
 tales = TherapeuticTales()
 anchoring = Anchoring()
 
+
 # ============================================
-# ФУНКЦИЯ ДЛЯ БЕЗОПАСНОГО ФОРМАТИРОВАНИЯ ТЕКСТА
+# ФУНКЦИИ ДЛЯ БЕЗОПАСНОГО ФОРМАТИРОВАНИЯ ТЕКСТА
 # ============================================
 
 def escape_markdown(text: str) -> str:
-    """
-    Экранирует специальные символы Markdown и исправляет незакрытые теги
-    """
+    """Экранирует специальные символы Markdown и исправляет незакрытые теги"""
     if not text:
         return text
     
-    # Сначала заменяем корректные теги жирного текста
-    # (оставляем **жирный** как есть)
-    
-    # Экранируем опасные символы, которые не являются частью разметки
     dangerous_chars = ['_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!']
     
     result = []
@@ -128,21 +124,16 @@ def escape_markdown(text: str) -> str:
     while i < len(text):
         char = text[i]
         
-        # Проверяем на жирный текст (**)
         if char == '*' and i + 1 < len(text) and text[i + 1] == '*':
             result.append('**')
             in_bold = not in_bold
             i += 2
             continue
-        
-        # Проверяем на курсив (_)
         elif char == '_':
             result.append('_')
             in_italic = not in_italic
             i += 1
             continue
-        
-        # Экранируем опасные символы вне разметки
         elif char in dangerous_chars and not in_bold and not in_italic:
             result.append('\\' + char)
         else:
@@ -154,20 +145,17 @@ def escape_markdown(text: str) -> str:
 
 
 def clean_markdown(text: str) -> str:
-    """
-    Полностью очищает текст от Markdown (для безопасной отправки)
-    """
+    """Полностью очищает текст от Markdown (для безопасной отправки)"""
     if not text:
         return text
     
-    # Удаляем Markdown-разметку
-    text = re.sub(r'\*\*(.*?)\*\*', r'\1', text)  # **жирный**
-    text = re.sub(r'__(.*?)__', r'\1', text)      # __жирный__
-    text = re.sub(r'\*(.*?)\*', r'\1', text)      # *курсив*
-    text = re.sub(r'_(.*?)_', r'\1', text)        # _курсив_
-    text = re.sub(r'`(.*?)`', r'\1', text)        # `код`
-    text = re.sub(r'\[(.*?)\]\(.*?\)', r'\1', text)  # [ссылка](url)
-    text = re.sub(r'!\[(.*?)\]\(.*?\)', r'\1', text) # ![картинка](url)
+    text = re.sub(r'\*\*(.*?)\*\*', r'\1', text)
+    text = re.sub(r'__(.*?)__', r'\1', text)
+    text = re.sub(r'\*(.*?)\*', r'\1', text)
+    text = re.sub(r'_(.*?)_', r'\1', text)
+    text = re.sub(r'`(.*?)`', r'\1', text)
+    text = re.sub(r'\[(.*?)\]\(.*?\)', r'\1', text)
+    text = re.sub(r'!\[(.*?)\]\(.*?\)', r'\1', text)
     
     return text
 
@@ -200,632 +188,16 @@ class TestStates(StatesGroup):
     viewing_intervention = State()
     
     # НОВЫЕ состояния
-    profile_generated = State()           # Профиль сгенерирован, показаны кнопки
-    destination_selection = State()       # Выбор точки назначения
-    route_generation = State()            # Генерация маршрута
-    route_active = State()                # Активный маршрут
-    route_step_active = State()           # Текущий шаг маршрута
-
-
-# ============================================
-# РЕЖИМЫ ОБЩЕНИЯ
-# ============================================
-
-COMMUNICATION_MODES = {
-    "coach": {
-        "name": "КОУЧ",
-        "display_name": "🔮 КОУЧ",
-        "emoji": "🔮",
-        "voice": "filipp",
-        "voice_emotion": "neutral",
-        
-        # ЗОНА ОТВЕТСТВЕННОСТИ
-        "responsibility": "Помогаю найти ответы внутри вас. Не даю готовых решений, а задаю вопросы.",
-        
-        # ПРОМПТ ДЛЯ AI
-        "system_prompt": """Ты — КОУЧ. Твоя задача: задавать открытые вопросы, помогать клиенту найти ответы внутри себя.
-
-        ТЫ НЕ ДОЛЖЕН:
-        - Давать готовые советы
-        - Говорить "я бы на вашем месте"
-        - Предлагать конкретные решения
-        - Оценивать и судить
-
-        ТЫ ДОЛЖЕН:
-        - Задавать уточняющие вопросы
-        - Отражать мысли клиента
-        - Помогать структурировать размышления
-        - Поддерживать в поиске собственных ответов
-        
-        ТВОЯ ФОРМУЛА: вопрос > ответ. Каждый твой ответ должен содержать вопрос.
-        
-        ГОВОРИ КОРОТКО, ПО ДЕЛУ, БЕЗ ВОДЫ. 2-4 предложения максимум."""
-    },
-    "friend": {
-        "name": "ДРУГ",
-        "display_name": "💚 ДРУГ",
-        "emoji": "💚",
-        "voice": "ermil",
-        "voice_emotion": "good",
-        
-        "responsibility": "Выслушиваю, поддерживаю, принимаю без осуждения. Как старший товарищ.",
-        
-        "system_prompt": """Ты — ДРУГ (как старший товарищ). Твоя задача: выслушивать, поддерживать, принимать без осуждения.
-
-        ТЫ НЕ ДОЛЖЕН:
-        - Давать непрошеные советы
-        - Обесценивать чувства ("не парьтесь", "ерунда")
-        - Сравнивать с другими
-        - Требовать "взять себя в руки"
-
-        ТЫ ДОЛЖЕН:
-        - Сначала признать чувства ("я слышу вас", "это действительно тяжело")
-        - Задавать бережные вопросы
-        - Быть рядом и поддерживать
-        
-        ТВОЯ ФОРМУЛА: принятие → поддержка → бережный вопрос.
-        
-        ГОВОРИ КОРОТКО, ДУШЕВНО, БЕЗ НАЗИДАНИЙ."""
-    },
-    "trainer": {
-        "name": "ТРЕНЕР",
-        "display_name": "⚡ ТРЕНЕР",
-        "emoji": "⚡",
-        "voice": "filipp",
-        "voice_emotion": "strict",
-        
-        "responsibility": "Даю чёткие инструкции, структуру, план действий. Требую результат.",
-        
-        "system_prompt": """Ты — ТРЕНЕР. Твоя задача: давать чёткие инструкции, структуру, план действий. Требовать результат.
-
-        ТВОЙ СТИЛЬ: коротко, по делу, без воды.
-
-        ТЫ ДОЛЖЕН:
-        - Давать конкретные шаги
-        - Устанавливать сроки
-        - Контролировать выполнение
-        - Требовать отчёт
-        
-        ФОРМУЛА: задача → дедлайн → следующий шаг.
-        
-        ГОВОРИ: чётко, структурно, с фокусом на действие."""
-    }
-}
-
-# Для обратной совместимости
-COMMUNICATION_MODES["hard"] = COMMUNICATION_MODES["trainer"]
-COMMUNICATION_MODES["medium"] = COMMUNICATION_MODES["coach"]
-COMMUNICATION_MODES["soft"] = COMMUNICATION_MODES["friend"]
-
-
-# ============================================
-# КЛАСС UserContext
-# ============================================
-
-class UserContext:
-    def __init__(self, user_id: int):
-        self.user_id = user_id
-        self.city = None
-        self.timezone = "Europe/Moscow"
-        self.timezone_offset = 3
-        self.gender = None
-        self.age = None
-        self.birth_date = None
-        self.name = None
-        self.communication_mode = "coach"
-        self.last_context_update = None
-        self.weather_cache = {}
-        self.weather_cache_time = None
-        self.season = None
-        self.moon_phase = None
-        self.holidays_today = []
-        self.working_hours = True
-        self.user_preferences = {}
-        self.awaiting_context = None
-        
-    def get_greeting(self, user_name: str = "") -> str:
-        """Персонализированное приветствие с учётом времени суток, пола и погоды"""
-        now = datetime.now()
-        hour = now.hour
-        
-        if 5 <= hour < 12:
-            greeting = "Доброе утро"
-        elif 12 <= hour < 18:
-            greeting = "Добрый день"
-        elif 18 <= hour < 23:
-            greeting = "Добрый вечер"
-        else:
-            greeting = "Доброй ночи"
-        
-        address = self.get_address() if self.communication_mode == "friend" else ""
-        
-        base = f"{greeting}"
-        if user_name:
-            base += f", {user_name}"
-        if address and self.communication_mode == "friend":
-            base += f" {address}"
-        base += "!"
-        
-        if self.weather_cache:
-            temp = self.weather_cache.get('temp')
-            icon = self.weather_cache.get('icon', '')
-            
-            if temp is not None:
-                if temp < 0:
-                    weather_note = f"❄️ На улице морозно, {temp}°C. Одевайтесь теплее!"
-                elif temp < 10:
-                    weather_note = f"☁️ Прохладно, {temp}°C. Хорошего дня!"
-                elif temp < 20:
-                    weather_note = f"🍃 Свежо, {temp}°C. Отличная погода!"
-                elif temp < 30:
-                    weather_note = f"☀️ Тепло, {temp}°C. Прекрасный день!"
-                else:
-                    weather_note = f"🔥 Жарко, {temp}°C. Пейте больше воды!"
-                
-                base += f"\n\n{icon} {weather_note}"
-        
-        return base
-    
-    def get_address(self) -> str:
-        """Возвращает обращение в зависимости от пола (только для режима ДРУГ)"""
-        if self.gender == "male":
-            return "братишка"
-        elif self.gender == "female":
-            return "сестрёнка"
-        return ""
-    
-    async def ask_for_context(self) -> Tuple[Optional[str], Optional[InlineKeyboardMarkup]]:
-        """Возвращает первый вопрос для сбора контекста"""
-        if not self.city:
-            self.awaiting_context = "city"
-            return "🌆 В каком городе вы находитесь? (Это нужно для погоды)", InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="⏭ Пропустить", callback_data="skip_context")]
-            ])
-        
-        if not self.gender:
-            self.awaiting_context = "gender"
-            return "👤 Укажите ваш пол", InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="👨 Мужской", callback_data="set_gender_male")],
-                [InlineKeyboardButton(text="👩 Женский", callback_data="set_gender_female")],
-                [InlineKeyboardButton(text="⏭ Пропустить", callback_data="skip_context")]
-            ])
-        
-        if not self.age:
-            self.awaiting_context = "age"
-            return "📅 Сколько вам лет?", InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="⏭ Пропустить", callback_data="skip_context")]
-            ])
-        
-        self.awaiting_context = None
-        return None, None
-    
-    async def process_context_answer(self, text: str) -> Tuple[bool, Optional[str], Optional[InlineKeyboardMarkup]]:
-        """Обрабатывает ответ на контекстный вопрос"""
-        if not self.awaiting_context:
-            return False, None, None
-        
-        field = self.awaiting_context
-        
-        if field == "city":
-            self.city = text.strip()
-            self.awaiting_context = None
-            await self.update_weather()
-            question, keyboard = await self.ask_for_context()
-            return True, question, keyboard
-                
-        elif field == "gender":
-            gender_lower = text.lower().strip()
-            if gender_lower in ['м', 'муж', 'мужчина', 'male']:
-                self.gender = "male"
-            elif gender_lower in ['ж', 'жен', 'женщина', 'female']:
-                self.gender = "female"
-            else:
-                self.gender = "other"
-            
-            self.awaiting_context = None
-            question, keyboard = await self.ask_for_context()
-            return True, question, keyboard
-                
-        elif field == "age":
-            try:
-                self.age = int(text.strip())
-                self.awaiting_context = None
-                question, keyboard = await self.ask_for_context()
-                return True, question, keyboard
-            except ValueError:
-                return False, "Пожалуйста, введите число", None
-        
-        return False, None, None
-    
-    async def handle_gender_callback(self, gender: str) -> Tuple[Optional[str], Optional[InlineKeyboardMarkup]]:
-        """Обрабатывает выбор пола через callback"""
-        self.gender = gender
-        self.awaiting_context = None
-        question, keyboard = await self.ask_for_context()
-        return question, keyboard
-    
-    def get_day_context(self) -> dict:
-        """Возвращает контекст текущего дня"""
-        now = datetime.now()
-        weekdays_ru = {
-            0: "понедельник", 1: "вторник", 2: "среда", 3: "четверг",
-            4: "пятница", 5: "суббота", 6: "воскресенье"
-        }
-        months_ru = {
-            1: "января", 2: "февраля", 3: "марта", 4: "апреля",
-            5: "мая", 6: "июня", 7: "июля", 8: "августа",
-            9: "сентября", 10: "октября", 11: "ноября", 12: "декабря"
-        }
-        
-        return {
-            "weekday": weekdays_ru[now.weekday()],
-            "weekday_num": now.weekday(),
-            "is_weekend": now.weekday() >= 5,
-            "month": months_ru[now.month],
-            "month_num": now.month,
-            "day": now.day,
-            "hour": now.hour,
-            "minute": now.minute,
-            "time_str": now.strftime("%H:%M")
-        }
-    
-    def get_prompt_context(self) -> str:
-        """Возвращает контекст для вставки в промпт AI"""
-        lines = []
-        
-        if self.gender:
-            gender_text = "мужской" if self.gender == "male" else "женский" if self.gender == "female" else "другой"
-            lines.append(f"Пол пользователя: {gender_text}")
-            if self.communication_mode == "friend":
-                lines.append(f"Обращение: {self.get_address()}")
-        if self.age:
-            lines.append(f"Возраст: {self.age} лет")
-        if self.city:
-            lines.append(f"Город: {self.city}")
-        
-        day = self.get_day_context()
-        lines.append(f"Время: {day['time_str']}, {day['weekday']}" + (" (выходной)" if day['is_weekend'] else ""))
-        
-        if self.weather_cache:
-            lines.append(f"Погода: {self.weather_cache['icon']} {self.weather_cache['description']}, {self.weather_cache['temp']}°C")
-        
-        return "\n".join(lines)
-    
-    async def update_weather(self):
-        """Обновляет погоду через OpenWeatherMap API"""
-        if not self.city or not OPENWEATHER_API_KEY:
-            return False
-        
-        if self.weather_cache and self.weather_cache_time:
-            if (datetime.now() - self.weather_cache_time).seconds < 3600:
-                return True
-        
-        url = f"http://api.openweathermap.org/data/2.5/weather?q={self.city}&appid={OPENWEATHER_API_KEY}&units=metric&lang=ru"
-        try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(url, timeout=10) as response:
-                    if response.status == 200:
-                        data = await response.json()
-                        
-                        weather_icons = {
-                            "clear": "☀️",
-                            "clouds": "☁️",
-                            "rain": "🌧",
-                            "snow": "❄️",
-                            "thunderstorm": "⚡️",
-                            "mist": "🌫",
-                            "fog": "🌫"
-                        }
-                        
-                        icon = "☁️"
-                        main = data['weather'][0]['main'].lower()
-                        for key, emoji in weather_icons.items():
-                            if key in main:
-                                icon = emoji
-                                break
-                        
-                        self.weather_cache = {
-                            "temp": round(data['main']['temp']),
-                            "feels_like": round(data['main']['feels_like']),
-                            "description": data['weather'][0]['description'],
-                            "humidity": data['main']['humidity'],
-                            "wind": round(data['wind']['speed']),
-                            "icon": icon,
-                            "pressure": data['main']['pressure']
-                        }
-                        self.weather_cache_time = datetime.now()
-                        return True
-        except Exception as e:
-            logger.error(f"Ошибка получения погоды: {e}")
-        return False
-    
-    def get_age_stage(self) -> str:
-        """Возвращает возрастной этап"""
-        if not self.age:
-            return ""
-        
-        if self.age < 18:
-            return "подростковый возраст"
-        elif self.age < 25:
-            return "молодость"
-        elif self.age < 35:
-            return "активная зрелость"
-        elif self.age < 45:
-            return "расцвет"
-        elif self.age < 55:
-            return "мудрая зрелость"
-        elif self.age < 65:
-            return "золотой возраст"
-        else:
-            return "возраст мудрости"
-
-
-# ============================================
-# НОВЫЙ КЛАСС ReminderManager
-# ============================================
-
-class ReminderManager:
-    """Управляет напоминаниями для активных маршрутов"""
-    
-    def __init__(self):
-        self.reminders = {}  # {user_id: [reminder1, reminder2, ...]}
-        self.bot = None
-    
-    def set_bot(self, bot):
-        self.bot = bot
-    
-    async def schedule_reminder(self, user_id: int, reminder_type: str, delay_minutes: int, data: dict = None):
-        """
-        Планирует напоминание
-        reminder_type: 'motivation' | 'checkin' | 'deadline'
-        """
-        if not self.bot:
-            return None
-            
-        task_id = f"{reminder_type}_{user_id}_{int(time.time())}"
-        
-        async def send_reminder():
-            await asyncio.sleep(delay_minutes * 60)
-            
-            user_context = user_contexts.get(user_id)
-            address = user_context.get_address() if user_context and user_context.communication_mode == "friend" else ""
-            
-            # Текст зависит от типа напоминания
-            if reminder_type == 'motivation':
-                text = f"🧠 *Напоминание*\n\nКак продвигается ваш план? Нужна помощь?"
-            elif reminder_type == 'checkin':
-                text = f"👋 *Проверка связи*\n\nРасскажите, что получилось за это время?"
-            elif reminder_type == 'deadline':
-                hours = data.get('hours_left', 24) if data else 24
-                text = f"⏰ *Дедлайн приближается*\n\nОсталось {hours} часов. Успеваете?"
-            else:
-                text = f"🔔 *Напоминание*"
-            
-            keyboard = InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="✅ ВЫПОЛНИЛ", callback_data="route_step_done")],
-                [InlineKeyboardButton(text="❓ НУЖНА ПОМОЩЬ", callback_data="smart_questions")],
-                [InlineKeyboardButton(text="⏭️ ОТЛОЖИТЬ", callback_data="reminder_snooze")]
-            ])
-            
-            await self.bot.send_message(user_id, text, reply_markup=keyboard)
-        
-        task = asyncio.create_task(send_reminder())
-        
-        if user_id not in self.reminders:
-            self.reminders[user_id] = []
-        
-        self.reminders[user_id].append({
-            'id': task_id,
-            'type': reminder_type,
-            'task': task,
-            'scheduled_time': datetime.now() + timedelta(minutes=delay_minutes)
-        })
-        
-        return task_id
-    
-    async def schedule_motivation_sequence(self, user_id: int, route_data: dict):
-        """Планирует последовательность напоминаний для маршрута"""
-        # Через 5 минут после начала
-        await self.schedule_reminder(
-            user_id=user_id,
-            reminder_type='motivation',
-            delay_minutes=5,
-            data={'step': 1}
-        )
-        
-        # Через 24 часа
-        await self.schedule_reminder(
-            user_id=user_id,
-            reminder_type='checkin',
-            delay_minutes=24*60,
-            data={'step': 1}
-        )
-    
-    def cancel_user_reminders(self, user_id: int):
-        """Отменяет все напоминания пользователя"""
-        if user_id in self.reminders:
-            for reminder in self.reminders[user_id]:
-                reminder['task'].cancel()
-            del self.reminders[user_id]
-
-reminder_manager = ReminderManager()
-
-
-# ============================================
-# НОВЫЙ КЛАСС DestinationManager
-# ============================================
-
-class DestinationManager:
-    """Управляет точками назначения и маршрутами"""
-    
-    def __init__(self):
-        self.destinations = {
-            "coach": {
-                "self_discovery": {
-                    "name": "🧩 САМОПОЗНАНИЕ",
-                    "description": "Понять себя, свои истинные желания и ценности",
-                    "destinations": [
-                        {"id": "values", "name": "Понять свои ценности", "time": "2-4 недели", "difficulty": "medium"},
-                        {"id": "purpose", "name": "Найти предназначение", "time": "1-3 месяца", "difficulty": "hard"},
-                        {"id": "strengths", "name": "Осознать сильные стороны", "time": "2-3 недели", "difficulty": "easy"},
-                        {"id": "blocks", "name": "Найти внутренние блоки", "time": "3-4 недели", "difficulty": "medium"}
-                    ]
-                },
-                "decisions": {
-                    "name": "⚖️ ПРИНЯТИЕ РЕШЕНИЙ",
-                    "description": "Научиться делать выбор и не жалеть",
-                    "destinations": [
-                        {"id": "choice", "name": "Сделать сложный выбор", "time": "1-2 недели", "difficulty": "medium"},
-                        {"id": "priorities", "name": "Расставить приоритеты", "time": "1 неделя", "difficulty": "easy"},
-                        {"id": "doubts", "name": "Преодолеть сомнения", "time": "2-3 недели", "difficulty": "medium"}
-                    ]
-                },
-                "goals": {
-                    "name": "🎯 ПОСТАНОВКА ЦЕЛЕЙ",
-                    "description": "Научиться ставить цели и достигать их",
-                    "destinations": [
-                        {"id": "smart_goals", "name": "Сформулировать цели по SMART", "time": "1 неделя", "difficulty": "easy"},
-                        {"id": "action_plan", "name": "Составить план действий", "time": "2 недели", "difficulty": "easy"},
-                        {"id": "motivation", "name": "Найти мотивацию", "time": "2-3 недели", "difficulty": "medium"}
-                    ]
-                }
-            },
-            "friend": {
-                "emotions": {
-                    "name": "💭 РАБОТА С ЧУВСТВАМИ",
-                    "description": "Научиться понимать и проживать эмоции",
-                    "destinations": [
-                        {"id": "anger", "name": "Справиться с гневом", "time": "2-3 недели", "difficulty": "medium"},
-                        {"id": "fear", "name": "Преодолеть страх", "time": "3-4 недели", "difficulty": "hard"},
-                        {"id": "sadness", "name": "Пережить грусть", "time": "2-4 недели", "difficulty": "medium"},
-                        {"id": "anxiety", "name": "Успокоить тревогу", "time": "3-5 недель", "difficulty": "hard"}
-                    ]
-                },
-                "self_esteem": {
-                    "name": "🪞 САМООЦЕНКА",
-                    "description": "Повысить уверенность в себе",
-                    "destinations": [
-                        {"id": "confidence", "name": "Стать увереннее", "time": "3-6 недель", "difficulty": "medium"},
-                        {"id": "self_love", "name": "Полюбить себя", "time": "1-2 месяца", "difficulty": "hard"},
-                        {"id": "boundaries", "name": "Выстроить границы", "time": "3-5 недель", "difficulty": "medium"}
-                    ]
-                },
-                "loneliness": {
-                    "name": "🫂 ОДИНОЧЕСТВО",
-                    "description": "Справиться с чувством одиночества",
-                    "destinations": [
-                        {"id": "connect", "name": "Научиться сближаться", "time": "4-6 недель", "difficulty": "hard"},
-                        {"id": "alone_time", "name": "Комфортно быть одному", "time": "3-5 недель", "difficulty": "medium"},
-                        {"id": "friends", "name": "Найти друзей", "time": "2-3 месяца", "difficulty": "hard"}
-                    ]
-                }
-            },
-            "trainer": {
-                "career": {
-                    "name": "💼 КАРЬЕРА",
-                    "description": "Профессиональный рост и достижения",
-                    "destinations": [
-                        {"id": "new_job", "name": "Найти работу мечты", "time": "1-3 месяца", "difficulty": "hard"},
-                        {"id": "promotion", "name": "Получить повышение", "time": "2-4 месяца", "difficulty": "hard"},
-                        {"id": "skills", "name": "Освоить новый навык", "time": "1-2 месяца", "difficulty": "medium"}
-                    ]
-                },
-                "business": {
-                    "name": "💰 БИЗНЕС",
-                    "description": "Развитие своего дела",
-                    "destinations": [
-                        {"id": "startup", "name": "Запустить проект", "time": "2-3 месяца", "difficulty": "hard"},
-                        {"id": "profit", "name": "Увеличить прибыль", "time": "3-6 месяцев", "difficulty": "hard"},
-                        {"id": "team", "name": "Собрать команду", "time": "2-4 месяца", "difficulty": "hard"}
-                    ]
-                },
-                "habits": {
-                    "name": "🏋️ ПРИВЫЧКИ",
-                    "description": "Внедрить полезные привычки",
-                    "destinations": [
-                        {"id": "sport", "name": "Начать заниматься спортом", "time": "21 день", "difficulty": "medium"},
-                        {"id": "morning", "name": "Выстроить утреннюю рутину", "time": "2-3 недели", "difficulty": "easy"},
-                        {"id": "productivity", "name": "Повысить продуктивность", "time": "1-2 месяца", "difficulty": "medium"}
-                    ]
-                },
-                "finance": {
-                    "name": "💰 ФИНАНСЫ",
-                    "description": "Улучшить финансовое положение",
-                    "destinations": [
-                        {"id": "budget", "name": "Научиться budgeting", "time": "2-3 недели", "difficulty": "easy"},
-                        {"id": "savings", "name": "Накопить подушку", "time": "3-6 месяцев", "difficulty": "medium"},
-                        {"id": "invest", "name": "Начать инвестировать", "time": "2-3 месяца", "difficulty": "hard"}
-                    ]
-                }
-            }
-        }
-    
-    def get_destinations_for_mode(self, mode: str) -> dict:
-        """Возвращает доступные точки для режима"""
-        return self.destinations.get(mode, self.destinations["coach"])
-    
-    def recommend_by_profile(self, profile_code: str, mode: str) -> List[str]:
-        """Рекомендует точки на основе профиля"""
-        # Парсим профиль (СБ-2_ТФ-5_УБ-3_ЧВ-4)
-        parts = profile_code.split('_')
-        scores = {}
-        for part in parts:
-            if '-' in part:
-                vec, val = part.split('-')
-                scores[vec] = int(val)
-        
-        if not scores:
-            return []
-        
-        # Находим самое слабое место
-        weakest = min(scores.items(), key=lambda x: x[1])
-        weak_vector = weakest[0]
-        
-        # Маппинг векторов на категории в зависимости от режима
-        mapping = {
-            "coach": {
-                "СБ": ["blocks", "doubts"],
-                "ТФ": ["values", "purpose"],
-                "УБ": ["values", "purpose"],
-                "ЧВ": ["choice", "priorities"]
-            },
-            "friend": {
-                "СБ": ["fear", "anxiety"],
-                "ТФ": ["self_love", "confidence"],
-                "УБ": ["loneliness", "connect"],
-                "ЧВ": ["connect", "friends", "boundaries"]
-            },
-            "trainer": {
-                "СБ": ["stress", "anger"],
-                "ТФ": ["budget", "savings", "invest"],
-                "УБ": ["skills", "new_job"],
-                "ЧВ": ["team", "promotion"]
-            }
-        }
-        
-        return mapping.get(mode, {}).get(weak_vector, [])
-
-destination_manager = DestinationManager()
+    profile_generated = State()
+    destination_selection = State()
+    route_generation = State()
+    route_active = State()
+    route_step_active = State()
 
 
 # ============================================
 # ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
 # ============================================
-
-def level(score: float) -> int:
-    """Дробный балл 1..4 → целый уровень 1..6"""
-    if score <= 1.49:
-        return 1
-    elif score <= 2.00:
-        return 2
-    elif score <= 2.50:
-        return 3
-    elif score <= 3.00:
-        return 4
-    elif score <= 3.50:
-        return 5
-    else:
-        return 6
 
 def calculate_progress(current: int, total: int) -> str:
     """Возвращает прогресс-бар"""
@@ -833,10 +205,12 @@ def calculate_progress(current: int, total: int) -> str:
     bar = "█" * percent + "░" * (10 - percent)
     return f"▸ Вопрос {current}/{total} • {bar}"
 
+
 def generate_unique_callback(prefix: str, user_id: int, question: int, option: str, extra: str = "") -> str:
     """Генерирует уникальный callback"""
     timestamp = int(time.time() * 1000) % 10000
     return f"{prefix}_{question}_{option}_{extra}_{user_id}_{timestamp}"
+
 
 def determine_perception_type(scores: dict) -> str:
     """Определяет тип восприятия"""
@@ -856,6 +230,7 @@ def determine_perception_type(scores: dict) -> str:
         return "СМЫСЛО-ОРИЕНТИРОВАННЫЙ"
     else:
         return "ПРАКТИКО-ОРИЕНТИРОВАННЫЙ"
+
 
 def calculate_thinking_level_by_scores(level_scores_dict: dict) -> int:
     """Рассчитывает уровень мышления"""
@@ -880,6 +255,7 @@ def calculate_thinking_level_by_scores(level_scores_dict: dict) -> int:
     else:
         return 9
 
+
 def get_level_group(level: int) -> str:
     """Группирует уровни"""
     if level <= 3:
@@ -889,6 +265,7 @@ def get_level_group(level: int) -> str:
     else:
         return "7-9"
 
+
 def calculate_final_level(stage2_level: int, stage3_scores: list) -> int:
     """Рассчитывает финальный уровень"""
     if not stage3_scores:
@@ -896,12 +273,14 @@ def calculate_final_level(stage2_level: int, stage3_scores: list) -> int:
     avg_behavior = sum(stage3_scores) / len(stage3_scores)
     return round((stage2_level + avg_behavior) / 2)
 
+
 def determine_dominant_dilts(dilts_counts: dict) -> str:
     """Определяет доминирующий уровень Дилтса"""
     if not dilts_counts:
         return "BEHAVIOR"
     dominant = max(dilts_counts.items(), key=lambda x: x[1])
     return dominant[0]
+
 
 def calculate_profile_final(user_data: dict) -> dict:
     """Финальный расчет профиля"""
@@ -937,6 +316,7 @@ def calculate_profile_final(user_data: dict) -> dict:
         "dilts_counts": dilts_counts
     }
 
+
 def get_priority_order(scores: dict) -> list:
     """Определяет порядок приоритетов"""
     if not scores:
@@ -948,6 +328,7 @@ def get_priority_order(scores: dict) -> list:
     else:
         return [k for k, _ in sorted(scores.items(), key=lambda x: x[1])]
 
+
 def is_test_completed(user_data: dict) -> bool:
     """Проверяет, завершен ли тест"""
     required_fields = ["perception_type", "thinking_level", "behavioral_levels", "dilts_counts", "deep_patterns"]
@@ -955,6 +336,7 @@ def is_test_completed(user_data: dict) -> bool:
         if field not in user_data:
             return False
     return True
+
 
 def should_be_ironic(text: str) -> bool:
     """Проверяет, должен ли ответ быть ироничным"""
@@ -965,11 +347,13 @@ def should_be_ironic(text: str) -> bool:
     ]
     return any(marker in text.lower() for marker in ironic_markers)
 
+
 def needs_clarification(avg: float) -> bool:
     """Проверяет, нужно ли уточнение"""
     CLARIFICATION_ZONES = [1.49, 2.00, 2.50, 3.00, 3.50]
     CLARIFICATION_MARGIN = 0.12
     return any(abs(avg - b) <= CLARIFICATION_MARGIN for b in CLARIFICATION_ZONES)
+
 
 def check_consistency(scores_list: list) -> bool:
     """Проверяет согласованность ответов"""
@@ -979,824 +363,6 @@ def check_consistency(scores_list: list) -> bool:
     variance = sum((x - avg) ** 2 for x in scores_list) / len(scores_list)
     std_dev = variance ** 0.5
     return std_dev <= 1.3
-
-
-# ============================================
-# API ФУНКЦИИ
-# ============================================
-
-async def speech_to_text(voice_file_path: str) -> str:
-    """Преобразует голос в текст через Deepgram"""
-    if not DEEPGRAM_API_KEY:
-        logger.error("❌ DEEPGRAM_API_KEY не найден")
-        return ""
-    
-    url = "https://api.deepgram.com/v1/listen"
-    params = {
-        "model": "nova-2",
-        "language": "ru",
-        "punctuate": "true",
-        "smart_format": "true",
-        "detect_language": "false"
-    }
-    
-    headers = {
-        "Authorization": f"Token {DEEPGRAM_API_KEY}",
-        "Content-Type": "audio/ogg"
-    }
-    
-    try:
-        logger.info(f"🎤 Отправка голосового сообщения в Deepgram STT")
-        
-        with open(voice_file_path, 'rb') as audio_file:
-            audio_data = audio_file.read()
-        
-        timeout = aiohttp.ClientTimeout(total=60)
-        
-        async with aiohttp.ClientSession() as session:
-            async with session.post(
-                url,
-                params=params,
-                headers=headers,
-                data=audio_data,
-                timeout=timeout
-            ) as response:
-                
-                if response.status != 200:
-                    error_text = await response.text()
-                    logger.error(f"❌ Ошибка Deepgram API {response.status}: {error_text[:200]}")
-                    return ""
-                
-                result = await response.json()
-                
-                try:
-                    transcript = result["results"]["channels"][0]["alternatives"][0]["transcript"]
-                    logger.info(f"✅ Голос распознан: {len(transcript)} символов")
-                    return transcript
-                except (KeyError, IndexError) as e:
-                    logger.error(f"❌ Ошибка парсинга ответа Deepgram: {e}")
-                    return ""
-                    
-    except Exception as e:
-        logger.error(f"💥 Ошибка Deepgram STT: {e}")
-        return ""
-
-async def text_to_speech(text: str, mode: str = "coach") -> Optional[bytes]:
-    """Преобразует текст в голос через Yandex SpeechKit"""
-    if not YANDEX_API_KEY:
-        logger.error("❌ YANDEX_API_KEY не найден")
-        return None
-    
-    clean_text = text.replace('*', '').replace('_', '').replace('`', '').replace('#', '')
-    clean_text = re.sub(r'\[(.*?)\]\(.*?\)', r'\1', clean_text)
-    
-    if len(clean_text) > 1000:
-        clean_text = clean_text[:1000] + "..."
-    
-    url = "https://tts.api.cloud.yandex.net/speech/v1/tts:synthesize"
-    
-    headers = {
-        "Authorization": f"Api-Key {YANDEX_API_KEY}",
-    }
-    
-    mode_config = COMMUNICATION_MODES.get(mode, COMMUNICATION_MODES["coach"])
-    voice = mode_config.get("voice", "filipp")
-    emotion = mode_config.get("voice_emotion", "neutral")
-    
-    if mode == "coach":
-        speed = "1.0"
-    elif mode == "friend":
-        speed = "0.9"
-    elif mode == "trainer":
-        speed = "1.1"
-    else:
-        speed = "1.0"
-    
-    data = {
-        "text": clean_text,
-        "voice": voice,
-        "emotion": emotion,
-        "speed": speed,
-        "format": "oggopus",
-    }
-    
-    try:
-        logger.info(f"🎧 Отправка в Яндекс TTS: голос {voice}, эмоция {emotion}, скорость {speed}")
-        
-        timeout = aiohttp.ClientTimeout(total=30)
-        
-        async with aiohttp.ClientSession() as session:
-            async with session.post(
-                url,
-                headers=headers,
-                data=data,
-                timeout=timeout
-            ) as response:
-                
-                if response.status == 200:
-                    audio_data = await response.read()
-                    logger.info(f"✅ Аудио получено: {len(audio_data)} байт")
-                    return audio_data
-                else:
-                    error_text = await response.text()
-                    logger.error(f"❌ Ошибка Yandex TTS {response.status}: {error_text}")
-                    return None
-                    
-    except Exception as e:
-        logger.error(f"💥 Ошибка Yandex TTS: {e}")
-        return None
-
-async def call_deepseek(prompt: str, system_message: str = "", max_tokens: int = 500, retry_count: int = 3) -> Optional[str]:
-    """Вызов DeepSeek API"""
-    if not DEEPSEEK_API_KEY:
-        logger.error("❌ DEEPSEEK_API_KEY не найден")
-        return None
-
-    url = "https://api.deepseek.com/chat/completions"
-    
-    headers = {
-        "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
-        "Content-Type": "application/json",
-    }
-
-    messages = []
-    if system_message:
-        messages.append({"role": "system", "content": system_message})
-    messages.append({"role": "user", "content": prompt})
-
-    data = {
-        "model": "deepseek-chat",
-        "messages": messages,
-        "temperature": 0.7,
-        "max_tokens": max_tokens,
-    }
-
-    for attempt in range(retry_count):
-        try:
-            logger.info(f"📡 Попытка {attempt + 1}/{retry_count}")
-            
-            timeout = aiohttp.ClientTimeout(total=120)
-            
-            async with aiohttp.ClientSession() as session:
-                async with session.post(
-                    url,
-                    headers=headers,
-                    json=data,
-                    timeout=timeout
-                ) as response:
-                    
-                    if response.status != 200:
-                        error_text = await response.text()
-                        logger.error(f"❌ Ошибка API {response.status}: {error_text[:200]}")
-                        
-                        if response.status == 429:
-                            wait_time = (2 ** attempt) + random.random()
-                            await asyncio.sleep(wait_time)
-                            continue
-                        elif response.status >= 500:
-                            wait_time = (2 ** attempt) + random.random()
-                            await asyncio.sleep(wait_time)
-                            continue
-                        else:
-                            return None
-                    
-                    result = await response.json()
-                    
-                    if result and "choices" in result and len(result["choices"]) > 0:
-                        content = result["choices"][0]["message"]["content"]
-                        logger.info(f"✅ Успех! Длина ответа: {len(content)} символов")
-                        return content
-                    else:
-                        logger.error(f"❌ Странный формат ответа: {result}")
-                        return None
-                            
-        except asyncio.TimeoutError:
-            logger.error(f"⏰ Таймаут соединения (попытка {attempt + 1})")
-            if attempt < retry_count - 1:
-                wait_time = (2 ** attempt) + random.random()
-                await asyncio.sleep(wait_time)
-        except Exception as e:
-            logger.error(f"💥 Неожиданная ошибка: {e}")
-            if attempt < retry_count - 1:
-                wait_time = (2 ** attempt) + random.random()
-                await asyncio.sleep(wait_time)
-    
-    logger.error("❌ ВСЕ ПОПЫТКИ НЕ УДАЛИСЬ")
-    return None
-
-
-async def generate_response_with_full_context(user_id: int, user_message: str, state_data: dict) -> str:
-    """Генерирует ответ с учётом полного контекста пользователя"""
-    
-    user_context = user_contexts.get(user_id)
-    
-    mode = "coach"
-    if user_context:
-        mode = user_context.communication_mode
-    elif state_data.get("communication_mode"):
-        mode = state_data["communication_mode"]
-    
-    mode_config = COMMUNICATION_MODES.get(mode, COMMUNICATION_MODES["coach"])
-    
-    profile_data = state_data.get("profile_data", {})
-    profile_code = profile_data.get('display_name', 'не определен')
-    
-    full_context = ""
-    if user_context:
-        full_context = user_context.get_prompt_context()
-    
-    address = user_context.get_address() if user_context and mode == "friend" else ""
-    
-    history = state_data.get("history", [])
-    history_text = ""
-    for entry in history[-5:]:
-        role = "Клиент" if entry["role"] == "user" else "Психолог"
-        history_text += f"{role}: {entry['text']}\n"
-    
-    # Добавляем информацию о текущем маршруте, если есть
-    route_info = ""
-    if state_data.get("current_destination"):
-        dest = state_data["current_destination"]
-        route_info = f"\nТЕКУЩАЯ ЦЕЛЬ: {dest.get('name', '')}\n"
-        route_info += f"ЭТАП: {state_data.get('route_step', 1)}/3\n"
-    
-    base_prompt = f"""Ты — Фреди, виртуальный психолог, оцифрованная версия Андрея Мейстера.
-Ты общаешься с пользователем.
-
-ПРОФИЛЬ ПОЛЬЗОВАТЕЛЯ: {profile_code}
-
-КОНТЕКСТ ПОЛЬЗОВАТЕЛЯ:
-{full_context}
-
-{route_info}
-
-РЕЖИМ ОБЩЕНИЯ: {mode_config['display_name']}
-{mode_config['responsibility']}
-
-ИНСТРУКЦИЯ: {mode_config['system_prompt']}
-
-ИСТОРИЯ ДИАЛОГА:
-{history_text}
-
-СООБЩЕНИЕ ПОЛЬЗОВАТЕЛЯ: {user_message}
-
-ОТВЕТ (учитывая контекст и режим):"""
-    
-    response = await call_deepseek(base_prompt, max_tokens=500)
-    
-    if not response:
-        if user_context and user_context.weather_cache:
-            weather = user_context.weather_cache
-            if weather['temp'] < 0 and "грусть" in user_message.lower():
-                response = f"Слушайте, погода {weather['icon']} действительно может влиять на настроение. Расскажите подробнее?"
-            else:
-                response = f"Я слышу вас. Что именно вас беспокоит?"
-        else:
-            response = f"Я слышу вас. Расскажите подробнее?"
-    
-    return response
-
-
-# ============================================
-# КОНФАЙНМЕНТ-МОДЕЛИРОВАНИЕ
-# ============================================
-
-class ConfinementElement:
-    TYPE_RESULT = 'result'
-    TYPE_IMMEDIATE_CAUSE = 'immediate_cause'
-    TYPE_COMMON_CAUSE = 'common_cause'
-    TYPE_UPPER_CAUSE = 'upper_cause'
-    TYPE_CLOSING = 'closing'
-    
-    def __init__(self, element_id: int, name: str = None):
-        self.id = element_id
-        self.name = name
-        self.description = ""
-        self.element_type = None
-        self.vector = None
-        self.level = None
-        self.archetype = None
-        self.strength = 0.5
-        self.vak = 'digital'
-        self.causes = []
-        self.caused_by = []
-        self.amplifies = []
-        
-    def to_dict(self):
-        return {
-            'id': self.id,
-            'name': self.name,
-            'description': self.description,
-            'type': self.element_type,
-            'vector': self.vector,
-            'level': self.level,
-            'archetype': self.archetype,
-            'strength': self.strength,
-            'vak': self.vak,
-            'causes': self.causes,
-            'caused_by': self.caused_by,
-            'amplifies': self.amplifies
-        }
-    
-    @classmethod
-    def from_dict(cls, data):
-        element = cls(data['id'], data['name'])
-        element.description = data.get('description', '')
-        element.element_type = data.get('type')
-        element.vector = data.get('vector')
-        element.level = data.get('level')
-        element.archetype = data.get('archetype')
-        element.strength = data.get('strength', 0.5)
-        element.vak = data.get('vak', 'digital')
-        element.causes = data.get('causes', [])
-        element.caused_by = data.get('caused_by', [])
-        element.amplifies = data.get('amplifies', [])
-        return element
-
-
-class ConfinementModel9:
-    def __init__(self, user_id: int = None):
-        self.user_id = user_id
-        self.elements = {i: None for i in range(1, 10)}
-        self.links = []
-        self.loops = []
-        self.key_confinement = None
-        self.is_closed = False
-        self.closure_score = 0.0
-        self.created_at = datetime.now()
-        self.updated_at = datetime.now()
-        self.source_scores = {}
-        self.source_history = []
-    
-    def build_from_profile(self, scores: dict, history: list = None) -> 'ConfinementModel9':
-        self.source_scores = scores
-        self.source_history = history or []
-        
-        self.elements[1] = self._extract_main_symptom()
-        self.elements[2] = self._element_from_vector('СБ', 2)
-        self.elements[3] = self._element_from_vector('ТФ', 3)
-        self.elements[4] = self._element_from_vector('УБ', 4)
-        
-        self._ensure_causal_chain([2, 3, 4])
-        
-        self.elements[5] = self._find_common_cause([2, 3, 4])
-        self.elements[6] = self._find_cause_for(6, [2, 5])
-        self.elements[7] = self._find_cause_for(7, [6, 2])
-        self.elements[8] = self._find_linked_to(8, 7, causing=[6, 5])
-        self.elements[9] = self._find_closing_element()
-        
-        self._validate_links()
-        self._find_loops()
-        self._identify_key_confinement()
-        self._calculate_closure()
-        
-        return self
-    
-    def _extract_main_symptom(self) -> ConfinementElement:
-        min_vector = min(self.source_scores.items(), key=lambda x: level(x[1]))
-        vector, score = min_vector
-        vector_name = VECTORS[vector]['name']
-        vector_emoji = VECTORS[vector]['emoji']
-        lvl = level(score)
-        level_info = VECTORS[vector]['levels'][lvl]
-        profile = LEVEL_PROFILES.get(vector, {}).get(lvl, {})
-        
-        element = ConfinementElement(1, f"{vector_emoji} {vector_name}")
-        element.description = profile.get('quote', level_info['desc'])
-        element.element_type = ConfinementElement.TYPE_RESULT
-        element.vector = vector
-        element.level = lvl
-        element.archetype = profile.get('archetype')
-        element.strength = 1.0
-        element.vak = 'kinesthetic'
-        return element
-    
-    def _element_from_vector(self, vector: str, element_id: int) -> ConfinementElement:
-        score = self.source_scores.get(vector, 3.0)
-        lvl = level(score)
-        level_info = VECTORS[vector]['levels'][lvl]
-        vector_name = VECTORS[vector]['name']
-        vector_emoji = VECTORS[vector]['emoji']
-        profile = LEVEL_PROFILES.get(vector, {}).get(lvl, {})
-        
-        element = ConfinementElement(element_id, f"{vector_emoji} {vector_name}")
-        element.description = level_info['desc']
-        element.element_type = ConfinementElement.TYPE_IMMEDIATE_CAUSE
-        element.vector = vector
-        element.level = lvl
-        element.archetype = profile.get('archetype')
-        element.strength = lvl / 6.0
-        
-        vak_map = {'СБ': 'kinesthetic', 'ТФ': 'digital', 'УБ': 'visual', 'ЧВ': 'auditory'}
-        element.vak = vak_map.get(vector, 'digital')
-        return element
-    
-    def _ensure_causal_chain(self, element_ids: list):
-        for i in range(len(element_ids)-1):
-            cause_id = element_ids[i]
-            effect_id = element_ids[i+1]
-            cause = self.elements[cause_id]
-            effect = self.elements[effect_id]
-            if not cause or not effect:
-                continue
-            if effect_id not in cause.amplifies:
-                cause.amplifies.append(effect_id)
-            if cause_id not in effect.caused_by:
-                effect.caused_by.append(cause_id)
-            self.links.append({
-                'from': cause_id, 'to': effect_id, 'type': 'amplifies',
-                'strength': cause.strength * effect.strength
-            })
-    
-    def _find_common_cause(self, effect_ids: list) -> ConfinementElement:
-        vectors = []
-        for eid in effect_ids:
-            elem = self.elements[eid]
-            if elem and elem.vector:
-                vectors.append(elem.vector)
-        
-        if 'СБ' in vectors and 'ТФ' in vectors and 'УБ' in vectors:
-            return self._create_identity_element()
-        return self._create_belief_element('common')
-    
-    def _create_identity_element(self) -> ConfinementElement:
-        weakest = min(self.source_scores.items(), key=lambda x: level(x[1]))
-        vector, score = weakest
-        lvl = level(score)
-        profile = LEVEL_PROFILES.get(vector, {}).get(lvl, {})
-        
-        element = ConfinementElement(5, f"🎭 Идентичность")
-        element.description = profile.get('archetype_desc', "То, кем ты себя считаешь")
-        element.element_type = ConfinementElement.TYPE_COMMON_CAUSE
-        element.archetype = profile.get('archetype')
-        element.strength = 0.8
-        element.vak = 'visual'
-        return element
-    
-    def _create_belief_element(self, belief_type: str) -> ConfinementElement:
-        beliefs = {'common': "Есть вещи, которые я не могу изменить"}
-        element = ConfinementElement(5, f"💭 Убеждение")
-        element.description = beliefs.get(belief_type, beliefs['common'])
-        element.element_type = ConfinementElement.TYPE_COMMON_CAUSE
-        element.strength = 0.7
-        element.vak = 'auditory_digital'
-        return element
-    
-    def _find_cause_for(self, element_id: int, effect_ids: list) -> ConfinementElement:
-        if element_id == 6:
-            element = ConfinementElement(6, f"🏛 Система")
-            element.description = "Семья, работа, культура — контекст"
-        else:
-            element = ConfinementElement(7, f"⚓ Глубинное убеждение")
-            element.description = "То, во что ты веришь на самом деле"
-        element.element_type = ConfinementElement.TYPE_UPPER_CAUSE
-        element.strength = 0.8 if element_id == 7 else 0.6
-        return element
-    
-    def _find_linked_to(self, element_id: int, source_id: int, causing: list) -> ConfinementElement:
-        element = ConfinementElement(8, f"🔗 Связка")
-        element.description = "То, что соединяет верхний и нижний уровни"
-        element.element_type = ConfinementElement.TYPE_UPPER_CAUSE
-        element.strength = 0.7
-        return element
-    
-    def _find_closing_element(self) -> ConfinementElement:
-        weakest = min(self.source_scores.items(), key=lambda x: level(x[1]))
-        vector, score = weakest
-        closing_map = {
-            'СБ': "Мир опасен, нужно защищаться",
-            'ТФ': "Ресурсов мало, их надо экономить",
-            'УБ': "Все не случайно",
-            'ЧВ': "Людям нельзя доверять"
-        }
-        element = ConfinementElement(9, f"🌍 Замыкание")
-        element.description = closing_map.get(vector, "Система самоподдерживается")
-        element.element_type = ConfinementElement.TYPE_CLOSING
-        element.vector = vector
-        element.level = level(score)
-        element.strength = 1.0
-        element.vak = 'visual'
-        return element
-    
-    def _validate_links(self):
-        standard_links = [
-            (1,2),(1,3),(1,4),(2,3),(3,4),(5,2),(5,3),(5,4),
-            (6,2),(6,5),(7,6),(7,2),(8,7),(8,6),(8,5),(9,7),(9,8),(4,9),(1,9)
-        ]
-        for from_id, to_id in standard_links:
-            if self.elements[from_id] and self.elements[to_id]:
-                if to_id not in self.elements[from_id].causes:
-                    self.elements[from_id].causes.append(to_id)
-                if from_id not in self.elements[to_id].caused_by:
-                    self.elements[to_id].caused_by.append(from_id)
-                self.links.append({'from': from_id, 'to': to_id, 'type': 'causes', 'strength': 0.7})
-    
-    def _find_loops(self):
-        self.loops = []
-        loop1 = self._check_cycle([1,2,6,9,1])
-        if loop1:
-            self.loops.append({
-                'elements': loop1, 'type': 'symptom_behavior_belief',
-                'description': 'Симптом → поведение → убеждение → симптом',
-                'strength': self._calculate_loop_strength(loop1)
-            })
-        loop2 = self._check_cycle([5,6,7,8,5])
-        if loop2:
-            self.loops.append({
-                'elements': loop2, 'type': 'identity_system_environment',
-                'description': 'Идентичность → система → среда → идентичность',
-                'strength': self._calculate_loop_strength(loop2)
-            })
-        loop3 = self._check_cycle([1,2,3,4,9,1])
-        if loop3:
-            self.loops.append({
-                'elements': loop3, 'type': 'full_cycle',
-                'description': 'Полный цикл самоподдержания',
-                'strength': self._calculate_loop_strength(loop3)
-            })
-    
-    def _check_cycle(self, potential_cycle: list) -> list:
-        for i in range(len(potential_cycle)-1):
-            if potential_cycle[i+1] not in self.elements[potential_cycle[i]].causes:
-                return None
-        return potential_cycle
-    
-    def _calculate_loop_strength(self, cycle: list) -> float:
-        strength = 1.0
-        for i in range(len(cycle)-1):
-            for link in self.links:
-                if link['from'] == cycle[i] and link['to'] == cycle[i+1]:
-                    strength *= link['strength']
-                    break
-        return strength
-    
-    def _identify_key_confinement(self):
-        candidates = []
-        for elem_id, element in self.elements.items():
-            if not element:
-                continue
-            importance = (len(element.causes) + 1) * (len(element.caused_by) + 1) * element.strength
-            candidates.append({'id': elem_id, 'element': element, 'importance': importance})
-        candidates.sort(key=lambda x: x['importance'], reverse=True)
-        if candidates:
-            self.key_confinement = {'id': candidates[0]['id'], 'element': candidates[0]['element']}
-    
-    def _calculate_closure(self):
-        for loop in self.loops:
-            if 9 in loop['elements']:
-                self.closure_score = loop['strength']
-                self.is_closed = self.closure_score > 0.5
-                return
-        self.is_closed = False
-        self.closure_score = 0.0
-    
-    def to_dict(self) -> dict:
-        return {
-            'user_id': self.user_id,
-            'elements': {k: v.to_dict() if v else None for k, v in self.elements.items()},
-            'loops': self.loops,
-            'key_confinement': self.key_confinement,
-            'is_closed': self.is_closed,
-            'closure_score': self.closure_score,
-            'created_at': self.created_at.isoformat(),
-            'updated_at': self.updated_at.isoformat()
-        }
-    
-    @classmethod
-    def from_dict(cls, data: dict) -> 'ConfinementModel9':
-        model = cls(data.get('user_id'))
-        elements_dict = data.get('elements', {})
-        for k, v in elements_dict.items():
-            if v:
-                model.elements[int(k)] = ConfinementElement.from_dict(v)
-        model.loops = data.get('loops', [])
-        model.key_confinement = data.get('key_confinement')
-        model.is_closed = data.get('is_closed', False)
-        model.closure_score = data.get('closure_score', 0.0)
-        if data.get('created_at'):
-            model.created_at = datetime.fromisoformat(data['created_at'])
-        if data.get('updated_at'):
-            model.updated_at = datetime.fromisoformat(data['updated_at'])
-        return model
-
-
-# ============================================
-# СТАТИСТИКА
-# ============================================
-
-class Statistics:
-    def __init__(self, stats_file="bot_stats.json"):
-        self.stats_file = stats_file
-        self.load()
-    
-    def load(self):
-        if os.path.exists(self.stats_file):
-            with open(self.stats_file, "r", encoding="utf-8") as f:
-                self.data = json.load(f)
-        else:
-            self.data = {
-                "total_starts": 0,
-                "completed_tests": 0,
-                "vectors": {v: {i: 0 for i in range(1, 7)} for v in VECTORS},
-                "users": {},
-                "daily": {},
-                "last_updated": datetime.now().isoformat()
-            }
-    
-    def save(self):
-        self.data["last_updated"] = datetime.now().isoformat()
-        with open(self.stats_file, "w", encoding="utf-8") as f:
-            json.dump(self.data, f, ensure_ascii=False, indent=2)
-    
-    def register_start(self, user_id):
-        self.data["total_starts"] += 1
-        self.data["users"][str(user_id)] = {
-            "started": datetime.now().isoformat(),
-            "completed": False
-        }
-        today = datetime.now().strftime("%Y-%m-%d")
-        if today not in self.data["daily"]:
-            self.data["daily"][today] = {"starts": 0, "completions": 0}
-        self.data["daily"][today]["starts"] = self.data["daily"][today].get("starts", 0) + 1
-        self.save()
-    
-    def register_completion(self, user_id, scores):
-        self.data["completed_tests"] += 1
-        if str(user_id) in self.data["users"]:
-            self.data["users"][str(user_id)]["completed"] = True
-            self.data["users"][str(user_id)]["completed_at"] = datetime.now().isoformat()
-            self.data["users"][str(user_id)]["scores"] = scores
-        
-        for vector, score in scores.items():
-            lvl = level(score)
-            self.data["vectors"][vector][lvl] = self.data["vectors"][vector].get(lvl, 0) + 1
-        
-        today = datetime.now().strftime("%Y-%m-%d")
-        if today not in self.data["daily"]:
-            self.data["daily"][today] = {"starts": 0, "completions": 0}
-        self.data["daily"][today]["completions"] = self.data["daily"][today].get("completions", 0) + 1
-        self.save()
-    
-    def get_stats_text(self):
-        total_users = len(self.data["users"])
-        completed = self.data["completed_tests"]
-        started = self.data["total_starts"]
-        
-        text = f"📊 *СТАТИСТИКА БОТА*\n\n"
-        text += f"👥 Всего пользователей: *{total_users}*\n"
-        text += f"▶️ Начали тест: *{started}*\n"
-        text += f"✅ Завершили тест: *{completed}*\n"
-        text += f"📈 Конверсия: *{(completed/started*100) if started > 0 else 0:.1f}%*\n\n"
-        
-        if completed > 0:
-            text += "*Распределение по уровням:*\n"
-            for vector, vec_data in VECTORS.items():
-                text += f"\n{vec_data['emoji']} *{vec_data['name']}*\n"
-                dist = self.data["vectors"][vector]
-                for lvl in range(1, 7):
-                    count = dist.get(lvl, 0)
-                    percent = (count / completed) * 100 if completed > 0 else 0
-                    bar = "█" * int(percent / 5) + "░" * (20 - int(percent / 5))
-                    text += f"  Ур.{lvl}: {count} чел. {bar} {percent:.1f}%\n"
-        
-        text += f"\n*Последние 7 дней:*\n"
-        dates = sorted(self.data["daily"].keys(), reverse=True)[:7]
-        for date in dates:
-            day_stats = self.data["daily"][date]
-            text += f"  {date}: {day_stats.get('starts', 0)} стартов, {day_stats.get('completions', 0)} завершений\n"
-        
-        text += f"\n🕐 Обновлено: {self.data['last_updated']}"
-        return text
-
-
-stats = Statistics()
-
-
-# ============================================
-# МЕНЕДЖЕР ОТЛОЖЕННЫХ ЗАДАЧ
-# ============================================
-
-class DelayedTaskManager:
-    def __init__(self):
-        self.tasks = {}
-        self.bot_instance = None
-    
-    def set_bot(self, bot):
-        self.bot_instance = bot
-    
-    async def schedule_motivation(self, user_id: int, scores: dict, user_name: str, delay_minutes: int = 5):
-        task_id = f"motivation_{user_id}_{datetime.now().timestamp()}"
-        
-        for tid in list(self.tasks.keys()):
-            if tid.startswith(f"motivation_{user_id}"):
-                self.tasks[tid]["task"].cancel()
-                del self.tasks[tid]
-        
-        async def send_motivation():
-            await asyncio.sleep(delay_minutes * 60)
-            if self.bot_instance:
-                try:
-                    if scores:
-                        min_vector = min(scores.items(), key=lambda x: level(x[1]))
-                        vector, score = min_vector
-                        lvl = level(score)
-                        profile = LEVEL_PROFILES.get(vector, {}).get(lvl, {})
-                        
-                        context = user_contexts.get(user_id)
-                        address = context.get_address() if context and context.communication_mode == "friend" else ""
-                        
-                        message_text = (
-                            f"🧠 *ЧЕРЕЗ {delay_minutes} МИНУТ ПОСЛЕ ТЕСТА*\n\n"
-                            f"Слушайте{', ' + address if address else ''}...\n\n"
-                            f"Ваше самое узкое место — {VECTORS[vector]['name']} (уровень {lvl}).\n"
-                            f"{profile.get('pain_origin', '')}\n\n"
-                            f"🎯 *Первый шаг:*\n"
-                            f"{profile.get('immediate_tool', 'Начните с малого.')}\n\n"
-                            f"⚡️ Я с вами на связи."
-                        )
-                    else:
-                        address = user_contexts.get(user_id).get_address() if user_contexts.get(user_id) and user_contexts.get(user_id).communication_mode == "friend" else ""
-                        message_text = f"Слушайте{', ' + address if address else ''}...\n\nКак вы? Я рядом."
-                    
-                    keyboard = InlineKeyboardMarkup(inline_keyboard=[
-                        [InlineKeyboardButton(text="❓ ЗАДАТЬ ВОПРОС", callback_data="smart_questions")],
-                        [InlineKeyboardButton(text="🧠 К ПОРТРЕТУ", callback_data="show_results")],
-                        [InlineKeyboardButton(text="🎯 ЧЕМ ПОМОЧЬ", callback_data="show_help")]
-                    ])
-                    
-                    await self.bot_instance.send_message(
-                        user_id,
-                        message_text,
-                        parse_mode='Markdown',
-                        reply_markup=keyboard
-                    )
-                    
-                    context_obj = user_contexts.get(user_id)
-                    mode = context_obj.communication_mode if context_obj else "coach"
-                    
-                    if YANDEX_API_KEY:
-                        audio_data = await text_to_speech(message_text, mode)
-                        if audio_data:
-                            audio_file = BufferedInputFile(audio_data, filename="motivation.ogg")
-                            await self.bot_instance.send_voice(
-                                user_id,
-                                audio_file,
-                                caption="🎙 *Мотивационное сообщение*",
-                                parse_mode='Markdown'
-                            )
-                except Exception as e:
-                    logger.error(f"Ошибка при отправке мотивационного сообщения пользователю {user_id}: {e}")
-        
-        task = asyncio.create_task(send_motivation())
-        self.tasks[task_id] = {
-            "task": task,
-            "user_id": user_id,
-            "type": "motivation",
-            "scheduled_time": datetime.now() + timedelta(minutes=delay_minutes)
-        }
-        logger.info(f"📅 Запланировано мотивационное сообщение для пользователя {user_id} через {delay_minutes} минут")
-        return task_id
-    
-    async def schedule_reminder(self, user_id: int, message: str, delay_hours: int = 24):
-        task_id = f"reminder_{user_id}_{datetime.now().timestamp()}"
-        
-        async def send_reminder():
-            await asyncio.sleep(delay_hours * 3600)
-            if self.bot_instance:
-                try:
-                    keyboard = InlineKeyboardMarkup(inline_keyboard=[
-                        [InlineKeyboardButton(text="❓ ЗАДАТЬ ВОПРОС", callback_data="smart_questions")],
-                        [InlineKeyboardButton(text="🧠 К ПОРТРЕТУ", callback_data="show_results")],
-                        [InlineKeyboardButton(text="🔄 ПРОЙТИ ТЕСТ ЗАНОВО", callback_data="restart_test")]
-                    ])
-                    
-                    await self.bot_instance.send_message(
-                        user_id,
-                        message,
-                        parse_mode='Markdown',
-                        reply_markup=keyboard
-                    )
-                except Exception as e:
-                    logger.error(f"Ошибка при отправке напоминания пользователю {user_id}: {e}")
-        
-        task = asyncio.create_task(send_reminder())
-        self.tasks[task_id] = {
-            "task": task,
-            "user_id": user_id,
-            "type": "reminder",
-            "scheduled_time": datetime.now() + timedelta(hours=delay_hours)
-        }
-        return task_id
-    
-    def cancel_user_tasks(self, user_id: int):
-        for task_id in list(self.tasks.keys()):
-            if self.tasks[task_id]["user_id"] == user_id:
-                self.tasks[task_id]["task"].cancel()
-                del self.tasks[task_id]
-        logger.info(f"❌ Отменены все задачи для пользователя {user_id}")
-
-
-task_manager = DelayedTaskManager()
 
 
 # ============================================
@@ -1959,254 +525,6 @@ def get_help_keyboard() -> InlineKeyboardMarkup:
 
 
 # ============================================
-# НОВЫЕ ФУНКЦИИ ГЕНЕРАЦИИ ПРОФИЛЯ
-# ============================================
-
-async def generate_ai_profile(user_id: int, state: FSMContext) -> Optional[str]:
-    """
-    Отправляет все ответы в DeepSeek и получает развернутый профиль
-    """
-    
-    data = await state.get_data()
-    context = user_contexts.get(user_id)
-    
-    # Собираем все данные
-    scores = {}
-    for k in VECTORS:
-        levels = data.get("behavioral_levels", {}).get(k, [])
-        scores[k] = sum(levels) / len(levels) if levels else 3.0
-    
-    sb_level = level(scores.get("СБ", 3))
-    tf_level = level(scores.get("ТФ", 3))
-    ub_level = level(scores.get("УБ", 3))
-    chv_level = level(scores.get("ЧВ", 3))
-    
-    perception_type = data.get("perception_type", "не определен")
-    thinking_level = data.get("thinking_level", 5)
-    deep_patterns = data.get("deep_patterns", {})
-    
-    # Определяем доминирующий уровень Дилтса
-    dilts_counts = data.get("dilts_counts", {})
-    dominant_dilts = determine_dominant_dilts(dilts_counts)
-    
-    dilts_names = {
-        "ENVIRONMENT": "Окружение",
-        "BEHAVIOR": "Поведение", 
-        "CAPABILITIES": "Способности",
-        "VALUES": "Ценности",
-        "IDENTITY": "Идентичность"
-    }
-    
-    # ВАЖНО: добавляем инструкцию по форматированию
-    prompt = f"""ТЫ — ПСИХОЛОГ-АНАЛИТИК. На основе данных теста составь психологический портрет человека.
-
-=== ИСХОДНЫЕ ДАННЫЕ ===
-
-1. ТИП ВОСПРИЯТИЯ: {perception_type}
-   (как человек смотрит на мир)
-
-2. УРОВЕНЬ МЫШЛЕНИЯ: {thinking_level}/9
-   (1-3 конкретное, 4-6 системное, 7-9 мета-системное)
-
-3. ПОВЕДЕНЧЕСКИЕ ВЕКТОРЫ (уровни 1-6):
-   • Реакция на угрозу: {sb_level}/6
-   • Отношение к деньгам: {tf_level}/6
-   • Понимание мира: {ub_level}/6
-   • Отношения с людьми: {chv_level}/6
-
-4. ТОЧКА РОСТА (доминирующий уровень Дилтса): {dilts_names.get(dominant_dilts, "Поведение")}
-
-5. ГЛУБИННЫЕ ПАТТЕРНЫ:
-   • Тип привязанности: {deep_patterns.get('attachment', 'не определен')}
-   • Защитные механизмы: {', '.join(deep_patterns.get('defense_mechanisms', ['не определены']))}
-   • Базовые убеждения: {', '.join(deep_patterns.get('core_beliefs', ['не определены']))}
-
-=== ЗАДАЧА ===
-Напиши психологический портрет в 5 блоках:
-
-🔹 БЛОК 1: КЛЮЧЕВАЯ ХАРАКТЕРИСТИКА (2-3 предложения)
-   Как одним словом можно описать этого человека? В чем его суть?
-
-🔹 БЛОК 2: СИЛЬНЫЕ СТОРОНЫ (3-4 пункта)
-   Что у него получается хорошо? На что можно опираться?
-
-🔹 БЛОК 3: ЗОНЫ РОСТА (3-4 пункта)
-   Что мешает, ограничивает, создает проблемы?
-
-🔹 БЛОК 4: КАК ЭТО СФОРМИРОВАЛОСЬ (3-4 предложения)
-   Откуда взялись эти паттерны? Свяжи с глубинными паттернами.
-
-🔹 БЛОК 5: ГЛАВНАЯ ЛОВУШКА (2-3 предложения)
-   Какой цикл сам себя подпитывает?
-
-СТИЛЬ: Как опытный психолог — честно, по-взрослому, без воды, но с заботой.
-
-!!! ВАЖНОЕ ТРЕБОВАНИЕ К ФОРМАТИРОВАНИЮ !!!
-- Используй ТОЛЬКО **жирный текст** для заголовков блоков
-- Не используй символы #, _ в других местах
-- Каждый пункт в списках начинай с •
-- Не оставляй незакрытые символы **
-- Проверь, что все ** имеют закрывающую пару
-
-ОБЪЕМ: Не больше 2000 символов всего.
-"""
-    
-    response = await call_deepseek(prompt, max_tokens=2000)
-    
-    if not response:
-        # Запасной вариант
-        response = generate_fallback_profile(scores, perception_type, thinking_level, deep_patterns)
-    
-    return response
-
-
-def generate_fallback_profile(scores: dict, perception_type: str, thinking_level: int, deep_patterns: dict = None) -> str:
-    """Генерирует простой профиль на основе шаблонов"""
-    
-    sb_level = level(scores.get('СБ', 3))
-    tf_level = level(scores.get('ТФ', 3))
-    ub_level = level(scores.get('УБ', 3))
-    chv_level = level(scores.get('ЧВ', 3))
-    
-    # Определяем доминирующий вектор
-    vectors = {'СБ': sb_level, 'ТФ': tf_level, 'УБ': ub_level, 'ЧВ': chv_level}
-    min_vector = min(vectors.items(), key=lambda x: x[1])
-    
-    profile_templates = {
-        'СБ': {
-            'key': 'ЗАЩИТНИК',
-            'strengths': ['Умеете держать удар', 'Стабильны в стрессе', 'Надежны'],
-            'growth': ['Можете замыкаться', 'Пропускаете атаки мимо себя'],
-            'origin': 'Сформировалось в среде, где нужно было защищаться'
-        },
-        'ТФ': {
-            'key': 'ДОБЫТЧИК',
-            'strengths': ['Умеете зарабатывать', 'Практичны', 'Результативны'],
-            'growth': ['Можете зацикливаться на деньгах', 'Рискуете'],
-            'origin': 'Выросли в среде, где ресурсы были ограничены'
-        },
-        'УБ': {
-            'key': 'МЫСЛИТЕЛЬ',
-            'strengths': ['Глубоко анализируете', 'Видите суть', 'Проницательны'],
-            'growth': ['Можете закапываться', 'Сомневаетесь'],
-            'origin': 'С детства искали смыслы и объяснения'
-        },
-        'ЧВ': {
-            'key': 'КОММУНИКАТОР',
-            'strengths': ['Эмпатичны', 'Легко находите контакт', 'Понимаете людей'],
-            'growth': ['Теряете себя в отношениях', 'Зависите от мнения'],
-            'origin': 'Сформировались в среде, где важны были связи'
-        }
-    }
-    
-    profile = profile_templates.get(min_vector[0], profile_templates['СБ'])
-    
-    text = f"""
-🔹 *КЛЮЧЕВАЯ ХАРАКТЕРИСТИКА*
-Вы — «{profile['key']}». {perception_type.lower()}, с мышлением {thinking_level}/9.
-
-🔹 *СИЛЬНЫЕ СТОРОНЫ*
-• {profile['strengths'][0]}
-• {profile['strengths'][1]}
-• {profile['strengths'][2]}
-
-🔹 *ЗОНЫ РОСТА*
-• {profile['growth'][0]}
-• {profile['growth'][1]}
-
-🔹 *КАК ЭТО СФОРМИРОВАЛОСЬ*
-{profile['origin']}. Ваши глубинные паттерны закрепили этот способ взаимодействия с миром.
-
-🔹 *ГЛАВНАЯ ЛОВУШКА*
-Вы попадаете в цикл: ситуация → привычная реакция → результат → закрепление реакции.
-"""
-    return text
-
-
-async def generate_psychologist_thought(user_id: int, state: FSMContext) -> str:
-    """Генерирует мысли психолога с использованием конфайнмент-модели"""
-    
-    data = await state.get_data()
-    
-    scores = {}
-    for k in VECTORS:
-        levels = data.get("behavioral_levels", {}).get(k, [])
-        scores[k] = sum(levels) / len(levels) if levels else 3.0
-    
-    sb_level = level(scores.get("СБ", 3))
-    tf_level = level(scores.get("ТФ", 3))
-    ub_level = level(scores.get("УБ", 3))
-    chv_level = level(scores.get("ЧВ", 3))
-    
-    perception_type = data.get("perception_type", "не определен")
-    thinking_level = data.get("thinking_level", 5)
-    deep_patterns = data.get("deep_patterns", {})
-    
-    # Получаем конфайнмент-модель
-    model_data = data.get('confinement_model')
-    model_summary = "не построена"
-    if model_data:
-        try:
-            model = ConfinementModel9.from_dict(model_data)
-            if model.key_confinement:
-                elem = model.key_confinement['element']
-                model_summary = f"Ключевой элемент: {elem.name} - {elem.description[:100]}"
-        except:
-            pass
-    
-    prompt = f"""ТЫ — ПСИХОЛОГ-АНАЛИТИК. Используя конфайнмент-модель, проанализируй состояние пользователя.
-
-=== ДАННЫЕ ПОЛЬЗОВАТЕЛЯ ===
-
-ПРОФИЛЬ:
-- Тип восприятия: {perception_type}
-- Уровень мышления: {thinking_level}/9
-- Поведенческие векторы: СБ={sb_level}, ТФ={tf_level}, УБ={ub_level}, ЧВ={chv_level}
-
-ГЛУБИННЫЕ ПАТТЕРНЫ:
-{json.dumps(deep_patterns, ensure_ascii=False, indent=2) if deep_patterns else "не определены"}
-
-КОНФАЙНМЕНТ-МОДЕЛЬ:
-{model_summary}
-
-=== ЗАДАЧА ===
-Дай развернутый анализ по 4 пунктам:
-
-1. КЛЮЧЕВОЙ ЭЛЕМЕНТ (2-3 предложения)
-   Что сейчас держит систему? Где главный зажим?
-
-2. ПЕТЛЯ (2-3 предложения)
-   Какой цикл самоподдержания работает?
-
-3. ТОЧКА ВХОДА (2-3 предложения)
-   Где можно разорвать эту петлю?
-
-4. ПРОГНОЗ (2-3 предложения)
-   Что будет, если ничего не менять? Что будет, если сделать точку входа?
-
-СТИЛЬ: Как опытный психолог — честно, по-взрослому, но с заботой.
-ОБЪЕМ: 1500-2000 символов.
-"""
-    
-    response = await call_deepseek(prompt, max_tokens=1500)
-    
-    if not response:
-        response = """🔹 *КЛЮЧЕВОЙ ЭЛЕМЕНТ*
-Судя по вашему профилю, основной зажим — в избегании конфликтов. Вы предпочитаете уйти, чем решать.
-
-🔹 *ПЕТЛЯ*
-Возникает цикл: проблема → избегание → накопление → взрыв → чувство вины → еще большее избегание.
-
-🔹 *ТОЧКА ВХОДА*
-Попробуйте в следующем конфликте не уходить, а сделать паузу и сказать: "Мне нужно подумать". Это разорвет автоматизм.
-
-🔹 *ПРОГНОЗ*
-Без изменений: будете накапливать напряжение и взрываться. С изменениями: научитесь экологично отстаивать себя."""
-    
-    return response
-
-
-# ============================================
 # НОВЫЕ ЭКРАНЫ ПРИВЕТСТВИЯ
 # ============================================
 
@@ -2230,7 +548,6 @@ async def cmd_start(message: Message, state: FSMContext):
     # Проверяем, есть ли уже профиль
     data = await state.get_data()
     if is_test_completed(data):
-        # Экран для возвращающихся пользователей
         profile_code = data.get("profile_data", {}).get('display_name', 'SA-5_INT')
         
         text = f"""
@@ -2375,16 +692,13 @@ async def show_destinations(callback: CallbackQuery, state: FSMContext):
     destinations = destination_manager.get_destinations_for_mode(mode)
     
     for cat_id, category in destinations.items():
-        # Добавляем заголовок категории
         keyboard.append([InlineKeyboardButton(
             text=f"━━━ {category['name']} ━━━",
             callback_data="ignore"
         )])
         
-        # Добавляем точки назначения
         row = []
         for i, dest in enumerate(category["destinations"]):
-            # Помечаем рекомендованные
             prefix = "⭐ " if dest["id"] in recommended else ""
             button = InlineKeyboardButton(
                 text=f"{prefix}{dest['name']}",
@@ -2396,7 +710,6 @@ async def show_destinations(callback: CallbackQuery, state: FSMContext):
                 keyboard.append(row)
                 row = []
     
-    # Добавляем кнопки навигации
     keyboard.append([InlineKeyboardButton(
         text="✏️ Сформулирую сам", 
         callback_data="custom_destination"
@@ -2450,72 +763,21 @@ async def show_destination_route(callback: CallbackQuery, state: FSMContext):
         route_progress=[]
     )
     
-    # Генерируем промпт для маршрута
     await callback.message.edit_text(
         "🧠 *Строю оптимальный маршрут...*\n\n"
         "Это займёт несколько секунд.",
         parse_mode='Markdown'
     )
     
-    # Генерируем маршрут через ИИ
-    route = await generate_route_ai(user_id, state, dest_info)
+    # Генерируем маршрут через ИИ (функция в services.py)
+    from services import generate_route_ai
+    route = await generate_route_ai(user_id, state_data, dest_info)
     
     if route:
         await state.update_data(current_route=route)
         await show_route_step(callback, state, 1, route)
     else:
-        # Резервный маршрут
         await show_fallback_route(callback, state, dest_info)
-
-
-async def generate_route_ai(user_id: int, state: FSMContext, destination: dict) -> Optional[Dict]:
-    """Генерирует маршрут через DeepSeek"""
-    
-    data = await state.get_data()
-    mode = data.get("communication_mode", "coach")
-    mode_config = COMMUNICATION_MODES.get(mode, COMMUNICATION_MODES["coach"])
-    
-    profile_data = data.get("profile_data", {})
-    profile_code = profile_data.get('display_name', 'SA-5_INT')
-    deep_patterns = data.get("deep_patterns", {})
-    
-    prompt = f"""ТЫ — НАВИГАТОР. На основе профиля пользователя и выбранной цели, составь пошаговый маршрут.
-
-=== ДАННЫЕ ПОЛЬЗОВАТЕЛЯ ===
-
-ПРОФИЛЬ: {profile_code}
-
-ГЛУБИННЫЕ ПАТТЕРНЫ:
-{json.dumps(deep_patterns, ensure_ascii=False, indent=2) if deep_patterns else "не определены"}
-
-ВЫБРАННЫЙ РЕЖИМ: {mode_config['name']} - {mode_config['responsibility']}
-
-ВЫБРАННАЯ ЦЕЛЬ: {destination['name']}
-Ориентировочное время: {destination['time']}
-Сложность: {destination.get('difficulty', 'medium')}
-
-=== ЗАДАЧА ===
-Составь маршрут из 3-5 этапов. Для каждого этапа укажи:
-
-📍 ЭТАП {N}: [Название этапа]
-   • Что делаем: конкретное действие
-   • Домашнее задание: что нужно сделать за неделю
-   • Критерий выполнения: как поймем, что этап пройден
-
-Учитывай профиль пользователя и выбранный режим.
-
-СТИЛЬ: {mode_config['system_prompt'][:200]}
-
-ОБЪЕМ: 1500-2000 символов.
-"""
-    
-    response = await call_deepseek(prompt, max_tokens=1500)
-    
-    if not response:
-        return None
-    
-    # Парсим ответ в структуру
-    return {"full_text": response, "steps": 3}
 
 
 async def show_route_step(callback: CallbackQuery, state: FSMContext, step: int, route: Dict):
@@ -2548,7 +810,6 @@ async def show_route_step(callback: CallbackQuery, state: FSMContext, step: int,
     await callback.message.edit_text(text, reply_markup=keyboard, parse_mode='Markdown')
     await state.set_state(TestStates.route_active)
     
-    # Запускаем напоминания
     await reminder_manager.schedule_motivation_sequence(callback.from_user.id, destination)
 
 
@@ -2567,7 +828,7 @@ async def route_step_done(callback: CallbackQuery, state: FSMContext):
         route_progress=route_progress
     )
     
-    if next_step > 3:  # Маршрут завершен
+    if next_step > 3:
         await show_route_complete(callback, state)
     else:
         await callback.message.edit_text(
@@ -2576,7 +837,6 @@ async def route_step_done(callback: CallbackQuery, state: FSMContext):
         )
         await asyncio.sleep(1)
         
-        # Показываем следующий шаг
         route = data.get("current_route", {})
         await show_route_step(callback, state, next_step, route)
 
@@ -2607,7 +867,6 @@ async def show_route_complete(callback: CallbackQuery, state: FSMContext):
     await callback.message.edit_text(text, reply_markup=keyboard, parse_mode='Markdown')
     await state.update_data(route_step=None, current_destination=None)
     
-    # Отменяем напоминания
     reminder_manager.cancel_user_reminders(callback.from_user.id)
 
 
@@ -2662,12 +921,10 @@ async def show_final_profile(callback: CallbackQuery, state: FSMContext):
     user_id = callback.from_user.id
     data = await state.get_data()
     
-    # Проверяем, есть ли уже сгенерированный профиль
     if data.get("ai_generated_profile"):
         await show_ai_generated_profile(callback, state, data["ai_generated_profile"])
         return
     
-    # Показываем сообщение о генерации
     await callback.message.edit_text(
         "🧠 *Анализирую данные...*\n\n"
         "Собираю воедино результаты 5 этапов тестирования.\n"
@@ -2676,21 +933,18 @@ async def show_final_profile(callback: CallbackQuery, state: FSMContext):
         parse_mode='Markdown'
     )
     
-    # Генерируем профиль через ИИ
-    ai_profile = await generate_ai_profile(user_id, state)
+    ai_profile = await generate_ai_profile(user_id, data)
     
     if ai_profile:
         await state.update_data(ai_generated_profile=ai_profile)
         await show_ai_generated_profile(callback, state, ai_profile)
     else:
-        # Если генерация не удалась, показываем старый вариант
         await show_old_final_profile(callback, state)
 
 
 async def show_ai_generated_profile(callback: CallbackQuery, state: FSMContext, ai_profile: str):
     """Показывает профиль, сгенерированный ИИ"""
     
-    # Очищаем текст от проблемной Markdown-разметки
     clean_text = clean_markdown(ai_profile)
     
     text = f"""
@@ -2711,9 +965,7 @@ async def show_ai_generated_profile(callback: CallbackQuery, state: FSMContext, 
     try:
         await callback.message.edit_text(text, reply_markup=keyboard, parse_mode='Markdown')
     except TelegramBadRequest as e:
-        # Если ошибка с Markdown, пробуем отправить без Markdown
         if "can't parse entities" in str(e).lower():
-            # Убираем Markdown совсем
             text_plain = re.sub(r'[*_`]', '', text)
             await callback.message.edit_text(text_plain, reply_markup=keyboard)
         else:
@@ -2724,9 +976,35 @@ async def show_ai_generated_profile(callback: CallbackQuery, state: FSMContext, 
 
 async def show_old_final_profile(callback: CallbackQuery, state: FSMContext):
     """Старая версия финального профиля (резерв)"""
-    # Здесь должен быть код из существующей функции show_final_profile
-    # (сохраняем как резерв, но не дублируем для краткости)
-    pass
+    data = await state.get_data()
+    scores = {}
+    for k in VECTORS:
+        levels = data.get("behavioral_levels", {}).get(k, [])
+        scores[k] = sum(levels) / len(levels) if levels else 3.0
+    
+    perception_type = data.get("perception_type", "не определен")
+    thinking_level = data.get("thinking_level", 5)
+    dilts_counts = data.get("dilts_counts", {})
+    dominant_dilts = determine_dominant_dilts(dilts_counts)
+    
+    profile_text = get_human_readable_profile(
+        scores, 
+        model=None,
+        perception_type=perception_type,
+        thinking_level=thinking_level,
+        dominant_dilts=dominant_dilts
+    )
+    
+    text = f"{profile_text}\n\n━━━━━━━━━━━━━━━━━━━━\n👇 *Что дальше?*"
+    
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🧠 МЫСЛИ ПСИХОЛОГА", callback_data="psychologist_thought")],
+        [InlineKeyboardButton(text="🎯 ВЫБРАТЬ ЦЕЛЬ", callback_data="show_destinations")],
+        [InlineKeyboardButton(text="⚙️ ВЫБРАТЬ РЕЖИМ", callback_data="show_mode_selection")]
+    ])
+    
+    await callback.message.edit_text(text, reply_markup=keyboard, parse_mode='Markdown')
+    await state.set_state(TestStates.profile_generated)
 
 
 # ============================================
@@ -2824,6 +1102,8 @@ async def handle_stage_1_answer(callback: CallbackQuery, state: FSMContext):
         if len(parts) < 4 or parts[0] != "stage1":
             return
         
+        if not parts[1].isdigit():
+            return
         current = int(parts[1])
         option_id = parts[2]
         
@@ -2993,6 +1273,8 @@ async def handle_stage_2_answer(callback: CallbackQuery, state: FSMContext):
         if len(parts) < 5 or parts[0] != "stage2":
             return
         
+        if not parts[1].isdigit():
+            return
         current = int(parts[1])
         selected_level = parts[2]
         measures = parts[3]
@@ -3175,6 +1457,8 @@ async def handle_stage_3_answer(callback: CallbackQuery, state: FSMContext):
         if len(parts) < 5 or parts[0] != "stage3":
             return
         
+        if not parts[1].isdigit():
+            return
         current = int(parts[1])
         option_id = parts[2]
         strategy = parts[3]
@@ -3350,6 +1634,8 @@ async def handle_stage_4_answer(callback: CallbackQuery, state: FSMContext):
         if len(parts) < 4 or parts[0] != "stage4":
             return
         
+        if not parts[1].isdigit():
+            return
         current = int(parts[1])
         option_id = parts[2]
         
@@ -3417,7 +1703,7 @@ async def finish_stage_4(callback: CallbackQuery, state: FSMContext):
     
     logger.info(f"✅ User {user_id}: Stage 4 complete, profile={profile_data.get('display_name', 'unknown')}")
     
-    # Показываем предварительный профиль вместо финального
+    # Показываем предварительный профиль
     await show_preliminary_profile(callback, state)
 
 
@@ -3432,7 +1718,6 @@ async def show_preliminary_profile(callback: CallbackQuery, state: FSMContext):
     user_id = callback.from_user.id
     context = user_contexts.get(user_id)
     
-    # Получаем данные из теста
     scores = {}
     for k in VECTORS:
         levels = data.get("behavioral_levels", {}).get(k, [])
@@ -3441,16 +1726,13 @@ async def show_preliminary_profile(callback: CallbackQuery, state: FSMContext):
     perception_type = data.get("perception_type", "unknown")
     thinking_level = data.get("thinking_level", 5)
     
-    # Конвертируем в простые описания
     simple_profile = convert_to_simple_language(
         scores, perception_type, thinking_level
     )
     
-    # Рассчитываем уверенность
     confidence = calculate_profile_confidence(data)
     confidence_bar = "█" * int(confidence * 10) + "░" * (10 - int(confidence * 10))
     
-    # Форматируем текст
     text = f"""
 🧠 *ПРЕДВАРИТЕЛЬНЫЙ ПОРТРЕТ*
 
@@ -3483,9 +1765,8 @@ async def show_preliminary_profile(callback: CallbackQuery, state: FSMContext):
 
 def calculate_profile_confidence(profile: dict) -> float:
     """Рассчитывает уверенность в профиле"""
-    confidence = 0.5  # базовое значение
+    confidence = 0.5
     
-    # Фактор 1: количество пройденных этапов
     stages_done = 0
     if profile.get("perception_type"):
         stages_done += 1
@@ -3500,7 +1781,6 @@ def calculate_profile_confidence(profile: dict) -> float:
     
     confidence += stages_done * 0.1
     
-    # Фактор 2: количество уточняющих циклов
     clarification_count = profile.get("clarification_iteration", 0)
     confidence += clarification_count * 0.05
     
@@ -3516,7 +1796,7 @@ async def profile_confirm(callback: CallbackQuery, state: FSMContext):
     
     await callback.answer("✅ Отлично! Тогда исследуем глубину...")
     
-    # Показываем 5-й этап (глубинные паттерны)
+    # Показываем 5-й этап
     await show_stage_5_intro(callback, state)
 
 
@@ -3525,13 +1805,11 @@ async def profile_doubt(callback: CallbackQuery, state: FSMContext):
     
     data = await state.get_data()
     
-    # Получаем текущие уровни
     current_levels = {}
     for vector in VECTORS:
         levels = data.get("behavioral_levels", {}).get(vector, [])
         current_levels[vector] = sum(levels) / len(levels) if levels else 3
     
-    # Спрашиваем, что именно не так
     await ask_whats_wrong(callback, state, current_levels)
 
 
@@ -3540,7 +1818,6 @@ async def profile_reject(callback: CallbackQuery, state: FSMContext):
     
     await callback.answer("🔄 Хорошо, попробуем иначе...")
     
-    # Пока просто возвращаем к началу теста
     await state.clear()
     await back_to_intro(callback)
 
@@ -3563,7 +1840,6 @@ async def ask_whats_wrong(callback: CallbackQuery, state: FSMContext, current_le
 👇 *Выберите и нажмите ДАЛЬШЕ*
 """
     
-    # Сохраняем текущие уровни для уточняющих вопросов
     await state.update_data(clarifying_levels=current_levels)
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
@@ -3578,7 +1854,6 @@ async def ask_whats_wrong(callback: CallbackQuery, state: FSMContext, current_le
     await callback.message.edit_text(text, reply_markup=keyboard, parse_mode='Markdown')
     await state.set_state(TestStates.clarifying_selection)
     
-    # Инициализируем список расхождений
     await state.update_data(discrepancies=[])
 
 
@@ -3609,11 +1884,9 @@ async def clarify_next(callback: CallbackQuery, state: FSMContext):
         await callback.answer("Выберите хотя бы одно расхождение!")
         return
     
-    # Получаем уточняющие вопросы
     questions = get_clarifying_questions(discrepancies, current_levels)
     
     if not questions:
-        # Если нет специальных вопросов, показываем общие
         await callback.answer("Зададим общие уточняющие вопросы")
         return
     
@@ -3634,7 +1907,6 @@ async def ask_clarifying_question(callback: CallbackQuery, state: FSMContext):
     current = data.get("clarifying_current", 0)
     
     if current >= len(questions):
-        # Вопросы закончились, обновляем профиль
         await update_profile_with_clarifications(callback, state)
         return
     
@@ -3665,6 +1937,8 @@ async def handle_clarifying_answer(callback: CallbackQuery, state: FSMContext):
     if len(parts) < 4:
         return
     
+    if not parts[2].isdigit():
+        return
     current = int(parts[2])
     answer_key = parts[3]
     
@@ -3674,7 +1948,6 @@ async def handle_clarifying_answer(callback: CallbackQuery, state: FSMContext):
     
     question = questions[current]
     
-    # Сохраняем ответ
     answers = data.get("clarifying_answers", [])
     answers.append({
         "question": question['text'],
@@ -3698,28 +1971,9 @@ async def update_profile_with_clarifications(callback: CallbackQuery, state: FSM
     data = await state.get_data()
     answers = data.get("clarifying_answers", [])
     
-    # Получаем текущие данные
-    perception_scores = data.get("perception_scores", {})
-    behavioral_levels = data.get("behavioral_levels", {})
-    
-    # Корректируем на основе ответов (упрощенно)
-    for answer in answers:
-        if answer.get('type') == 'vector':
-            vector = answer.get('target')
-            if vector and vector in behavioral_levels:
-                # Простая коррекция: если выбраны крайние варианты
-                if answer.get('answer_key') in ['1', '2']:
-                    # Понижаем уровень (упрощенно)
-                    pass
-                elif answer.get('answer_key') in ['3', '4']:
-                    # Повышаем уровень (упрощенно)
-                    pass
-    
-    # Увеличиваем счётчик уточнений
     iteration = data.get("clarification_iteration", 0) + 1
     await state.update_data(clarification_iteration=iteration)
     
-    # Показываем обновлённый профиль
     await show_preliminary_profile(callback, state)
 
 
@@ -3824,6 +2078,8 @@ async def handle_stage_5_answer(callback: CallbackQuery, state: FSMContext):
         if len(parts) < 4 or parts[0] != "stage5":
             return
         
+        if not parts[1].isdigit():
+            return
         current = int(parts[1])
         option_id = parts[2]
         
@@ -3837,7 +2093,6 @@ async def handle_stage_5_answer(callback: CallbackQuery, state: FSMContext):
         if not selected_option:
             return
         
-        # Сохраняем ответ
         stage5_answers = data.get("stage5_answers", [])
         stage5_answers.append({
             'question_id': current,
@@ -3869,13 +2124,11 @@ async def finish_stage_5(callback: CallbackQuery, state: FSMContext):
     data = await state.get_data()
     stage5_answers = data.get("stage5_answers", [])
     
-    # Анализируем результаты
     deep_patterns = analyze_stage5_results(stage5_answers)
     await state.update_data(deep_patterns=deep_patterns)
     
     logger.info(f"✅ User {callback.from_user.id}: Stage 5 complete")
     
-    # Показываем финальный профиль
     await show_final_profile(callback, state)
 
 
@@ -3888,7 +2141,6 @@ async def show_ai_analysis(callback: CallbackQuery, state: FSMContext):
     user_id = callback.from_user.id
     data = await state.get_data()
     
-    # Проверяем, есть ли уже сгенерированные мысли
     if data.get("psychologist_thought"):
         await show_saved_psychologist_thought(callback, data["psychologist_thought"])
         return
@@ -3899,7 +2151,7 @@ async def show_ai_analysis(callback: CallbackQuery, state: FSMContext):
         parse_mode='Markdown'
     )
     
-    thought = await generate_psychologist_thought(user_id, state)
+    thought = await generate_psychologist_thought(user_id, data)
     
     if thought:
         await state.update_data(psychologist_thought=thought)
@@ -4047,7 +2299,7 @@ async def handle_smart_question(callback: CallbackQuery, state: FSMContext, ques
         parse_mode='Markdown'
     )
     
-    response = await generate_response_with_full_context(user_id, question, data)
+    response = await generate_response_with_full_context(user_id, question, data, user_contexts)
     
     history = data.get("history", [])
     history.append({
@@ -4671,7 +2923,7 @@ async def handle_question_message(message: Message, state: FSMContext):
     
     thinking = await message.answer("🤔 *Думаю над ответом...*", parse_mode='Markdown')
     
-    response = await generate_response_with_full_context(user_id, message.text, data)
+    response = await generate_response_with_full_context(user_id, message.text, data, user_contexts)
     
     context_obj = user_contexts.get(user_id)
     mode = context_obj.communication_mode if context_obj else "coach"
@@ -4752,7 +3004,7 @@ async def handle_voice_message(message: Message, state: FSMContext):
             )
             return
         
-        response = await generate_response_with_full_context(user_id, recognized_text, data)
+        response = await generate_response_with_full_context(user_id, recognized_text, data, user_contexts)
         
         context_obj = user_contexts.get(user_id)
         mode = context_obj.communication_mode if context_obj else "coach"
@@ -4854,6 +3106,9 @@ async def cmd_test_voices(message: Message):
 async def callback_handler(callback: CallbackQuery, state: FSMContext):
     """Основной обработчик callback'ов"""
     
+    # ВАЖНО: сразу отвечаем, чтобы избежать таймаута
+    await callback.answer()
+    
     data = callback.data
     
     try:
@@ -4887,7 +3142,6 @@ async def callback_handler(callback: CallbackQuery, state: FSMContext):
                 "⏭️ *Напоминание отложено на 24 часа*",
                 parse_mode='Markdown'
             )
-            # Планируем новое напоминание
             await reminder_manager.schedule_reminder(
                 callback.from_user.id,
                 'checkin',
@@ -5002,12 +3256,6 @@ async def callback_handler(callback: CallbackQuery, state: FSMContext):
         # Результаты и конфайнмент
         elif data == "show_results":
             await show_final_profile(callback, state)
-        elif data == "show_confinement":
-            await show_confinement(callback, state)
-        elif data == "show_intervention":
-            await show_intervention(callback, state)
-        elif data == "intervention_done":
-            await intervention_done(callback, state)
         elif data == "ai_analysis":
             await show_ai_analysis(callback, state)
         elif data == "smart_questions":
@@ -5030,35 +3278,25 @@ async def callback_handler(callback: CallbackQuery, state: FSMContext):
         elif data == "back_to_results":
             await back_to_results(callback, state)
         
-        # Отвечаем на callback
-        await callback.answer()
-    
     except TelegramBadRequest as e:
         if "message is not modified" in str(e).lower():
             logger.info("Ignored 'message not modified' error")
-            await callback.answer()
         elif "can't parse entities" in str(e).lower() or "parse entities" in str(e).lower():
-            # 👇 НОВАЯ ОБРАБОТКА: ошибка парсинга Markdown
             logger.warning(f"Markdown parsing error, retrying without markdown: {e}")
             try:
-                # Пробуем получить текущий текст и отправить без Markdown
                 if callback.message and callback.message.text:
-                    # Удаляем все Markdown-символы
                     clean_text = re.sub(r'[*_`#]', '', callback.message.text)
-                    # Отправляем без parse_mode
                     await callback.message.edit_text(clean_text, reply_markup=callback.message.reply_markup)
                 else:
-                    # Если не получилось, просто отвечаем
                     await callback.answer("❌ Ошибка форматирования")
             except Exception as e2:
                 logger.error(f"Failed to recover from Markdown error: {e2}")
                 await callback.answer("❌ Произошла ошибка")
         else:
             logger.error(f"TelegramBadRequest: {e}")
-            await callback.answer()
     except Exception as e:
         logger.error(f"Unexpected error in callback_handler: {e}")
-        await callback.answer()
+
 
 # ============================================
 # КОМАНДЫ АДМИНИСТРАТОРОВ
@@ -5078,6 +3316,8 @@ async def cmd_apistatus(message: Message):
     if message.from_user.id not in ADMIN_IDS:
         await message.answer("⛔ Доступ запрещен")
         return
+    
+    from config import DEEPSEEK_API_KEY, DEEPGRAM_API_KEY, YANDEX_API_KEY, OPENWEATHER_API_KEY
     
     deepseek_status = "✅ работает" if DEEPSEEK_API_KEY else "❌ не настроен"
     deepgram_status = "✅ работает" if DEEPGRAM_API_KEY else "❌ не настроен"
@@ -5132,6 +3372,8 @@ async def cmd_test_weather(message: Message):
     if message.from_user.id not in ADMIN_IDS:
         await message.answer("⛔ Только для администраторов")
         return
+    
+    from config import OPENWEATHER_API_KEY
     
     if not OPENWEATHER_API_KEY:
         await message.answer("❌ OPENWEATHER_API_KEY не настроен")
@@ -5219,6 +3461,8 @@ async def cmd_context(message: Message, state: FSMContext):
 
 async def check_api_on_startup():
     """Проверка API при запуске"""
+    from config import DEEPSEEK_API_KEY, OPENWEATHER_API_KEY
+    
     logger.info("Проверяю DeepSeek API...")
     response = await call_deepseek("Ответь 'OK' одним словом", max_tokens=10)
     if response:
@@ -5243,7 +3487,6 @@ async def main():
     bot = Bot(token=TELEGRAM_TOKEN)
     dp = Dispatcher(storage=storage)
     
-    task_manager.set_bot(bot)
     reminder_manager.set_bot(bot)
     
     await bot.delete_webhook(drop_pending_updates=True)
@@ -5269,6 +3512,7 @@ async def main():
     # Регистрируем callback хендлер
     dp.callback_query.register(callback_handler)
     
+    from config import DEEPSEEK_API_KEY
     if DEEPSEEK_API_KEY:
         logger.info("✅ DeepSeek API ключ найден")
         asyncio.create_task(check_api_on_startup())
