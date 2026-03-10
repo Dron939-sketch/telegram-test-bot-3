@@ -1561,9 +1561,7 @@ async def ask_goal_specific_questions(callback: CallbackQuery, state: FSMContext
 
 
 async def process_life_context(message: Message, state: FSMContext):
-    """
-    Обрабатывает ответы на вопросы о жизненном контексте
-    """
+    """Обрабатывает ответы на вопросы о жизненном контексте"""
     user_id = message.from_user.id
     text = message.text
     
@@ -1572,40 +1570,36 @@ async def process_life_context(message: Message, state: FSMContext):
         context = UserContext(user_id)
         user_contexts[user_id] = context
     
-    # Парсим ответы (упрощённо)
-    lines = text.strip().split('\n')
-    answers = []
-    for line in lines:
-        # Убираем нумерацию и лишние символы
-        clean = re.sub(r'^[\d️⃣🔟]*\s*', '', line.strip())
-        if clean:
-            answers.append(clean)
-    
-    # Заполняем контекст
-    if len(answers) >= 10:
-        context.family_status = answers[0]
-        context.has_children = 'да' in answers[1].lower() if len(answers) > 1 else None
-        context.children_ages = answers[1] if len(answers) > 1 else None
-        context.work_schedule = answers[2] if len(answers) > 2 else None
-        context.job_title = answers[2] if len(answers) > 2 else None
-        context.commute_time = answers[3] if len(answers) > 3 else None
-        context.housing_type = answers[4] if len(answers) > 4 else None
-        context.has_private_space = 'да' in answers[5].lower() if len(answers) > 5 else None
-        context.has_car = 'да' in answers[6].lower() if len(answers) > 6 else None
-        context.support_people = answers[7] if len(answers) > 7 else None
-        context.resistance_people = answers[8] if len(answers) > 8 else None
+    # 🔥 ИСПОЛЬЗУЕМ ПАРСЕР ИЗ reality_check
+    try:
+        from reality_check import parse_life_context_answers
+        parsed = parse_life_context_answers(text)
         
-        try:
-            context.energy_level = int(re.findall(r'\d+', answers[9])[0]) if len(answers) > 9 else 5
-        except:
-            context.energy_level = 5
-    else:
-        # Если ответов мало, заполняем дефолтными значениями
-        context.family_status = "не указано"
-        context.has_children = False
-        context.work_schedule = "5/2"
-        context.has_private_space = False
-        context.energy_level = 5
+        # Заполняем контекст из распарсенных данных
+        context.family_status = parsed.get('family_status', 'не указано')
+        context.has_children = parsed.get('has_children', False)
+        context.children_ages = parsed.get('children_info', '')
+        context.work_schedule = parsed.get('work_schedule', '')
+        context.job_title = parsed.get('job_title', '')
+        context.commute_time = parsed.get('commute_time', '')
+        context.housing_type = parsed.get('housing_type', '')
+        context.has_private_space = parsed.get('has_private_space', False)
+        context.has_car = parsed.get('has_car', False)
+        context.support_people = parsed.get('support_people', '')
+        context.resistance_people = parsed.get('resistance_people', '')
+        context.energy_level = parsed.get('energy_level', 5)
+        
+    except Exception as e:
+        logger.error(f"Ошибка при парсинге: {e}")
+        # Если парсер не сработал, используем старый метод
+        lines = text.strip().split('\n')
+        answers = []
+        for line in lines:
+            clean = re.sub(r'^[\d️⃣🔟]*\s*', '', line.strip())
+            if clean:
+                answers.append(clean)
+        
+        # ... старый код заполнения ...
     
     context.life_context_complete = True
     
@@ -1614,7 +1608,6 @@ async def process_life_context(message: Message, state: FSMContext):
     goal = data.get("pending_goal") or data.get("current_destination")
     
     if goal:
-        # Переходим к целевым вопросам
         fake_callback = CallbackQuery(
             id="fake", 
             from_user=message.from_user, 
@@ -1624,52 +1617,40 @@ async def process_life_context(message: Message, state: FSMContext):
         )
         await ask_goal_specific_questions(fake_callback, state, goal)
     else:
-        # Если цели нет, возвращаемся в меню
         await show_main_menu_after_mode(message, context)
 
-
 async def process_goal_context(message: Message, state: FSMContext):
-    """
-    Обрабатывает ответы на вопросы о целевом контексте
-    """
+    """Обрабатывает ответы на вопросы о целевом контексте"""
     user_id = message.from_user.id
     text = message.text
     
     data = await state.get_data()
     goal = data.get("pending_goal") or data.get("current_destination")
     
-    # Сохраняем ответы в state
-    goal_context = {
-        "raw_answers": text,
-        "timestamp": datetime.now().isoformat()
-    }
-    
-    # Пробуем извлечь ключевые данные
-    lines = text.strip().split('\n')
-    
-    # Ищем время
-    time_match = re.search(r'(\d+)\s*часов', text, re.IGNORECASE)
-    if time_match:
-        goal_context["time_per_week"] = int(time_match.group(1))
-    else:
-        # Пробуем найти число, похожее на часы
-        numbers = re.findall(r'\d+', text)
-        if numbers and len(numbers) > 0:
-            # Берём первое число как часы
-            goal_context["time_per_week"] = int(numbers[0])
+    # 🔥 ИСПОЛЬЗУЕМ ПАРСЕР ИЗ reality_check
+    try:
+        from reality_check import parse_goal_context_answers
+        goal_context = parse_goal_context_answers(text)
+    except Exception as e:
+        logger.error(f"Ошибка при парсинге целевого контекста: {e}")
+        # Запасной вариант
+        goal_context = {
+            "raw_answers": text,
+            "time_per_week": 5,
+            "budget": 0
+        }
+        
+        # Пробуем извлечь время
+        time_match = re.search(r'(\d+)\s*часов', text, re.IGNORECASE)
+        if time_match:
+            goal_context["time_per_week"] = int(time_match.group(1))
         else:
-            goal_context["time_per_week"] = 5  # значение по умолчанию
-    
-    # Ищем бюджет
-    budget_match = re.search(r'(\d+)\s*тыс', text, re.IGNORECASE)
-    if budget_match:
-        goal_context["budget"] = int(budget_match.group(1)) * 1000
-    else:
-        goal_context["budget"] = 0
+            numbers = re.findall(r'\d+', text)
+            if numbers and len(numbers) > 0:
+                goal_context["time_per_week"] = int(numbers[0])
     
     await state.update_data(goal_context=goal_context)
     
-    # Переходим к расчёту
     fake_callback = CallbackQuery(
         id="fake", 
         from_user=message.from_user, 
