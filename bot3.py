@@ -2203,13 +2203,18 @@ async def show_route_step(callback: CallbackQuery, state: FSMContext, step: int,
     mode = data.get("communication_mode", "coach")
     mode_config = COMMUNICATION_MODES.get(mode, COMMUNICATION_MODES["coach"])
     
+    # 🔥 ОЧИЩАЕМ ТЕКСТ ОТ MARKDOWN
+    route_text = route.get('full_text', 'Маршрут строится...')
+    # Убираем Markdown-жирный (**), оставляем обычный текст
+    route_text = re.sub(r'\*\*(.*?)\*\*', r'\1', route_text)
+    
     text = f"""
 {mode_config['emoji']} {bold('МАРШРУТ К ЦЕЛИ')}
 
 🎯 {bold('Точка назначения:')} {destination['name']}
 ⏱ {bold('Ориентировочное время:')} {destination['time']}
 
-{route.get('full_text', 'Маршрут строится...')}
+{route_text}
 
 👇 {bold('Отмечайте выполнение, когда готовы')}
 """
@@ -2220,11 +2225,17 @@ async def show_route_step(callback: CallbackQuery, state: FSMContext, step: int,
         [InlineKeyboardButton(text="◀️ К ЦЕЛЯМ", callback_data="show_destinations")]
     ])
     
-    await safe_send_message(callback.message, text, reply_markup=keyboard, delete_previous=True)
-    await state.set_state(TestStates.route_active)
+    # 🔥 ИСПОЛЬЗУЕМ safe_send_message
+    await safe_send_message(
+        callback.message,
+        text,
+        reply_markup=keyboard,
+        parse_mode='HTML',
+        delete_previous=True
+    )
     
+    await state.set_state(TestStates.route_active)
     await reminder_manager.schedule_motivation_sequence(callback.from_user.id, destination)
-
 
 async def route_step_done(callback: CallbackQuery, state: FSMContext):
     """Отмечает выполнение этапа"""
