@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 
 # ============================================
-# Вспомогательная функция level (ПЕРЕНЕСЕНА В НАЧАЛО)
+# Вспомогательная функция level
 # ============================================
 
 def level(score: float) -> int:
@@ -41,7 +41,7 @@ def level(score: float) -> int:
 
 
 # ============================================
-# КЛАСС UserContext
+# КЛАСС UserContext (ОБНОВЛЁННЫЙ)
 # ============================================
 
 class UserContext:
@@ -64,6 +64,22 @@ class UserContext:
         self.working_hours = True
         self.user_preferences = {}
         self.awaiting_context = None
+        
+        # ========== НОВЫЕ ПОЛЯ: ЖИЗНЕННЫЙ КОНТЕКСТ ==========
+        self.family_status = None           # один/пара/семья/с родителями
+        self.has_children = None             # bool
+        self.children_ages = None            # список возрастов или строка
+        self.work_schedule = None            # 5/2, 2/2, посменный, свободный
+        self.job_title = None                 # профессия
+        self.commute_time = None              # время на дорогу в минутах
+        self.housing_type = None              # своё/съёмное/ипотека
+        self.has_private_space = None         # bool (отдельная комната)
+        self.has_car = None                   # bool
+        self.support_people = None            # кто поддерживает (строка)
+        self.resistance_people = None         # кто мешает/обесценивает
+        self.energy_level = None               # число от 1 до 10
+        self.life_context_complete = False     # флаг, собран ли контекст
+        # ====================================================
         
     def get_greeting(self, user_name: str = "") -> str:
         """Персонализированное приветствие с учётом времени суток, пола и погоды"""
@@ -230,6 +246,17 @@ class UserContext:
         
         if self.weather_cache:
             lines.append(f"Погода: {self.weather_cache['icon']} {self.weather_cache['description']}, {self.weather_cache['temp']}°C")
+        
+        # Добавляем жизненный контекст, если он есть
+        if self.life_context_complete:
+            if self.family_status:
+                lines.append(f"Семейное положение: {self.family_status}")
+            if self.has_children:
+                lines.append(f"Дети: {self.children_ages}")
+            if self.job_title:
+                lines.append(f"Работа: {self.job_title}, график {self.work_schedule}")
+            if self.energy_level:
+                lines.append(f"Уровень энергии: {self.energy_level}/10")
         
         return "\n".join(lines)
     
