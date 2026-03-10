@@ -1,54 +1,603 @@
-# services.py
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 """
-Функции для работы с внешними API и тяжелые генерации
+Сервисные функции для работы с API и генерации ответов
+Версия 9.6: ПОЛНЫЕ ПРОМТЫ с жирным текстом и эмодзи
 """
+
 import os
 import json
 import logging
 import aiohttp
 import asyncio
-import tempfile
 import re
-import random
-import time
-from typing import Optional, Dict, List, Any
+from typing import Optional, Dict, List, Any, Tuple
+from datetime import datetime
 
-from config import DEEPSEEK_API_KEY, DEEPGRAM_API_KEY, YANDEX_API_KEY, COMMUNICATION_MODES, VOICE_SETTINGS
-from models import level
+from config import (
+    DEEPSEEK_API_KEY,
+    DEEPGRAM_API_KEY,
+    YANDEX_API_KEY,
+    OPENWEATHER_API_KEY,
+    DEEPSEEK_API_URL,
+    DEEPGRAM_API_URL,
+    YANDEX_TTS_API_URL
+)
 
 logger = logging.getLogger(__name__)
 
 
 # ============================================
-# Вспомогательная функция для определения доминирующего уровня Дилтса
+# ФУНКЦИИ ДЛЯ ФОРМАТИРОВАНИЯ (дублируем для независимости)
 # ============================================
 
-def determine_dominant_dilts(dilts_counts: dict) -> str:
-    """Определяет доминирующий уровень Дилтса"""
-    if not dilts_counts:
-        return "BEHAVIOR"
-    dominant = max(dilts_counts.items(), key=lambda x: x[1])
-    return dominant[0]
+def bold(text: str) -> str:
+    """Жирный текст для HTML"""
+    return f"<b>{text}</b>"
+
+
+def italic(text: str) -> str:
+    """Курсив для HTML"""
+    return f"<i>{text}</i>"
+
+
+def emoji_text(emoji: str, text: str) -> str:
+    """Текст с эмодзи"""
+    return f"{emoji} {text}"
 
 
 # ============================================
-# API ФУНКЦИИ
+# DEEPSEEK API
 # ============================================
 
-async def speech_to_text(voice_file_path: str) -> str:
-    """Преобразует голос в текст через Deepgram"""
-    if not DEEPGRAM_API_KEY:
-        logger.error("❌ DEEPGRAM_API_KEY не найден")
-        return ""
+async def call_deepseek(prompt: str, system_prompt: str = None, max_tokens: int = 1000, temperature: float = 0.7) -> Optional[str]:
+    """
+    Универсальная функция вызова DeepSeek API
+    """
+    if not DEEPSEEK_API_KEY:
+        logger.error("❌ DEEPSEEK_API_KEY не настроен")
+        return None
     
-    url = "https://api.deepgram.com/v1/listen"
-    params = {
-        "model": "nova-2",
-        "language": "ru",
-        "punctuate": "true",
-        "smart_format": "true",
-        "detect_language": "false"
+    headers = {
+        "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
+        "Content-Type": "application/json"
     }
+    
+    messages = []
+    if system_prompt:
+        messages.append({"role": "system", "content": system_prompt})
+    messages.append({"role": "user", "content": prompt})
+    
+    payload = {
+        "model": "deepseek-chat",
+        "messages": messages,
+        "max_tokens": max_tokens,
+        "temperature": temperature,
+        "top_p": 0.95,
+        "frequency_penalty": 0.3,
+        "presence_penalty": 0.3
+    }
+    
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.post(DEEPSEEK_API_URL, headers=headers, json=payload, timeout=60) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    return data['choices'][0]['message']['content'].strip()
+                else:
+                    error_text = await response.text()
+                    logger.error(f"❌ DeepSeek API error {response.status}: {error_text[:200]}")
+                    return None
+    except asyncio.TimeoutError:
+        logger.error("❌ DeepSeek API timeout")
+        return None
+    except Exception as e:
+        logger.error(f"❌ DeepSeek API exception: {e}")
+        return None
+
+
+# ============================================
+# ГЕНЕРАЦИЯ ПСИХОЛОГИЧЕСКОГО ПОРТРЕТА (ПОЛНЫЙ ПРОМТ)
+# ============================================
+
+async def generate_ai_profile(user_id: int, data: dict) -> Optional[str]:
+    """
+    Генерирует психологический портрет на основе данных теста
+    """
+    logger.info(f"🧠 Генерация AI-профиля для пользователя {user_id}")
+    
+    system_prompt = """Ты — Фреди, виртуальный психолог, цифровая копия Андрея Мейстера. 
+Твоя задача — создавать глубокие, точные психологические портреты на основе теста «Матрица поведений 4×6».
+
+ТВОЙ СТИЛЬ:
+- Говоришь от первого лица, напрямую обращаясь к человеку
+- Используешь живой, образный язык, метафоры, аналогии
+- Избегаешь шаблонных фраз и психологического жаргона
+- Будь честным, иногда ироничным, но всегда поддерживающим
+- Используй эмодзи для эмоциональной окраски, но не перебарщивай
+
+ВАЖНО: 
+- Твои портреты помогают людям увидеть себя со стороны
+- Они должны быть узнаваемыми и полезными
+- Никакой воды — только суть"""
+    
+    # Подготавливаем данные для анализа
+    profile_data = {
+        "perception_type": data.get("perception_type", "не определен"),
+        "thinking_level": data.get("thinking_level", 5),
+        "behavioral_levels": data.get("behavioral_levels", {}),
+        "dilts_counts": data.get("dilts_counts", {}),
+        "dominant_dilts": data.get("dominant_dilts", "BEHAVIOR"),
+        "final_level": data.get("final_level", 5),
+        "deep_patterns": data.get("deep_patterns", {})
+    }
+    
+    # Добавляем конфайнмент-модель, если есть
+    if data.get("confinement_model"):
+        profile_data["confinement_model"] = data["confinement_model"]
+    
+    # Полный промт для генерации профиля
+    prompt = f"""На основе данных теста создай глубокий, точный психологический портрет человека.
+
+ДАННЫЕ ТЕСТА:
+{json.dumps(profile_data, ensure_ascii=False, indent=2)}
+
+ИНСТРУКЦИИ ПО ФОРМАТУ:
+1. Пиши от первого лица, как будто ты напрямую обращаешься к человеку.
+2. Используй живой, образный язык, метафоры, аналогии.
+3. Избегай шаблонных фраз и психологического жаргона.
+4. Будь честным, иногда ироничным, но всегда поддерживающим.
+5. ОБЯЗАТЕЛЬНО используй эмодзи в заголовках блоков.
+
+СТРУКТУРА ПОРТРЕТА (обязательно соблюдай):
+
+БЛОК 1: КЛЮЧЕВАЯ ХАРАКТЕРИСТИКА
+(Опиши главную особенность личности пользователя одной яркой фразой или метафорой. Что определяет его способ взаимодействия с миром? Например: «Вы — архитектор, который строит системы, но забывает в них жить» или «Вы — разведчик, который всегда сканирует опасность, даже когда вокруг безопасно». Используй эмодзи 🔑 в начале блока.)
+
+БЛОК 2: СИЛЬНЫЕ СТОРОНЫ
+(Распиши 3-4 сильные стороны. Не просто перечисли, а покажи, как они проявляются в жизни. Например: «Ваша способность замечать детали позволяет вам находить неочевидные решения...» Используй эмодзи 💪 в начале блока.)
+
+БЛОК 3: ЗОНЫ РОСТА
+(Опиши, что мешает, какие паттерны повторяются. Укажи цену, которую человек платит за эти паттерны — энергией, отношениями, деньгами, временем. Например: «Стремление всё контролировать съедает вашу энергию и не даёт расслабиться даже в безопасной обстановке». Используй эмодзи 🎯 в начале блока.)
+
+БЛОК 4: КАК ЭТО СФОРМИРОВАЛОСЬ
+(Свяжи текущие паттерны с прошлым опытом, воспитанием, средой. Будь деликатен. Например: «Скорее всего, такая гиперответственность сформировалась, потому что в детстве вам приходилось быть «взрослым» раньше времени...» Используй эмодзи 🌱 в начале блока.)
+
+БЛОК 5: ГЛАВНАЯ ЛОВУШКА
+(Опиши цикл, в котором застревает пользователь. Как его сильные стороны превращаются в слабости, а попытки решить проблему её усугубляют. Например: «Вы боитесь ошибок → поэтому тщательно планируете → тратите на планирование всю энергию → на действие сил не остаётся → вы не достигаете цели → убеждаетесь, что «опять не получилось» → страх ошибок усиливается». Замкнутый круг. Используй эмодзи ⚠️ в начале блока.)
+
+ТОН И СТИЛЬ:
+- Представь, что ты разговариваешь с человеком в уютной комнате за чашкой чая.
+- Используй разговорные обороты: «Слушай...», «Понимаешь...», «Дело в том, что...».
+- Добавляй лёгкую иронию, но не сарказм.
+- Завершай портрет вопросом или приглашением к размышлению.
+
+НАПИШИ ПОРТРЕТ, СОБЛЮДАЯ ВСЕ 5 БЛОКОВ С ЭМОДЗИ В ЗАГОЛОВКАХ:
+🔑 КЛЮЧЕВАЯ ХАРАКТЕРИСТИКА
+💪 СИЛЬНЫЕ СТОРОНЫ
+🎯 ЗОНЫ РОСТА
+🌱 КАК ЭТО СФОРМИРОВАЛОСЬ
+⚠️ ГЛАВНАЯ ЛОВУШКА
+"""
+    
+    response = await call_deepseek(
+        prompt=prompt,
+        system_prompt=system_prompt,
+        max_tokens=2000,
+        temperature=0.8
+    )
+    
+    if response:
+        logger.info(f"✅ AI-профиль сгенерирован ({len(response)} символов)")
+    else:
+        logger.error("❌ Не удалось сгенерировать AI-профиль")
+    
+    return response
+
+
+# ============================================
+# ГЕНЕРАЦИЯ МЫСЛЕЙ ПСИХОЛОГА (ПОЛНЫЙ ПРОМТ)
+# ============================================
+
+async def generate_psychologist_thought(user_id: int, data: dict) -> Optional[str]:
+    """
+    Генерирует мысли психолога на основе конфайнмент-модели
+    """
+    logger.info(f"🧠 Генерация мыслей психолога для пользователя {user_id}")
+    
+    system_prompt = """Ты — Фреди, виртуальный психолог. Твоя задача — давать глубинный анализ через конфайнмент-модель.
+
+ТВОЙ СТИЛЬ:
+- Говоришь как опытный психолог, но простым языком
+- Используешь метафоры и образы
+- Видишь систему, а не отдельные симптомы
+- Будь честным, иногда жестким, но всегда заботливым
+- Используй эмодзи для выделения ключевых моментов"""
+    
+    profile_data = {
+        "perception_type": data.get("perception_type", "не определен"),
+        "thinking_level": data.get("thinking_level", 5),
+        "behavioral_levels": data.get("behavioral_levels", {}),
+        "profile_code": data.get("profile_data", {}).get("display_name", "СБ-4_ТФ-4_УБ-4_ЧВ-4")
+    }
+    
+    confinement_data = data.get("confinement_model", {})
+    
+    # Полный промт для мыслей психолога
+    prompt = f"""Проанализируй пользователя через конфайнмент-модель и дай 3 глубинные мысли.
+
+ПРОФИЛЬ ПОЛЬЗОВАТЕЛЯ:
+{json.dumps(profile_data, ensure_ascii=False, indent=2)}
+
+КОНФАЙНМЕНТ-МОДЕЛЬ:
+{json.dumps(confinement_data, ensure_ascii=False, indent=2)}
+
+Дай 3 мысли, строго соблюдая формат:
+
+МЫСЛЬ 1 — КЛЮЧЕВОЙ ЭЛЕМЕНТ 🔐
+Какой элемент в системе самый важный? Что держит всю конструкцию? Опиши его простыми словами, метафорой. Почему именно он — центр? (2-3 предложения)
+
+МЫСЛЬ 2 — ПЕТЛЯ 🔄
+Опиши основной цикл, в котором застревает пользователь. Как его действия (или бездействие) приводят к тому же результату? Где здесь «замкнутый круг»? Покажи связь между разными уровнями (поведение, способности, ценности, идентичность). (3-4 предложения)
+
+МЫСЛЬ 3 — ТОЧКА ВХОДА 🚪 И ПРОГНОЗ 📊
+Если бы нужно было разорвать эту петлю одним маленьким действием, где находится эта точка? Самый слабый узел, потянув за который, можно начать распутывать весь клубок. И какой прогноз — что изменится, если начать с этой точки? Что будет через месяц, через полгода? (3-4 предложения)
+
+ФОРМАТ ОТВЕТА (строго соблюдай заголовки с эмодзи):
+
+🔐 КЛЮЧЕВОЙ ЭЛЕМЕНТ:
+[текст]
+
+🔄 ПЕТЛЯ:
+[текст]
+
+🚪 ТОЧКА ВХОДА:
+[текст]
+
+📊 ПРОГНОЗ:
+[текст]
+
+ВАЖНО:
+- Не используй Markdown, только обычный текст
+- Не ставь лишних символов вроде "###"
+- Каждая мысль должна быть связана с конфайнмент-моделью
+- Пиши на русском, живым языком
+"""
+    
+    response = await call_deepseek(
+        prompt=prompt,
+        system_prompt=system_prompt,
+        max_tokens=1500,
+        temperature=0.7
+    )
+    
+    if response:
+        logger.info(f"✅ Мысли психолога сгенерированы ({len(response)} символов)")
+    else:
+        logger.error("❌ Не удалось сгенерировать мысли психолога")
+    
+    return response
+
+
+# ============================================
+# ГЕНЕРАЦИЯ МАРШРУТА (ПОЛНЫЙ ПРОМТ)
+# ============================================
+
+async def generate_route_ai(user_id: int, data: dict, goal: dict) -> Optional[Dict]:
+    """
+    Генерирует пошаговый маршрут к цели
+    """
+    logger.info(f"🧠 Генерация маршрута для пользователя {user_id}, цель: {goal.get('name')}")
+    
+    mode = data.get("communication_mode", "coach")
+    
+    # Описания режимов
+    mode_descriptions = {
+        "coach": {
+            "name": "КОУЧ",
+            "emoji": "🔮",
+            "style": "Ты — коуч. Задаешь открытые вопросы, помогаешь найти ответы внутри себя. Не даешь готовых решений, но направляешь. Твой стиль — партнерский, поддерживающий, но не директивный.",
+            "tone": "используй вопросы, размышления, метафоры. Избегай прямых указаний."
+        },
+        "psychologist": {
+            "name": "ПСИХОЛОГ",
+            "emoji": "🧠",
+            "style": "Ты — психолог. Исследуешь глубинные паттерны, защитные механизмы, прошлый опыт. Работаешь с причинами, а не следствиями.",
+            "tone": "будь эмпатичным, но профессиональным. Используй терапевтические техники, задавай вопросы о прошлом, чувствах."
+        },
+        "trainer": {
+            "name": "ТРЕНЕР",
+            "emoji": "⚡",
+            "style": "Ты — тренер. Даешь четкие инструкции, упражнения, ставишь дедлайны. Формируешь навыки и требуешь выполнения.",
+            "tone": "будь конкретным, структурированным, требовательным. Используй списки, алгоритмы, чек-листы."
+        }
+    }
+    
+    mode_info = mode_descriptions.get(mode, mode_descriptions["coach"])
+    
+    # Получаем данные профиля
+    profile_data = data.get("profile_data", {})
+    profile_code = profile_data.get("display_name", "СБ-4_ТФ-4_УБ-4_ЧВ-4")
+    
+    # Парсим профиль для более детального анализа
+    sb_level = profile_data.get("sb_level", 4)
+    tf_level = profile_data.get("tf_level", 4)
+    ub_level = profile_data.get("ub_level", 4)
+    chv_level = profile_data.get("chv_level", 4)
+    
+    # Полный промт для генерации маршрута
+    prompt = f"""Ты — {mode_info['emoji']} {mode_info['name']}, виртуальный помощник. Твоя задача — создать пошаговый маршрут для пользователя к его цели.
+
+ЦЕЛЬ ПОЛЬЗОВАТЕЛЯ: {goal.get('name', 'цель')}
+ОПИСАНИЕ ЦЕЛИ: {goal.get('description', '')}
+СЛОЖНОСТЬ: {goal.get('difficulty', 'medium')}
+ОРИЕНТИРОВОЧНОЕ ВРЕМЯ: {goal.get('time', '3-6 месяцев')}
+
+ПРОФИЛЬ ПОЛЬЗОВАТЕЛЯ: {profile_code}
+РАСШИФРОВКА ПРОФИЛЯ:
+• СБ-{sb_level} — реакция на угрозу (1-2: замирает/избегает, 3-4: внешне спокоен, 5-6: защищает/атакует)
+• ТФ-{tf_level} — деньги/ресурсы (1-2: хаотично, 3-4: стабильно, 5-6: системно/инвестиции)
+• УБ-{ub_level} — понимание мира (1-2: верит в знаки, 3-4: доверяет экспертам, 5-6: анализирует сам)
+• ЧВ-{chv_level} — отношения (1-2: привязывается, 3-4: хочет нравиться, 5-6: строит партнерство)
+
+РЕЖИМ: {mode_info['emoji']} {mode_info['name']}
+СТИЛЬ В ЭТОМ РЕЖИМЕ: {mode_info['style']}
+ТОН: {mode_info['tone']}
+
+ЗАДАЧА:
+Создай маршрут из 3 ПОСЛЕДОВАТЕЛЬНЫХ ЭТАПОВ. Каждый этап должен быть конкретным, выполнимым и вести к следующему.
+
+ДЛЯ КАЖДОГО ЭТАПА УКАЖИ:
+📍 ЭТАП X: [НАЗВАНИЕ]
+   • Что делаем: [конкретные действия, обсуждения, размышления]
+   • 📝 Домашнее задание: [что нужно сделать между сессиями]
+   • ✅ Критерий выполнения: [как понять, что этап пройден]
+
+ВАЖНО:
+1. Учитывай профиль пользователя:
+   - Если СБ низкий (1-2) — будь мягче, избегай давления, давай техники заземления
+   - Если ТФ низкий (1-2) — фокусируйся на маленьких шагах, базовой финансовой грамотности
+   - Если УБ низкий (1-2) — давай больше структуры, объясняй простыми словами
+   - Если ЧВ низкий (1-2) — работай с привязанностью, страхом отвержения
+
+2. Адаптируй сложность под уровень пользователя:
+   - Уровни 1-2: базовые, поддерживающие шаги
+   - Уровни 3-4: развивающие, укрепляющие шаги
+   - Уровни 5-6: продвинутые, масштабирующие шаги
+
+3. Делай шаги маленькими и реалистичными:
+   - Каждый этап должен занимать 1-2 недели
+   - Домашнее задание — не более 15-20 минут в день
+   - Критерии должны быть измеримыми
+
+4. Используй метафоры и образы, соответствующие режиму:
+   - Коуч: "путешествие", "карта", "компас"
+   - Психолог: "глубина", "корни", "исцеление"
+   - Тренер: "тренировка", "мышцы", "рекорды"
+
+ФОРМАТ ОТВЕТА (строго соблюдай):
+
+📍 ЭТАП 1: [НАЗВАНИЕ]
+   • Что делаем: [описание]
+   • 📝 Домашнее задание: [задание]
+   • ✅ Критерий: [критерий]
+
+📍 ЭТАП 2: [НАЗВАНИЕ]
+   • Что делаем: [описание]
+   • 📝 Домашнее задание: [задание]
+   • ✅ Критерий: [критерий]
+
+📍 ЭТАП 3: [НАЗВАНИЕ]
+   • Что делаем: [описание]
+   • 📝 Домашнее задание: [задание]
+   • ✅ Критерий: [критерий]
+
+Напиши маршрут, соблюдая все инструкции."""
+    
+    response = await call_deepseek(
+        prompt=prompt,
+        system_prompt=f"Ты — {mode_info['emoji']} {mode_info['name']}, создающий эффективные маршруты развития.",
+        max_tokens=1500,
+        temperature=0.7
+    )
+    
+    if response:
+        logger.info(f"✅ Маршрут сгенерирован ({len(response)} символов)")
+        return {
+            "full_text": response,
+            "steps": response.split("\n\n")  # Простое разбиение, можно улучшить
+        }
+    else:
+        logger.error("❌ Не удалось сгенерировать маршрут")
+        return None
+
+
+# ============================================
+# ГЕНЕРАЦИЯ ОТВЕТА НА ВОПРОС (ПОЛНЫЙ ПРОМТ)
+# ============================================
+
+async def generate_response_with_full_context(
+    user_id: int,
+    user_message: str,
+    profile_data: dict,
+    mode: str,
+    context: Any = None,
+    history: list = None
+) -> Dict[str, Any]:
+    """
+    Генерирует ответ с учетом полного контекста пользователя
+    """
+    logger.info(f"🧠 Генерация ответа для пользователя {user_id}, режим: {mode}")
+    
+    # Описания режимов
+    mode_prompts = {
+        "coach": {
+            "role": "коуч",
+            "style": """Ты — коуч. Твоя задача — помогать человеку находить ответы внутри себя через открытые вопросы и размышления.
+
+ПРАВИЛА КОУЧА:
+1. НЕ давай готовых ответов и советов
+2. Задавай открытые вопросы: "Что ты чувствуешь?", "Как ты видишь эту ситуацию?", "Какие есть варианты?"
+3. Отражай и перефразируй мысли человека
+4. Помогай структурировать размышления
+5. Верь, что человек сам знает ответы
+
+ПРИМЕРЫ:
+- "Расскажи подробнее об этой ситуации..."
+- "Что для тебя самое важное в этом?"
+- "Как бы ты хотел, чтобы это выглядело в идеале?"
+- "Какие маленькие шаги ты можешь сделать уже сегодня?""""
+        },
+        "psychologist": {
+            "role": "психолог",
+            "style": """Ты — психолог. Твоя задача — исследовать глубинные паттерны, прошлый опыт, защитные механизмы.
+
+ПРАВИЛА ПСИХОЛОГА:
+1. Исследуй чувства и эмоции: "Что ты чувствуешь, когда думаешь об этом?"
+2. Ищи связи с прошлым: "Было ли похожее раньше? Откуда это могло взяться?"
+3. Обращай внимание на повторяющиеся сценарии
+4. Работай с сопротивлением и защитами
+5. Создавай безопасное пространство для исследования
+
+ПРИМЕРЫ:
+- "Когда ты впервые почувствовал это?"
+- "Что для тебя самое страшное в этой ситуации?"
+- "Если бы твоя тревога могла говорить, что бы она сказала?"
+- "Как эта ситуация связана с твоим детством?""""
+        },
+        "trainer": {
+            "role": "тренер",
+            "style": """Ты — тренер. Твоя задача — давать четкие инструменты, навыки, упражнения для достижения результата.
+
+ПРАВИЛА ТРЕНЕРА:
+1. Давай конкретные, выполнимые задания
+2. Структурируй процесс: "Сначала делаем А, потом Б, затем В"
+3. Ставь дедлайны и требуй отчета
+4. Формируй навыки через повторение
+5. Измеряй прогресс
+
+ПРИМЕРЫ:
+- "Вот конкретное упражнение на эту неделю..."
+- "Сделай это до следующей встречи и напиши результат"
+- "Давай разберем это по шагам..."
+- "Твоя задача на сегодня — сделать первый шаг""""
+        }
+    }
+    
+    mode_info = mode_prompts.get(mode, mode_prompts["coach"])
+    
+    # Формируем контекст
+    profile_code = profile_data.get("display_name", "СБ-4_ТФ-4_УБ-4_ЧВ-4")
+    
+    context_text = ""
+    if context:
+        if hasattr(context, 'get_prompt_context'):
+            context_text = context.get_prompt_context()
+        else:
+            context_text = str(context)
+    
+    history_text = ""
+    if history and len(history) > 0:
+        last_messages = history[-6:]  # последние 3 диалога (вопрос-ответ)
+        history_text = "\n".join([
+            f"{'🤖' if i%2==0 else '👤'}: {msg[:100]}..." 
+            for i, msg in enumerate(last_messages)
+        ])
+    
+    # Полный промт для ответа на вопрос
+    prompt = f"""Ты — {mode_info['role']}, виртуальный помощник. Ответь на вопрос пользователя с учетом его профиля и контекста.
+
+ВОПРОС ПОЛЬЗОВАТЕЛЯ:
+{user_message}
+
+ПРОФИЛЬ ПОЛЬЗОВАТЕЛЯ: {profile_code}
+ДЕТАЛИ ПРОФИЛЯ:
+{json.dumps(profile_data, ensure_ascii=False, indent=2)[:500]}
+
+КОНТЕКСТ (время, погода, личные данные):
+{context_text if context_text else "Контекст не указан"}
+
+ИСТОРИЯ ДИАЛОГА (последние сообщения):
+{history_text if history_text else "Нет истории"}
+
+ТВОЙ СТИЛЬ КАК {mode_info['role'].upper()}:
+{mode_info['style']}
+
+ИНСТРУКЦИИ ПО ОТВЕТУ:
+1. Учитывай профиль пользователя — его сильные стороны и зоны роста
+2. Отвечай в стиле, соответствующем режиму ({mode_info['role']})
+3. Используй эмодзи для эмоциональной окраски, но не перебарщивай
+4. Не используй Markdown (**, __, и т.д.) — только обычный текст
+5. Если нужно выделить важное, используй эмодзи или просто заглавные буквы
+6. Ответ должен быть полезным и конкретным
+7. Длина ответа: 3-5 предложений для простых вопросов, до 10 для сложных
+
+ТВОЙ ОТВЕТ (без Markdown, с эмодзи где уместно):
+"""
+    
+    response = await call_deepseek(
+        prompt=prompt,
+        system_prompt=f"Ты — {mode_info['role']}, помогающий людям.",
+        max_tokens=1000,
+        temperature=0.7
+    )
+    
+    # Генерируем предложения для дальнейшего диалога
+    suggestions = await generate_suggestions(user_message, response, profile_code, mode)
+    
+    return {
+        "response": response or "Извините, не удалось сгенерировать ответ. Попробуйте переформулировать вопрос.",
+        "suggestions": suggestions or []
+    }
+
+
+async def generate_suggestions(question: str, answer: str, profile_code: str, mode: str) -> list:
+    """
+    Генерирует предложения для продолжения диалога
+    """
+    prompt = f"""На основе вопроса и ответа придумай 3 коротких варианта, что спросить дальше.
+
+ВОПРОС: {question}
+ОТВЕТ: {answer[:200]}...
+ПРОФИЛЬ: {profile_code}
+РЕЖИМ: {mode}
+
+Требования:
+- Каждый вариант не длиннее 7 слов
+- Варианты должны быть связаны с темой
+- Учитывай режим общения
+
+Формат ответа: просто список, каждый вариант с новой строки, без нумерации
+"""
+    
+    response = await call_deepseek(
+        prompt=prompt,
+        max_tokens=200,
+        temperature=0.8
+    )
+    
+    if response:
+        suggestions = [s.strip() for s in response.split('\n') if s.strip()]
+        return suggestions[:3]
+    
+    return [
+        "Расскажи подробнее",
+        "Что ты чувствуешь?",
+        "Какие есть варианты?"
+    ]
+
+
+# ============================================
+# РАСПОЗНАВАНИЕ РЕЧИ (DEEPGRAM)
+# ============================================
+
+async def speech_to_text(audio_file_path: str) -> Optional[str]:
+    """
+    Распознает речь из аудиофайла через Deepgram API
+    """
+    if not DEEPGRAM_API_KEY:
+        logger.error("❌ DEEPGRAM_API_KEY не настроен")
+        return None
     
     headers = {
         "Authorization": f"Token {DEEPGRAM_API_KEY}",
@@ -56,677 +605,93 @@ async def speech_to_text(voice_file_path: str) -> str:
     }
     
     try:
-        logger.info(f"🎤 Отправка голосового сообщения в Deepgram STT")
-        
-        with open(voice_file_path, 'rb') as audio_file:
+        with open(audio_file_path, 'rb') as audio_file:
             audio_data = audio_file.read()
         
-        timeout = aiohttp.ClientTimeout(total=60)
+        params = {
+            "model": "nova-2",
+            "language": "ru",
+            "punctuate": True,
+            "diarize": False,
+            "smart_format": True
+        }
         
         async with aiohttp.ClientSession() as session:
             async with session.post(
-                url,
-                params=params,
+                DEEPGRAM_API_URL,
                 headers=headers,
+                params=params,
                 data=audio_data,
-                timeout=timeout
+                timeout=30
             ) as response:
-                
-                if response.status != 200:
-                    error_text = await response.text()
-                    logger.error(f"❌ Ошибка Deepgram API {response.status}: {error_text[:200]}")
-                    return ""
-                
-                result = await response.json()
-                
-                try:
-                    transcript = result["results"]["channels"][0]["alternatives"][0]["transcript"]
-                    logger.info(f"✅ Голос распознан: {len(transcript)} символов")
+                if response.status == 200:
+                    data = await response.json()
+                    transcript = data['results']['channels'][0]['alternatives'][0]['transcript']
+                    logger.info(f"✅ Речь распознана: {len(transcript)} символов")
                     return transcript
-                except (KeyError, IndexError) as e:
-                    logger.error(f"❌ Ошибка парсинга ответа Deepgram: {e}")
-                    return ""
-                    
+                else:
+                    error_text = await response.text()
+                    logger.error(f"❌ Deepgram API error {response.status}: {error_text[:200]}")
+                    return None
     except Exception as e:
-        logger.error(f"💥 Ошибка Deepgram STT: {e}")
-        return ""
+        logger.error(f"❌ Ошибка распознавания речи: {e}")
+        return None
 
+
+# ============================================
+# СИНТЕЗ РЕЧИ (YANDEX)
+# ============================================
 
 async def text_to_speech(text: str, mode: str = "coach") -> Optional[bytes]:
-    """Преобразует текст в голос через Yandex SpeechKit"""
+    """
+    Преобразует текст в речь через Yandex TTS
+    """
     if not YANDEX_API_KEY:
-        logger.error("❌ YANDEX_API_KEY не найден")
+        logger.error("❌ YANDEX_API_KEY не настроен")
         return None
     
-    # Очищаем текст от Markdown
-    clean_text = text.replace('*', '').replace('_', '').replace('`', '').replace('#', '')
-    clean_text = re.sub(r'\[(.*?)\]\(.*?\)', r'\1', clean_text)
-    
-    # Ограничиваем длину (Yandex ограничение)
-    if len(clean_text) > 1000:
-        clean_text = clean_text[:1000] + "..."
-    
-    url = "https://tts.api.cloud.yandex.net/speech/v1/tts:synthesize"
+    # Выбираем голос в зависимости от режима
+    voices = {
+        "coach": "filipp",      # Филипп — коуч
+        "psychologist": "ermil", # Эрмил — психолог
+        "trainer": "filipp"      # Филипп — тренер (можно другой голос)
+    }
+    voice = voices.get(mode, "filipp")
     
     headers = {
         "Authorization": f"Api-Key {YANDEX_API_KEY}",
+        "Content-Type": "application/x-www-form-urlencoded"
     }
     
-    # Получаем настройки голоса из VOICE_SETTINGS
-    voice_settings = VOICE_SETTINGS.get(mode, VOICE_SETTINGS["coach"])
-    voice = voice_settings["voice"]
-    emotion = voice_settings["emotion"]
-    speed = voice_settings["speed"]
-    
-    # Если в режиме есть свои настройки из COMMUNICATION_MODES, используем их как запасной вариант
-    if mode in COMMUNICATION_MODES:
-        mode_config = COMMUNICATION_MODES[mode]
-        voice = mode_config.get("voice", voice)
-        emotion = mode_config.get("voice_emotion", emotion)
+    # Ограничиваем длину текста (Yandex ограничение)
+    if len(text) > 5000:
+        text = text[:5000] + "..."
     
     data = {
-        "text": clean_text,
+        "text": text,
+        "lang": "ru-RU",
         "voice": voice,
-        "emotion": emotion,
-        "speed": str(speed),  # Yandex ожидает строку
-        "format": "oggopus",
+        "emotion": "neutral",
+        "speed": 1.0,
+        "format": "oggopus"
     }
     
     try:
-        logger.info(f"🎧 Отправка в Яндекс TTS: голос {voice}, эмоция {emotion}, скорость {speed}")
-        
-        timeout = aiohttp.ClientTimeout(total=30)
-        
         async with aiohttp.ClientSession() as session:
             async with session.post(
-                url,
+                YANDEX_TTS_API_URL,
                 headers=headers,
                 data=data,
-                timeout=timeout
+                timeout=30
             ) as response:
-                
                 if response.status == 200:
                     audio_data = await response.read()
-                    logger.info(f"✅ Аудио получено: {len(audio_data)} байт")
+                    logger.info(f"✅ Речь синтезирована: {len(audio_data)} байт")
                     return audio_data
                 else:
                     error_text = await response.text()
-                    logger.error(f"❌ Ошибка Yandex TTS {response.status}: {error_text}")
+                    logger.error(f"❌ Yandex TTS API error {response.status}: {error_text[:200]}")
                     return None
-                    
     except Exception as e:
-        logger.error(f"💥 Ошибка Yandex TTS: {e}")
+        logger.error(f"❌ Ошибка синтеза речи: {e}")
         return None
-
-
-async def call_deepseek(prompt: str, system_message: str = "", max_tokens: int = 500, retry_count: int = 3) -> Optional[str]:
-    """Вызов DeepSeek API"""
-    if not DEEPSEEK_API_KEY:
-        logger.error("❌ DEEPSEEK_API_KEY не найден")
-        return None
-
-    url = "https://api.deepseek.com/chat/completions"
-    
-    headers = {
-        "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
-        "Content-Type": "application/json",
-    }
-
-    messages = []
-    if system_message:
-        messages.append({"role": "system", "content": system_message})
-    messages.append({"role": "user", "content": prompt})
-
-    data = {
-        "model": "deepseek-chat",
-        "messages": messages,
-        "temperature": 0.7,
-        "max_tokens": max_tokens,
-    }
-
-    for attempt in range(retry_count):
-        try:
-            logger.info(f"📡 Попытка {attempt + 1}/{retry_count}")
-            
-            timeout = aiohttp.ClientTimeout(total=120)
-            
-            async with aiohttp.ClientSession() as session:
-                async with session.post(
-                    url,
-                    headers=headers,
-                    json=data,
-                    timeout=timeout
-                ) as response:
-                    
-                    if response.status != 200:
-                        error_text = await response.text()
-                        logger.error(f"❌ Ошибка API {response.status}: {error_text[:200]}")
-                        
-                        if response.status == 429:
-                            wait_time = (2 ** attempt) + random.random()
-                            await asyncio.sleep(wait_time)
-                            continue
-                        elif response.status >= 500:
-                            wait_time = (2 ** attempt) + random.random()
-                            await asyncio.sleep(wait_time)
-                            continue
-                        else:
-                            return None
-                    
-                    result = await response.json()
-                    
-                    if result and "choices" in result and len(result["choices"]) > 0:
-                        content = result["choices"][0]["message"]["content"]
-                        logger.info(f"✅ Успех! Длина ответа: {len(content)} символов")
-                        return content
-                    else:
-                        logger.error(f"❌ Странный формат ответа: {result}")
-                        return None
-                            
-        except asyncio.TimeoutError:
-            logger.error(f"⏰ Таймаут соединения (попытка {attempt + 1})")
-            if attempt < retry_count - 1:
-                wait_time = (2 ** attempt) + random.random()
-                await asyncio.sleep(wait_time)
-        except Exception as e:
-            logger.error(f"💥 Неожиданная ошибка: {e}")
-            if attempt < retry_count - 1:
-                wait_time = (2 ** attempt) + random.random()
-                await asyncio.sleep(wait_time)
-    
-    logger.error("❌ ВСЕ ПОПЫТКИ НЕ УДАЛИСЬ")
-    return None
-
-
-# ============================================
-# УСТАРЕВШАЯ ФУНКЦИЯ - БУДЕТ ЗАМЕНЕНА НА generate_response_with_mode
-# ============================================
-
-async def generate_response_with_full_context(user_id: int, user_message: str, state_data: dict, user_contexts: dict) -> str:
-    """
-    УСТАРЕВШАЯ ФУНКЦИЯ.
-    Используйте generate_response_with_mode из modes/
-    """
-    logger.warning("⚠️ generate_response_with_full_context устарела. Используйте generate_response_with_mode")
-    
-    user_context = user_contexts.get(user_id)
-    
-    mode = "coach"
-    if user_context:
-        mode = user_context.communication_mode
-    elif state_data.get("communication_mode"):
-        mode = state_data["communication_mode"]
-    
-    mode_config = COMMUNICATION_MODES.get(mode, COMMUNICATION_MODES["coach"])
-    
-    profile_data = state_data.get("profile_data", {})
-    profile_code = profile_data.get('display_name', 'не определен')
-    
-    full_context = ""
-    if user_context:
-        full_context = user_context.get_prompt_context()
-    
-    history = state_data.get("history", [])
-    history_text = ""
-    for entry in history[-5:]:
-        role = "Клиент" if entry["role"] == "user" else "Психолог"
-        history_text += f"{role}: {entry['text']}\n"
-    
-    # Добавляем информацию о текущем маршруте, если есть
-    route_info = ""
-    if state_data.get("current_destination"):
-        dest = state_data["current_destination"]
-        route_info = f"\nТЕКУЩАЯ ЦЕЛЬ: {dest.get('name', '')}\n"
-        route_info += f"ЭТАП: {state_data.get('route_step', 1)}/3\n"
-    
-    base_prompt = f"""Ты — Фреди, виртуальный психолог, оцифрованная версия Андрея Мейстера.
-Ты общаешься с пользователем.
-
-ПРОФИЛЬ ПОЛЬЗОВАТЕЛЯ: {profile_code}
-
-КОНТЕКСТ ПОЛЬЗОВАТЕЛЯ:
-{full_context}
-
-{route_info}
-
-РЕЖИМ ОБЩЕНИЯ: {mode_config['display_name']}
-{mode_config['responsibility']}
-
-ИНСТРУКЦИЯ: {mode_config['system_prompt']}
-
-ИСТОРИЯ ДИАЛОГА:
-{history_text}
-
-СООБЩЕНИЕ ПОЛЬЗОВАТЕЛЯ: {user_message}
-
-ОТВЕТ (учитывая контекст и режим):"""
-    
-    response = await call_deepseek(base_prompt, max_tokens=500)
-    
-    if not response:
-        if user_context and user_context.weather_cache:
-            weather = user_context.weather_cache
-            if weather['temp'] < 0 and "грусть" in user_message.lower():
-                response = f"Слушайте, погода {weather['icon']} действительно может влиять на настроение. Расскажите подробнее?"
-            else:
-                response = f"Я слышу вас. Что именно вас беспокоит?"
-        else:
-            response = f"Я слышу вас. Расскажите подробнее?"
-    
-    return response
-
-
-# ============================================
-# ГЕНЕРАЦИЯ AI-ПРОФИЛЯ (ВАРИАНТ 4 - С ЖЁСТКИМИ ЛИМИТАМИ)
-# ============================================
-
-async def generate_ai_profile(user_id: int, state_data: dict) -> Optional[str]:
-    """
-    Отправляет все ответы в DeepSeek и получает развернутый профиль
-    """
-    
-    data = state_data
-    from profiles import VECTORS, LEVEL_PROFILES
-    
-    # Собираем все данные
-    scores = {}
-    for k in VECTORS:
-        levels = data.get("behavioral_levels", {}).get(k, [])
-        scores[k] = sum(levels) / len(levels) if levels else 3.0
-    
-    sb_level = level(scores.get("СБ", 3))
-    tf_level = level(scores.get("ТФ", 3))
-    ub_level = level(scores.get("УБ", 3))
-    chv_level = level(scores.get("ЧВ", 3))
-    
-    perception_type = data.get("perception_type", "не определен")
-    thinking_level = data.get("thinking_level", 5)
-    deep_patterns = data.get("deep_patterns", {})
-    
-    # Определяем доминирующий уровень Дилтса
-    dilts_counts = data.get("dilts_counts", {})
-    dominant_dilts = determine_dominant_dilts(dilts_counts)
-    
-    dilts_names = {
-        "ENVIRONMENT": "Окружение",
-        "BEHAVIOR": "Поведение", 
-        "CAPABILITIES": "Способности",
-        "VALUES": "Ценности",
-        "IDENTITY": "Идентичность"
-    }
-    
-    # ВАЖНО: жёсткое ограничение на длину ответа
-    prompt = f"""ТЫ — ПСИХОЛОГ-АНАЛИТИК. На основе данных теста составь психологический портрет человека.
-
-=== КРИТИЧЕСКИ ВАЖНОЕ ТРЕБОВАНИЕ ===
-ОТВЕТ ДОЛЖЕН БЫТЬ НЕ БОЛЕЕ 2000 СИМВОЛОВ!
-Это жёсткое ограничение Telegram. Если ответ будет длиннее, бот не сможет его отправить.
-
-Пиши максимально кратко, ёмко, без воды. Каждое предложение должно нести смысл.
-
-=== ИСХОДНЫЕ ДАННЫЕ ===
-
-1. ТИП ВОСПРИЯТИЯ: {perception_type}
-   (как человек смотрит на мир)
-
-2. УРОВЕНЬ МЫШЛЕНИЯ: {thinking_level}/9
-   (1-3 конкретное, 4-6 системное, 7-9 мета-системное)
-
-3. ПОВЕДЕНЧЕСКИЕ ВЕКТОРЫ (уровни 1-6):
-   • Реакция на угрозу: {sb_level}/6
-   • Отношение к деньгам: {tf_level}/6
-   • Понимание мира: {ub_level}/6
-   • Отношения с людьми: {chv_level}/6
-
-4. ТОЧКА РОСТА (доминирующий уровень Дилтса): {dilts_names.get(dominant_dilts, "Поведение")}
-
-5. ГЛУБИННЫЕ ПАТТЕРНЫ:
-   • Тип привязанности: {deep_patterns.get('attachment', 'не определен')}
-   • Защитные механизмы: {', '.join(deep_patterns.get('defense_mechanisms', ['не определены']))}
-   • Базовые убеждения: {', '.join(deep_patterns.get('core_beliefs', ['не определены']))}
-   • Базовые страхи: {', '.join(deep_patterns.get('fears', ['не определены']))}
-
-=== ЗАДАЧА ===
-Напиши психологический портрет в 5 кратких блоках:
-
-🔹 КЛЮЧЕВАЯ ХАРАКТЕРИСТИКА (1 предложение)
-🔹 СИЛЬНЫЕ СТОРОНЫ (2-3 пункта)
-🔹 ЗОНЫ РОСТА (2-3 пункта)
-🔹 КАК ЭТО СФОРМИРОВАЛОСЬ (1-2 предложения)
-🔹 ГЛАВНАЯ ЛОВУШКА (1 предложение)
-
-СТИЛЬ: Телеграфный, ёмкий, без воды. Как опытный психолог, но максимально кратко.
-
-!!! НАПОМИНАНИЕ: ВЕСЬ ОТВЕТ НЕ БОЛЕЕ 2000 СИМВОЛОВ !!!
-"""
-    
-    response = await call_deepseek(prompt, max_tokens=600)  # Уменьшенный max_tokens
-    
-    if not response:
-        # Запасной вариант
-        response = generate_fallback_profile(scores, perception_type, thinking_level, deep_patterns)
-    
-    return response
-
-
-def generate_fallback_profile(scores: dict, perception_type: str, thinking_level: int, deep_patterns: dict = None) -> str:
-    """Генерирует простой профиль на основе шаблонов"""
-    
-    sb_level = level(scores.get('СБ', 3))
-    tf_level = level(scores.get('ТФ', 3))
-    ub_level = level(scores.get('УБ', 3))
-    chv_level = level(scores.get('ЧВ', 3))
-    
-    # Определяем доминирующий вектор
-    vectors = {'СБ': sb_level, 'ТФ': tf_level, 'УБ': ub_level, 'ЧВ': chv_level}
-    min_vector = min(vectors.items(), key=lambda x: x[1])
-    
-    profile_templates = {
-        'СБ': {
-            'key': 'ЗАЩИТНИК',
-            'strengths': ['Умеете держать удар', 'Стабильны в стрессе', 'Надежны'],
-            'growth': ['Можете замыкаться', 'Пропускаете атаки мимо себя'],
-            'origin': 'Сформировалось в среде, где нужно было защищаться'
-        },
-        'ТФ': {
-            'key': 'ДОБЫТЧИК',
-            'strengths': ['Умеете зарабатывать', 'Практичны', 'Результативны'],
-            'growth': ['Можете зацикливаться на деньгах', 'Рискуете'],
-            'origin': 'Выросли в среде, где ресурсы были ограничены'
-        },
-        'УБ': {
-            'key': 'МЫСЛИТЕЛЬ',
-            'strengths': ['Глубоко анализируете', 'Видите суть', 'Проницательны'],
-            'growth': ['Можете закапываться', 'Сомневаетесь'],
-            'origin': 'С детства искали смыслы и объяснения'
-        },
-        'ЧВ': {
-            'key': 'КОММУНИКАТОР',
-            'strengths': ['Эмпатичны', 'Легко находите контакт', 'Понимаете людей'],
-            'growth': ['Теряете себя в отношениях', 'Зависите от мнения'],
-            'origin': 'Сформировались в среде, где важны были связи'
-        }
-    }
-    
-    profile = profile_templates.get(min_vector[0], profile_templates['СБ'])
-    
-    text = f"""
-🔹 *КЛЮЧЕВАЯ ХАРАКТЕРИСТИКА*
-Вы — «{profile['key']}». {perception_type.lower()}, с мышлением {thinking_level}/9.
-
-🔹 *СИЛЬНЫЕ СТОРОНЫ*
-• {profile['strengths'][0]}
-• {profile['strengths'][1]}
-• {profile['strengths'][2]}
-
-🔹 *ЗОНЫ РОСТА*
-• {profile['growth'][0]}
-• {profile['growth'][1]}
-
-🔹 *КАК ЭТО СФОРМИРОВАЛОСЬ*
-{profile['origin']}. Ваши глубинные паттерны закрепили этот способ взаимодействия с миром.
-
-🔹 *ГЛАВНАЯ ЛОВУШКА*
-Вы попадаете в цикл: ситуация → привычная реакция → результат → закрепление реакции.
-"""
-    return text
-
-
-# ============================================
-# ГЕНЕРАЦИЯ МЫСЛЕЙ ПСИХОЛОГА (ВАРИАНТ 4 - С ЖЁСТКИМИ ЛИМИТАМИ)
-# ============================================
-
-async def generate_psychologist_thought(user_id: int, state_data: dict) -> str:
-    """Генерирует мысли психолога с использованием конфайнмент-модели"""
-    
-    data = state_data
-    from profiles import VECTORS
-    
-    scores = {}
-    for k in VECTORS:
-        levels = data.get("behavioral_levels", {}).get(k, [])
-        scores[k] = sum(levels) / len(levels) if levels else 3.0
-    
-    sb_level = level(scores.get("СБ", 3))
-    tf_level = level(scores.get("ТФ", 3))
-    ub_level = level(scores.get("УБ", 3))
-    chv_level = level(scores.get("ЧВ", 3))
-    
-    perception_type = data.get("perception_type", "не определен")
-    thinking_level = data.get("thinking_level", 5)
-    deep_patterns = data.get("deep_patterns", {})
-    
-    # Получаем конфайнмент-модель
-    model_data = data.get('confinement_model')
-    model_summary = "не построена"
-    key_confinement_desc = ""
-    loops_desc = ""
-    
-    if model_data:
-        try:
-            from models import ConfinementModel9
-            model = ConfinementModel9.from_dict(model_data)
-            if model.key_confinement:
-                elem = model.key_confinement['element']
-                key_confinement_desc = f"Ключевой элемент: {elem.name} - {elem.description[:100]}"
-            
-            if model.loops:
-                strongest = max(model.loops, key=lambda x: x.get('strength', 0))
-                loops_desc = f"Главная петля: {strongest.get('description', 'не определена')} (сила {strongest.get('strength', 0):.1%})"
-        except Exception as e:
-            logger.error(f"Ошибка при парсинге конфайнмент-модели: {e}")
-    
-    prompt = f"""ТЫ — ПСИХОЛОГ-АНАЛИТИК. Используя конфайнмент-модель, проанализируй состояние пользователя.
-
-=== КРИТИЧЕСКИ ВАЖНОЕ ТРЕБОВАНИЕ ===
-ОТВЕТ ДОЛЖЕН БЫТЬ НЕ БОЛЕЕ 2000 СИМВОЛОВ!
-Это жёсткое ограничение Telegram. Пиши максимально кратко и ёмко.
-
-=== ДАННЫЕ ПОЛЬЗОВАТЕЛЯ ===
-
-ПРОФИЛЬ:
-- Тип восприятия: {perception_type}
-- Уровень мышления: {thinking_level}/9
-- Поведенческие векторы: СБ={sb_level}, ТФ={tf_level}, УБ={ub_level}, ЧВ={chv_level}
-
-ГЛУБИННЫЕ ПАТТЕРНЫ:
-{json.dumps(deep_patterns, ensure_ascii=False, indent=2) if deep_patterns else "не определены"}
-
-КОНФАЙНМЕНТ-МОДЕЛЬ:
-{key_confinement_desc}
-{loops_desc}
-
-=== ЗАДАЧА ===
-Дай анализ по 4 пунктам (каждый по 1-2 предложения):
-
-🔐 КЛЮЧЕВОЙ ЭЛЕМЕНТ - что держит систему? Где главный зажим?
-🔄 ПЕТЛЯ - какой цикл самоподдержания работает?
-🚪 ТОЧКА ВХОДА - где можно разорвать эту петлю?
-📊 ПРОГНОЗ - что будет если ничего не менять? Что будет если сделать точку входа?
-
-СТИЛЬ: Телеграфный, профессиональный, без воды. Как опытный психолог, но максимально кратко.
-
-!!! ВЕСЬ ОТВЕТ НЕ БОЛЕЕ 2000 СИМВОЛОВ !!!
-"""
-    
-    response = await call_deepseek(prompt, max_tokens=600)  # Уменьшенный max_tokens
-    
-    if not response:
-        response = """🔐 КЛЮЧЕВОЙ ЭЛЕМЕНТ: Избегание конфликтов и подавление агрессии.
-🔄 ПЕТЛЯ: Проблема → избегание → накопление → взрыв → вина → ещё большее избегание.
-🚪 ТОЧКА ВХОДА: В безопасных ситуациях говорить "мне это не подходит" без оправданий.
-📊 ПРОГНОЗ: Без изменений - выгорание и психосоматика. С изменениями - экологичное отстаивание себя."""
-    
-    return response
-
-
-# ============================================
-# ГЕНЕРАЦИЯ МАРШРУТА (ОБНОВЛЕННАЯ ВЕРСИЯ С ЛИМИТАМИ)
-# ============================================
-
-async def generate_route_ai(user_id: int, state_data: dict, destination: dict) -> Optional[Dict]:
-    """Генерирует маршрут через DeepSeek с учётом режима"""
-    
-    data = state_data
-    mode = data.get("communication_mode", "coach")
-    mode_config = COMMUNICATION_MODES.get(mode, COMMUNICATION_MODES["coach"])
-    
-    profile_data = data.get("profile_data", {})
-    profile_code = profile_data.get('display_name', 'СБ-4_ТФ-4_УБ-4_ЧВ-4')
-    deep_patterns = data.get("deep_patterns", {})
-    
-    # Промпты для разных режимов
-    mode_prompts = {
-        "coach": """
-ТЫ — КОУЧ-НАВИГАТОР. Составь краткий пошаговый маршрут к цели.
-
-ФОРМАТ (максимум 1500 символов):
-📍 ЭТАП 1: [Название]
-   • Действие: что делаем
-   • Критерий: что поймём
-""",
-        "psychologist": """
-ТЫ — ПСИХОЛОГ-НАВИГАТОР. Составь краткий терапевтический маршрут.
-
-ФОРМАТ (максимум 1500 символов):
-📍 ЭТАП 1: [Название]
-   • Исследуем: глубинные причины
-   • Инсайт: что откроется
-""",
-        "trainer": """
-ТЫ — ТРЕНЕР-НАВИГАТОР. Составь краткий тренировочный маршрут.
-
-ФОРМАТ (максимум 1500 символов):
-📍 ЭТАП 1: [Название]
-   • Задание: конкретное действие
-   • Результат: какой навык
-"""
-    }
-    
-    prompt = f"""{mode_prompts.get(mode, mode_prompts["coach"])}
-
-!!! КРИТИЧЕСКИ ВАЖНО: ОТВЕТ НЕ БОЛЕЕ 1500 СИМВОЛОВ !!!
-
-=== ДАННЫЕ ===
-Профиль: {profile_code}
-Цель: {destination['name']}
-Сложность: {destination.get('difficulty', 'medium')}
-
-Составь 3 этапа. Кратко, ёмко, без воды. Только самое важное.
-"""
-    
-    response = await call_deepseek(prompt, max_tokens=400)  # Уменьшенный max_tokens
-    
-    if not response:
-        return None
-    
-    return {"full_text": response, "steps": 3}
-
-
-# ============================================
-# НОВАЯ ФУНКЦИЯ: ГЕНЕРАЦИЯ ГИПНОТИЧЕСКОЙ ИНДУКЦИИ (С ЛИМИТАМИ)
-# ============================================
-
-async def generate_hypnotic_induction(user_id: int, state_data: dict, focus: str = "расслабление") -> str:
-    """
-    Генерирует гипнотическую индукцию для режима психолога
-    """
-    data = state_data
-    deep_patterns = data.get("deep_patterns", {})
-    
-    prompt = f"""ТЫ — ГИПНОТЕРАПЕВТ. Составь мягкую гипнотическую индукцию для пользователя.
-
-!!! ВАЖНО: ОТВЕТ НЕ БОЛЕЕ 1500 СИМВОЛОВ !!!
-
-ФОКУС: {focus}
-
-ГЛУБИННЫЕ ПАТТЕРНЫ ПОЛЬЗОВАТЕЛЯ:
-{json.dumps(deep_patterns, ensure_ascii=False, indent=2) if deep_patterns else "не определены"}
-
-ТРЕБОВАНИЯ:
-- Используй эриксоновский подход (мягкий, разрешающий)
-- Начинай с присоединения к текущему состоянию
-- Используй диссоциативные обороты ("вы можете заметить...")
-- Включай встроенные команды
-- Завершай открытым внушением
-
-Кратко, ёмко, без воды.
-"""
-    
-    response = await call_deepseek(prompt, max_tokens=400)
-    
-    if not response:
-        response = """Устройтесь поудобнее, закройте глаза, если хотите...
-Сделайте глубокий вдох... и медленный выдох...
-И с каждым выдохом вы можете позволить себе расслабляться всё больше...
-
-Ваше бессознательное знает, что вам нужно...
-И оно может показать это в образах, чувствах, мыслях...
-
-Просто позвольте этому случиться...
-И когда будете готовы, вы можете вернуться... с новым пониманием..."""
-    
-    return response
-
-
-# ============================================
-# НОВАЯ ФУНКЦИЯ: ГЕНЕРАЦИЯ ТЕРАПЕВТИЧЕСКОЙ МЕТАФОРЫ (С ЛИМИТАМИ)
-# ============================================
-
-async def generate_therapeutic_metaphor(user_id: int, state_data: dict, issue: str) -> str:
-    """
-    Генерирует терапевтическую метафору для работы с конкретной проблемой
-    """
-    data = state_data
-    weak_vector = "СБ"
-    
-    # Определяем слабый вектор
-    scores = {}
-    for k in ["СБ", "ТФ", "УБ", "ЧВ"]:
-        levels = data.get("behavioral_levels", {}).get(k, [])
-        scores[k] = sum(levels) / len(levels) if levels else 3.0
-    
-    if scores:
-        min_vector = min(scores.items(), key=lambda x: level(x[1]))
-        weak_vector = min_vector[0]
-    
-    vector_names = {"СБ": "страх", "ТФ": "деньги", "УБ": "понимание", "ЧВ": "отношения"}
-    default_issue = vector_names.get(weak_vector, "рост")
-    
-    prompt = f"""ТЫ — ПСИХОТЕРАПЕВТ, ИСПОЛЬЗУЮЩИЙ МЕТАФОРЫ.
-Создай терапевтическую метафору для работы с проблемой: {issue or default_issue}
-
-!!! ВАЖНО: ОТВЕТ НЕ БОЛЕЕ 1500 СИМВОЛОВ !!!
-
-ТРЕБОВАНИЯ:
-- Метафора должна быть изоморфна проблеме (иметь ту же структуру)
-- Содержать ресурсное решение
-- Работать на бессознательном уровне
-
-СТРУКТУРА (кратко):
-1. Герой и его ситуация
-2. Затруднение
-3. Решение
-4. Возвращение с новым опытом
-
-Кратко, ёмко, без воды.
-"""
-    
-    response = await call_deepseek(prompt, max_tokens=400)
-    
-    if not response:
-        response = """Представьте себе сад...
-В этом саду есть дерево, которое не дает плодов.
-Садовник уже хотел его срубить...
-
-Но однажды он заметил, что корни дерева уходят глубоко...
-И там, глубоко под землей, они переплетаются с корнями других деревьев...
-И возможно, это дерево просто питает их...
-
-Садовник задумался: а что, если задача дерева — не плоды?
-Что, если оно — опора для других?
-Или хранитель воды в глубине?
-
-Иногда мы ищем плоды там, где наша задача — быть корнями..."""
-    
-    return response
