@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 ВИРТУАЛЬНЫЙ ПСИХОЛОГ - МАТРИЦА ПОВЕДЕНИЙ 4×6
-ВЕРСИЯ 9.5: НОВЫЕ ЭКРАНЫ ПОДТВЕРЖДЕНИЯ РЕЖИМА И ДИНАМИЧЕСКИЕ ЦЕЛИ
+ВЕРСИЯ 9.6: ПРОВЕРКА РЕАЛЬНОСТИ, ИСПРАВЛЕННЫЕ ЭКРАНЫ
 """
 
 import os
@@ -44,6 +44,14 @@ from services import (
     speech_to_text, text_to_speech, call_deepseek,
     generate_response_with_full_context, generate_ai_profile,
     generate_psychologist_thought
+)
+
+# === НОВЫЙ МОДУЛЬ: проверка реальности ===
+from reality_check import (
+    get_theoretical_path,
+    generate_life_context_questions,
+    generate_goal_context_questions,
+    calculate_feasibility
 )
 
 # === НОВЫЙ ИМПОРТ: система режимов ===
@@ -136,59 +144,103 @@ def emoji_text(emoji: str, text: str, bold_text: bool = True) -> str:
 
 
 def format_profile_text(text: str) -> str:
-    """Форматирует текст профиля с жирными заголовками и эмодзи"""
+    """Форматирует текст профиля с жирными заголовками и эмодзи, убирает дубли"""
     if not text:
         return text
     
-    # Заменяем заголовки блоков на жирные с эмодзи
-    replacements = [
-        (r'БЛОК\s*1:?\s*', f'🔑 {bold("КЛЮЧЕВАЯ ХАРАКТЕРИСТИКА")}\n'),
-        (r'БЛОК\s*2:?\s*', f'💪 {bold("СИЛЬНЫЕ СТОРОНЫ")}\n'),
-        (r'БЛОК\s*3:?\s*', f'🎯 {bold("ЗОНЫ РОСТА")}\n'),
-        (r'БЛОК\s*4:?\s*', f'🌱 {bold("КАК ЭТО СФОРМИРОВАЛОСЬ")}\n'),
-        (r'БЛОК\s*5:?\s*', f'⚠️ {bold("ГЛАВНАЯ ЛОВУШКА")}\n'),
+    # Сначала очищаем от Markdown
+    text = clean_text_for_safe_display(text)
+    
+    # Карта замены заголовков с эмодзи
+    header_map = [
+        (r'БЛОК\s*1:?\s*', '🔑 КЛЮЧЕВАЯ ХАРАКТЕРИСТИКА'),
+        (r'БЛОК\s*2:?\s*', '💪 СИЛЬНЫЕ СТОРОНЫ'),
+        (r'БЛОК\s*3:?\s*', '🎯 ЗОНЫ РОСТА'),
+        (r'БЛОК\s*4:?\s*', '🌱 КАК ЭТО СФОРМИРОВАЛОСЬ'),
+        (r'БЛОК\s*5:?\s*', '⚠️ ГЛАВНАЯ ЛОВУШКА'),
     ]
     
-    for pattern, replacement in replacements:
+    # Сначала заменяем "БЛОК X:" на правильные заголовки
+    for pattern, replacement in header_map:
         text = re.sub(pattern, replacement, text, flags=re.IGNORECASE)
     
-    # Выделяем ключевые фразы жирным
-    key_phrases = [
-        'тревожный тип привязанности',
-        'базовое доверие',
-        'страх несоответствия',
-        'эмоциональное выгорание',
-        'тотальный контроль',
-        'цикл',
-        'петля',
-        'точка входа',
-        'прогноз'
-    ]
+    # Убираем дублирование заголовков
+    for _, header in header_map:
+        # Ищем паттерн: заголовок, затем перенос строки, затем снова тот же заголовок
+        pattern = rf'({re.escape(header)})\s*\n\s*{re.escape(header)}'
+        text = re.sub(pattern, r'\1', text, flags=re.IGNORECASE)
+        
+        # Ищем паттерн с жирным форматированием
+        pattern = rf'\*\*{re.escape(header)}\*\*\s*\n\s*{re.escape(header)}'
+        text = re.sub(pattern, rf'{bold(header)}', text, flags=re.IGNORECASE)
+        
+        # Ищем паттерн: заголовок, потом такой же заголовок в жирном
+        pattern = rf'{re.escape(header)}\s*\n\s*\*\*{re.escape(header)}\*\*'
+        text = re.sub(pattern, rf'{bold(header)}', text, flags=re.IGNORECASE)
     
-    for phrase in key_phrases:
-        text = re.sub(f'({phrase})', bold(r'\1'), text, flags=re.IGNORECASE)
+    # Теперь добавляем жирное форматирование к заголовкам
+    for _, header in header_map:
+        # Заменяем обычный заголовок на жирный
+        text = re.sub(
+            rf'({re.escape(header)})', 
+            rf'{bold(header)}', 
+            text, 
+            flags=re.IGNORECASE
+        )
     
     return text
 
 
-def format_psychologist_text(text: str) -> str:
-    """Форматирует мысли психолога с жирными заголовками и эмодзи"""
+def format_psychologist_text(text: str, user_name: str = "") -> str:
+    """Форматирует мысли психолога с жирными заголовками и эмодзи, убирает Markdown"""
     if not text:
         return text
     
-    # Добавляем заголовок с эмодзи
-    text = re.sub(r'^МЫСЛИ\s*ПСИХОЛОГА', f'🧠 {bold("МЫСЛИ ПСИХОЛОГА")}', text, flags=re.IGNORECASE)
+    # Очищаем от Markdown
+    text = clean_text_for_safe_display(text)
     
-    # Заменяем заголовки секций
-    sections = [
-        (r'КЛЮЧЕВОЙ\s*ЭЛЕМЕНТ', '🔐', 'КЛЮЧЕВОЙ ЭЛЕМЕНТ'),
-        (r'ПЕТЛЯ', '🔄', 'ПЕТЛЯ'),
-        (r'ТОЧКА\s*ВХОДА', '🚪', 'ТОЧКА ВХОДА'),
-        (r'ПРОГНОЗ', '📊', 'ПРОГНОЗ'),
+    # Убираем "### 1.", "### 2." и т.д.
+    text = re.sub(r'###\s*\d+\.?\s*', '', text)
+    text = re.sub(r'\d+\.\s*', '', text)
+    
+    # Добавляем обращение по имени, если есть и его нет
+    if user_name and not text.lower().startswith(user_name.lower()):
+        # Проверяем, начинается ли текст с обращения
+        first_word = text.split()[0] if text else ""
+        if first_word and first_word.lower() not in ['здравствуйте', 'привет', 'добрый']:
+            text = f"{user_name}, " + text[0].lower() + text[1:] if text else text
+    
+    # Карта замены заголовков
+    header_map = [
+        (r'КЛЮЧЕВОЙ\s*ЭЛЕМЕНТ', '🔐 КЛЮЧЕВОЙ ЭЛЕМЕНТ'),
+        (r'ПЕТЛЯ', '🔄 ПЕТЛЯ'),
+        (r'ТОЧКА\s*ВХОДА', '🚪 ТОЧКА ВХОДА'),
+        (r'ПРОГНОЗ', '📊 ПРОГНОЗ'),
     ]
     
-    for pattern, emj, title in sections:
-        text = re.sub(f'({pattern})', f'{emj} {bold(title)}', text, flags=re.IGNORECASE)
+    # Заменяем заголовки на форматированные с эмодзи
+    for pattern, replacement in header_map:
+        # Ищем заголовок в тексте и заменяем на жирный с эмодзи
+        text = re.sub(
+            rf'({pattern})', 
+            rf'{bold(replacement)}', 
+            text, 
+            flags=re.IGNORECASE
+        )
+    
+    # Убираем возможные дубли заголовков
+    for _, header in header_map:
+        # Разбиваем на эмодзи и текст
+        parts = header.split(' ', 1)
+        if len(parts) == 2:
+            emoji, header_text = parts
+            # Ищем дубли: "🔐 КЛЮЧЕВОЙ ЭЛЕМЕНТ\nКЛЮЧЕВОЙ ЭЛЕМЕНТ"
+            pattern = rf'{re.escape(emoji)}\s+{re.escape(header_text)}\s*\n\s*{re.escape(header_text)}'
+            text = re.sub(pattern, f'{emoji} {header_text}', text, flags=re.IGNORECASE)
+    
+    # Убираем лишние символы в конце
+    text = re.sub(r'И вот:$', '', text)
+    text = re.sub(r'И вот:\s*$', '', text)
     
     return text
 
@@ -281,7 +333,7 @@ async def send_with_status_cleanup(message: Message, text: str, status_msg: Mess
 
 
 # ============================================
-# FSM СОСТОЯНИЯ
+# FSM СОСТОЯНИЯ (ОБНОВЛЁННЫЕ)
 # ============================================
 
 class TestStates(StatesGroup):
@@ -313,6 +365,13 @@ class TestStates(StatesGroup):
     route_generation = State()
     route_active = State()
     route_step_active = State()
+    
+    # НОВЫЕ СОСТОЯНИЯ ДЛЯ ПРОВЕРКИ РЕАЛЬНОСТИ
+    collecting_life_context = State()      # сбор базового контекста жизни
+    collecting_goal_context = State()      # сбор контекста под конкретную цель
+    theoretical_path_shown = State()       # показан теоретический путь
+    reality_check_active = State()          # активна проверка реальности
+    feasibility_result = State()            # результат проверки
 
 
 # ============================================
@@ -1191,8 +1250,53 @@ async def show_dynamic_destinations(callback: CallbackQuery, state: FSMContext):
 
 
 # ============================================
-# ОБРАБОТЧИК ВЫБОРА ДИНАМИЧЕСКОЙ ЦЕЛИ
+# ПРОВЕРКА РЕАЛЬНОСТИ (НОВЫЕ ФУНКЦИИ)
 # ============================================
+
+async def show_theoretical_path(callback: CallbackQuery, state: FSMContext, goal_info: Dict):
+    """
+    Показывает теоретический путь к цели после её выбора
+    """
+    
+    user_id = callback.from_user.id
+    data = await state.get_data()
+    context = user_contexts.get(user_id)
+    user_name = context.name if context and context.name else "друг"
+    
+    goal_id = goal_info.get("id", "income_growth")
+    mode = data.get("communication_mode", "coach")
+    
+    # Получаем теоретический путь
+    path = get_theoretical_path(goal_id, mode)
+    
+    # Сохраняем путь в state
+    await state.update_data(theoretical_path=path)
+    
+    text = f"""
+🧠 {bold('ФРЕДИ: ТВОЯ ЦЕЛЬ')}
+
+{user_name}, ты выбрал: {bold(goal_info.get('name', 'цель'))}
+Режим: {bold(COMMUNICATION_MODES.get(mode, {}).get('name', 'КОУЧ'))}
+
+👇 {bold('ТЕОРЕТИЧЕСКИЙ МАРШРУТ:')}
+
+Чтобы достичь этой цели, в идеальном мире нужно:
+{path['formatted_text']}
+
+⚠️ Это в идеале. В реальности всё зависит от твоих условий.
+
+👇 Хочешь проверить, насколько это реально для тебя?
+"""
+    
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🔍 ПРОВЕРИТЬ РЕАЛЬНОСТЬ", callback_data="check_reality")],
+        [InlineKeyboardButton(text="🔄 ДРУГАЯ ЦЕЛЬ", callback_data="show_dynamic_destinations")],
+        [InlineKeyboardButton(text="◀️ НАЗАД", callback_data="back_to_mode_selected")]
+    ])
+    
+    await safe_send_message(callback.message, text, reply_markup=keyboard, delete_previous=True)
+    await state.set_state(TestStates.theoretical_path_shown)
+
 
 async def handle_dynamic_destination(callback: CallbackQuery, state: FSMContext):
     """Обрабатывает выбор динамической цели"""
@@ -1225,21 +1329,508 @@ async def handle_dynamic_destination(callback: CallbackQuery, state: FSMContext)
         route_progress=[]
     )
     
+    # ВМЕСТО прямого построения маршрута показываем теоретический путь
+    await show_theoretical_path(callback, state, dest_info)
+
+
+async def show_reality_check(callback: CallbackQuery, state: FSMContext):
+    """
+    Запускает проверку реальности для выбранной цели
+    """
+    user_id = callback.from_user.id
+    data = await state.get_data()
+    context = user_contexts.get(user_id)
+    
+    # Проверяем, есть ли цель
+    goal = data.get("current_destination")
+    if not goal:
+        text = f"""
+🧠 {bold('ФРЕДИ: СНАЧАЛА ВЫБЕРИ ЦЕЛЬ')}
+
+Чтобы проверить реальность, нужно знать, к чему мы стремимся.
+
+👇 Сначала выбери цель:
+"""
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="🎯 ВЫБРАТЬ ЦЕЛЬ", callback_data="show_dynamic_destinations")],
+            [InlineKeyboardButton(text="◀️ НАЗАД", callback_data="back_to_mode_selected")]
+        ])
+        await safe_send_message(callback.message, text, reply_markup=keyboard, delete_previous=True)
+        return
+    
+    # Проверяем, есть ли базовый контекст
+    if not (context and context.life_context_complete):
+        # Если нет — собираем
+        await start_life_context_collection(callback, state, goal)
+    else:
+        # Если есть — задаём целевые вопросы
+        await ask_goal_specific_questions(callback, state, goal)
+
+
+async def start_life_context_collection(callback: CallbackQuery, state: FSMContext, goal: Dict):
+    """
+    Сбор базового контекста жизни (1 раз)
+    """
+    
+    user_id = callback.from_user.id
+    user_name = user_names.get(user_id, "друг")
+    
+    questions = generate_life_context_questions()
+    
+    text = f"""
+🧠 {bold('ФРЕДИ: ДАВАЙ ПОЗНАКОМИМСЯ С ТВОЕЙ РЕАЛЬНОСТЬЮ')}
+
+{user_name}, чтобы понять, что потребуется для твоей цели "{bold(goal.get('name', 'цель'))}", мне нужно знать твои условия.
+
+Это вопросы на 2 минуты. Ответь коротко (можно одним сообщением все сразу):
+
+{questions}
+
+👇 Напиши ответы одним сообщением:
+"""
+    
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="⏭ ПРОПУСТИТЬ (будет неточно)", callback_data="skip_life_context")]
+    ])
+    
+    await safe_send_message(callback.message, text, reply_markup=keyboard, delete_previous=True)
+    await state.set_state(TestStates.collecting_life_context)
+    await state.update_data(pending_goal=goal)
+
+
+async def ask_goal_specific_questions(callback: CallbackQuery, state: FSMContext, goal: Dict):
+    """
+    Задаёт вопросы, специфичные для цели
+    """
+    
+    user_id = callback.from_user.id
+    data = await state.get_data()
+    context = user_contexts.get(user_id)
+    user_name = context.name if context and context.name else "друг"
+    
+    goal_id = goal.get("id", "income_growth")
+    goal_name = goal.get("name", "цель")
+    mode = data.get("communication_mode", "coach")
+    profile = data.get("profile_data", {})
+    
+    questions = generate_goal_context_questions(goal_id, profile, mode, goal_name)
+    
+    text = f"""
+🧠 {bold('ФРЕДИ: УТОЧНЯЮ ПОД ТВОЮ ЦЕЛЬ')}
+
+{user_name}, твоя цель: {bold(goal_name)}
+
+Чтобы точно рассчитать маршрут с учётом твоих условий, ответь на несколько вопросов:
+
+{questions}
+
+👇 Напиши ответы (можно по порядку):
+"""
+    
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="⏭ ПРОПУСТИТЬ (общий план)", callback_data="skip_goal_questions")]
+    ])
+    
+    await safe_send_message(callback.message, text, reply_markup=keyboard, delete_previous=True)
+    await state.set_state(TestStates.collecting_goal_context)
+    await state.update_data(pending_goal=goal)
+
+
+async def process_life_context(message: Message, state: FSMContext):
+    """
+    Обрабатывает ответы на вопросы о жизненном контексте
+    """
+    user_id = message.from_user.id
+    text = message.text
+    
+    context = user_contexts.get(user_id)
+    if not context:
+        context = UserContext(user_id)
+        user_contexts[user_id] = context
+    
+    # Парсим ответы (упрощённо)
+    lines = text.strip().split('\n')
+    answers = []
+    for line in lines:
+        # Убираем нумерацию и лишние символы
+        clean = re.sub(r'^[\d️⃣🔟]*\s*', '', line.strip())
+        if clean:
+            answers.append(clean)
+    
+    # Заполняем контекст
+    if len(answers) >= 10:
+        context.family_status = answers[0]
+        context.has_children = 'да' in answers[1].lower() if len(answers) > 1 else None
+        context.children_ages = answers[1] if len(answers) > 1 else None
+        context.work_schedule = answers[2] if len(answers) > 2 else None
+        context.job_title = answers[2] if len(answers) > 2 else None
+        context.commute_time = answers[3] if len(answers) > 3 else None
+        context.housing_type = answers[4] if len(answers) > 4 else None
+        context.has_private_space = 'да' in answers[5].lower() if len(answers) > 5 else None
+        context.has_car = 'да' in answers[6].lower() if len(answers) > 6 else None
+        context.support_people = answers[7] if len(answers) > 7 else None
+        context.resistance_people = answers[8] if len(answers) > 8 else None
+        
+        try:
+            context.energy_level = int(re.findall(r'\d+', answers[9])[0]) if len(answers) > 9 else 5
+        except:
+            context.energy_level = 5
+    else:
+        # Если ответов мало, заполняем дефолтными значениями
+        context.family_status = "не указано"
+        context.has_children = False
+        context.work_schedule = "5/2"
+        context.has_private_space = False
+        context.energy_level = 5
+    
+    context.life_context_complete = True
+    
+    # Получаем сохранённую цель
+    data = await state.get_data()
+    goal = data.get("pending_goal") or data.get("current_destination")
+    
+    if goal:
+        # Переходим к целевым вопросам
+        fake_callback = CallbackQuery(
+            id="fake", 
+            from_user=message.from_user, 
+            message=message, 
+            data="fake", 
+            chat_instance=""
+        )
+        await ask_goal_specific_questions(fake_callback, state, goal)
+    else:
+        # Если цели нет, возвращаемся в меню
+        await show_main_menu_after_mode(message, context)
+
+
+async def process_goal_context(message: Message, state: FSMContext):
+    """
+    Обрабатывает ответы на вопросы о целевом контексте
+    """
+    user_id = message.from_user.id
+    text = message.text
+    
+    data = await state.get_data()
+    goal = data.get("pending_goal") or data.get("current_destination")
+    
+    # Сохраняем ответы в state
+    goal_context = {
+        "raw_answers": text,
+        "timestamp": datetime.now().isoformat()
+    }
+    
+    # Пробуем извлечь ключевые данные
+    lines = text.strip().split('\n')
+    
+    # Ищем время
+    time_match = re.search(r'(\d+)\s*часов', text, re.IGNORECASE)
+    if time_match:
+        goal_context["time_per_week"] = int(time_match.group(1))
+    else:
+        # Пробуем найти число, похожее на часы
+        numbers = re.findall(r'\d+', text)
+        if numbers and len(numbers) > 0:
+            # Берём первое число как часы
+            goal_context["time_per_week"] = int(numbers[0])
+        else:
+            goal_context["time_per_week"] = 5  # значение по умолчанию
+    
+    # Ищем бюджет
+    budget_match = re.search(r'(\d+)\s*тыс', text, re.IGNORECASE)
+    if budget_match:
+        goal_context["budget"] = int(budget_match.group(1)) * 1000
+    else:
+        goal_context["budget"] = 0
+    
+    await state.update_data(goal_context=goal_context)
+    
+    # Переходим к расчёту
+    fake_callback = CallbackQuery(
+        id="fake", 
+        from_user=message.from_user, 
+        message=message, 
+        data="fake", 
+        chat_instance=""
+    )
+    await calculate_and_show_feasibility(fake_callback, state)
+
+
+async def calculate_and_show_feasibility(callback: CallbackQuery, state: FSMContext):
+    """
+    Рассчитывает достижимость и показывает результат
+    """
+    
+    data = await state.get_data()
+    context = user_contexts.get(callback.from_user.id)
+    user_name = context.name if context and context.name else "друг"
+    
+    goal = data.get("current_destination") or data.get("pending_goal")
+    goal_id = goal.get("id", "income_growth")
+    mode = data.get("communication_mode", "coach")
+    
+    # Получаем теоретический путь
+    path = get_theoretical_path(goal_id, mode)
+    
+    # Собираем контекст
+    life_context = {}
+    if context:
+        life_context = {
+            "time_per_week": 0,  # не заполняется из life_context
+            "energy_level": context.energy_level or 5,
+            "has_private_space": context.has_private_space or False,
+            "support_people": context.support_people or None
+        }
+    
+    goal_context = data.get("goal_context", {})
+    profile = data.get("profile_data", {})
+    
+    # Рассчитываем
+    result = calculate_feasibility(path, life_context, goal_context, profile)
+    
+    # Сохраняем результат
+    await state.update_data(feasibility_result=result)
+    
+    text = f"""
+🧠 {bold('ФРЕДИ: РЕАЛЬНОСТЬ ЦЕЛИ')}
+
+{result['status']} {bold(result['status_text'])}
+
+Твоя цель: {bold(goal.get('name', 'цель'))}
+
+👇 {bold('ЧТО ПОТРЕБУЕТСЯ:')}
+{result['requirements_text']}
+
+👇 {bold('ЧТО У ТЕБЯ ЕСТЬ:')}
+{result['available_text']}
+
+📊 {bold('ДЕФИЦИТ РЕСУРСОВ:')} {result['deficit']}%
+
+{result['recommendation']}
+
+👇 {bold(f'Что делаем, {user_name}?')}
+"""
+    
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="✅ ПРИНЯТЬ ПЛАН", callback_data="accept_feasibility_plan")],
+        [InlineKeyboardButton(text="🔄 ИЗМЕНИТЬ СРОК", callback_data="adjust_timeline")],
+        [InlineKeyboardButton(text="📉 СНИЗИТЬ ПЛАНКУ", callback_data="reduce_goal")],
+        [InlineKeyboardButton(text="◀️ ДРУГАЯ ЦЕЛЬ", callback_data="show_dynamic_destinations")]
+    ])
+    
+    await safe_send_message(callback.message, text, reply_markup=keyboard, delete_previous=True)
+    await state.set_state(TestStates.feasibility_result)
+
+
+async def accept_feasibility_plan(callback: CallbackQuery, state: FSMContext):
+    """
+    Принимает план и переходит к построению маршрута
+    """
+    data = await state.get_data()
+    goal = data.get("current_destination")
+    
+    if not goal:
+        await callback.answer("Цель не найдена")
+        return
+    
+    # Переходим к построению маршрута
     await safe_send_message(
         callback.message,
-        f"🧠 Строю оптимальный маршрут к цели: {bold(dest_info['name'])}...\n\nЭто займёт несколько секунд.",
+        f"🧠 Строю маршрут к цели: {bold(goal.get('name'))}...\n\nЭто займёт несколько секунд.",
         delete_previous=True
     )
     
-    # Генерируем маршрут
     from services import generate_route_ai
-    route = await generate_route_ai(user_id, data, dest_info)
+    route = await generate_route_ai(callback.from_user.id, data, goal)
     
     if route:
         await state.update_data(current_route=route)
         await show_route_step(callback, state, 1, route)
     else:
-        await show_fallback_route(callback, state, dest_info)
+        await show_fallback_route(callback, state, goal)
+
+
+async def skip_life_context(callback: CallbackQuery, state: FSMContext):
+    """
+    Пропускает сбор жизненного контекста
+    """
+    data = await state.get_data()
+    goal = data.get("pending_goal") or data.get("current_destination")
+    
+    text = f"""
+🧠 {bold('ФРЕДИ: БУДЕТ НЕТОЧНО')}
+
+Ок, пропускаем. Маршрут построю без учёта твоих условий — он будет общим.
+
+Хочешь продолжить?
+"""
+    
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="✅ ДА, ПОКАЖИ ПЛАН", callback_data="skip_to_route")],
+        [InlineKeyboardButton(text="🔄 ВСЁ-ТАКИ ОТВЕТИТЬ", callback_data="check_reality")],
+        [InlineKeyboardButton(text="◀️ ДРУГАЯ ЦЕЛЬ", callback_data="show_dynamic_destinations")]
+    ])
+    
+    await safe_send_message(callback.message, text, reply_markup=keyboard, delete_previous=True)
+
+
+async def skip_goal_questions(callback: CallbackQuery, state: FSMContext):
+    """
+    Пропускает целевые вопросы
+    """
+    data = await state.get_data()
+    goal = data.get("pending_goal") or data.get("current_destination")
+    
+    # Используем данные по умолчанию
+    await state.update_data(goal_context={"time_per_week": 5, "budget": 0})
+    
+    await calculate_and_show_feasibility(callback, state)
+
+
+async def skip_to_route(callback: CallbackQuery, state: FSMContext):
+    """
+    Пропускает проверку и сразу строит маршрут
+    """
+    data = await state.get_data()
+    goal = data.get("pending_goal") or data.get("current_destination")
+    
+    if not goal:
+        await callback.answer("Цель не найдена")
+        return
+    
+    await safe_send_message(
+        callback.message,
+        f"🧠 Строю маршрут к цели: {bold(goal.get('name'))}...\n\nЭто займёт несколько секунд.",
+        delete_previous=True
+    )
+    
+    from services import generate_route_ai
+    route = await generate_route_ai(callback.from_user.id, data, goal)
+    
+    if route:
+        await state.update_data(current_route=route)
+        await show_route_step(callback, state, 1, route)
+    else:
+        await show_fallback_route(callback, state, goal)
+
+
+async def adjust_timeline(callback: CallbackQuery, state: FSMContext):
+    """
+    Предлагает скорректировать сроки
+    """
+    data = await state.get_data()
+    goal = data.get("current_destination")
+    
+    text = f"""
+🧠 {bold('ФРЕДИ: КОРРЕКТИРОВКА СРОКОВ')}
+
+Текущий срок: 6 месяцев
+
+Если увеличить срок до 12 месяцев, нагрузка снизится:
+• Время: с 13 ч/нед до 6-7 ч/нед
+• Энергия: с 7/10 до 5-6/10
+
+Это сделает цель более реалистичной в твоих условиях.
+
+👇 Что выбираешь?
+"""
+    
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="✅ УВЕЛИЧИТЬ СРОК", callback_data="apply_extended_timeline")],
+        [InlineKeyboardButton(text="🔄 ОСТАВИТЬ КАК ЕСТЬ", callback_data="accept_feasibility_plan")],
+        [InlineKeyboardButton(text="📉 СНИЗИТЬ ПЛАНКУ", callback_data="reduce_goal")]
+    ])
+    
+    await safe_send_message(callback.message, text, reply_markup=keyboard, delete_previous=True)
+
+
+async def reduce_goal(callback: CallbackQuery, state: FSMContext):
+    """
+    Предлагает снизить планку цели
+    """
+    text = f"""
+🧠 {bold('ФРЕДИ: СНИЖЕНИЕ ПЛАНКИ')}
+
+Вместо "увеличить доход в 2 раза" можно выбрать:
+• Увеличить на 50% (реалистично за 6 месяцев)
+• Увеличить на 30% (легко за 3-4 месяца)
+• Проработать денежные блоки (подготовка)
+
+👇 Что выбираешь?
+"""
+    
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="📈 +50% (6 мес)", callback_data="select_goal_50")],
+        [InlineKeyboardButton(text="📈 +30% (4 мес)", callback_data="select_goal_30")],
+        [InlineKeyboardButton(text="🧠 ПРОРАБОТКА БЛОКОВ", callback_data="select_goal_blocks")],
+        [InlineKeyboardButton(text="◀️ ДРУГАЯ ЦЕЛЬ", callback_data="show_dynamic_destinations")]
+    ])
+    
+    await safe_send_message(callback.message, text, reply_markup=keyboard, delete_previous=True)
+
+
+async def apply_extended_timeline(callback: CallbackQuery, state: FSMContext):
+    """
+    Применяет увеличенный срок и пересчитывает
+    """
+    data = await state.get_data()
+    goal = data.get("current_destination")
+    
+    # Здесь можно реализовать пересчёт с увеличенным сроком
+    # Пока просто принимаем план
+    await accept_feasibility_plan(callback, state)
+
+
+async def select_goal_50(callback: CallbackQuery, state: FSMContext):
+    """
+    Выбирает цель +50%
+    """
+    data = await state.get_data()
+    
+    # Создаём новую цель с меньшей амбициозностью
+    new_goal = {
+        "id": "income_growth_50",
+        "name": "Увеличить доход на 50%",
+        "time": "6 месяцев",
+        "difficulty": "medium"
+    }
+    
+    await state.update_data(current_destination=new_goal)
+    await show_theoretical_path(callback, state, new_goal)
+
+
+async def select_goal_30(callback: CallbackQuery, state: FSMContext):
+    """
+    Выбирает цель +30%
+    """
+    data = await state.get_data()
+    
+    new_goal = {
+        "id": "income_growth_30",
+        "name": "Увеличить доход на 30%",
+        "time": "4 месяца",
+        "difficulty": "easy"
+    }
+    
+    await state.update_data(current_destination=new_goal)
+    await show_theoretical_path(callback, state, new_goal)
+
+
+async def select_goal_blocks(callback: CallbackQuery, state: FSMContext):
+    """
+    Выбирает работу с блоками
+    """
+    data = await state.get_data()
+    
+    new_goal = {
+        "id": "money_blocks",
+        "name": "Проработать денежные блоки",
+        "time": "3-4 недели",
+        "difficulty": "medium"
+    }
+    
+    await state.update_data(current_destination=new_goal)
+    await show_theoretical_path(callback, state, new_goal)
 
 
 # ============================================
@@ -1678,7 +2269,7 @@ async def show_ai_generated_profile(callback: CallbackQuery, state: FSMContext, 
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="🧠 МЫСЛИ ПСИХОЛОГА", callback_data="psychologist_thought")],
-        [InlineKeyboardButton(text="🎯 ВЫБРАТЬ ЦЕЛЬ", callback_data="show_destinations")],
+        [InlineKeyboardButton(text="🎯 ВЫБРАТЬ ЦЕЛЬ", callback_data="show_dynamic_destinations")],
         [InlineKeyboardButton(text="⚙️ ВЫБРАТЬ РЕЖИМ", callback_data="show_mode_selection")]
     ])
     
@@ -1712,7 +2303,7 @@ async def show_old_final_profile(callback: CallbackQuery, state: FSMContext, sta
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="🧠 МЫСЛИ ПСИХОЛОГА", callback_data="psychologist_thought")],
-        [InlineKeyboardButton(text="🎯 ВЫБРАТЬ ЦЕЛЬ", callback_data="show_destinations")],
+        [InlineKeyboardButton(text="🎯 ВЫБРАТЬ ЦЕЛЬ", callback_data="show_dynamic_destinations")],
         [InlineKeyboardButton(text="⚙️ ВЫБРАТЬ РЕЖИМ", callback_data="show_mode_selection")]
     ])
     
@@ -2864,13 +3455,15 @@ async def finish_stage_5(callback: CallbackQuery, state: FSMContext):
 
 
 # ============================================
-# AI АНАЛИЗ
+# AI АНАЛИЗ (ИСПРАВЛЕННЫЙ)
 # ============================================
 
 async def show_ai_analysis(callback: CallbackQuery, state: FSMContext):
     """Показывает мысли психолога"""
     user_id = callback.from_user.id
     data = await state.get_data()
+    context = user_contexts.get(user_id)
+    user_name = context.name if context and context.name else ""
     
     if data.get("psychologist_thought"):
         await show_saved_psychologist_thought(callback, data["psychologist_thought"])
@@ -2906,15 +3499,19 @@ async def show_ai_analysis(callback: CallbackQuery, state: FSMContext):
 async def show_saved_psychologist_thought(callback: CallbackQuery, thought: str):
     """Показывает сохраненные мысли психолога с красивым форматированием"""
     
-    # Форматируем текст
-    formatted_thought = format_psychologist_text(thought)
+    user_id = callback.from_user.id
+    context = user_contexts.get(user_id)
+    user_name = context.name if context and context.name else ""
     
-    # Очищаем от лишних символов
-    formatted_thought = re.sub(r'И вот:$', '', formatted_thought)
-    formatted_thought = re.sub(r'---', '', formatted_thought)
+    # Форматируем текст
+    formatted_thought = format_psychologist_text(thought, user_name)
+    
+    # Добавляем заголовок, если его нет
+    if not formatted_thought.startswith("🧠"):
+        formatted_thought = f"🧠 {bold('МЫСЛИ ПСИХОЛОГА')}\n\n{formatted_thought}"
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🎯 ВЫБРАТЬ ЦЕЛЬ", callback_data="show_destinations")],
+        [InlineKeyboardButton(text="🎯 ВЫБРАТЬ ЦЕЛЬ", callback_data="show_dynamic_destinations")],
         [InlineKeyboardButton(text="◀️ К ПОРТРЕТУ", callback_data="show_results")]
     ])
     
@@ -3798,7 +4395,7 @@ async def cmd_test_voices(message: Message):
 
 
 # ============================================
-# CALLBACK ХЕНДЛЕР (ОБНОВЛЕННЫЙ)
+# CALLBACK ХЕНДЛЕР (ОБНОВЛЁННЫЙ)
 # ============================================
 
 async def callback_handler(callback: CallbackQuery, state: FSMContext):
@@ -3851,7 +4448,38 @@ async def callback_handler(callback: CallbackQuery, state: FSMContext):
         elif data == "psychologist_thought":
             await show_ai_analysis(callback, state)
         
-        # НОВЫЕ ОБРАБОТЧИКИ
+        # НОВЫЕ ОБРАБОТЧИКИ ДЛЯ ПРОВЕРКИ РЕАЛЬНОСТИ
+        elif data == "check_reality":
+            await show_reality_check(callback, state)
+        
+        elif data == "skip_life_context":
+            await skip_life_context(callback, state)
+        
+        elif data == "skip_goal_questions":
+            await skip_goal_questions(callback, state)
+        
+        elif data == "skip_to_route":
+            await skip_to_route(callback, state)
+        
+        elif data == "accept_feasibility_plan":
+            await accept_feasibility_plan(callback, state)
+        
+        elif data == "adjust_timeline":
+            await adjust_timeline(callback, state)
+        
+        elif data == "apply_extended_timeline":
+            await apply_extended_timeline(callback, state)
+        
+        elif data == "select_goal_50":
+            await select_goal_50(callback, state)
+        
+        elif data == "select_goal_30":
+            await select_goal_30(callback, state)
+        
+        elif data == "select_goal_blocks":
+            await select_goal_blocks(callback, state)
+        
+        # Существующие обработчики
         elif data == "show_question_input":
             await show_question_input(callback, state)
         
@@ -3864,7 +4492,6 @@ async def callback_handler(callback: CallbackQuery, state: FSMContext):
         elif data == "back_to_mode_selected":
             await back_to_mode_selected(callback, state)
         
-        # Режимы
         elif data == "mode_hard":
             await choose_mode(callback, state, "hard")
         elif data == "mode_medium":
@@ -3872,7 +4499,6 @@ async def callback_handler(callback: CallbackQuery, state: FSMContext):
         elif data == "mode_soft":
             await choose_mode(callback, state, "soft")
         
-        # Контекст
         elif data == "start_context":
             await start_context(callback, state)
         elif data == "skip_context":
@@ -3882,7 +4508,6 @@ async def callback_handler(callback: CallbackQuery, state: FSMContext):
         elif data == "set_gender_female":
             await set_gender_female(callback, state)
         
-        # Выбор режима после теста
         elif data == "show_mode_selection":
             await show_mode_selection(callback, state)
         elif data == "set_mode_coach":
@@ -3892,7 +4517,6 @@ async def callback_handler(callback: CallbackQuery, state: FSMContext):
         elif data == "set_mode_trainer":
             await set_mode_trainer(callback, state)
         
-        # Навигация
         elif data == "show_benefits":
             await show_benefits(callback)
         elif data == "back_to_intro":
@@ -3902,22 +4526,17 @@ async def callback_handler(callback: CallbackQuery, state: FSMContext):
         elif data == "back_to_main":
             await back_to_main(callback, state)
         
-        # Категории помощи
         elif data.startswith("help_cat_"):
             category = data.replace("help_cat_", "")
             await handle_help_category(callback, state, category)
         
-        # Тест - начало
         elif data == "show_stage_1_intro":
             await show_stage_1_intro(callback, state)
-        
-        # Этап 1
         elif data == "start_stage_1":
             await start_stage_1(callback, state)
         elif data.startswith("stage1_"):
             await handle_stage_1_answer(callback, state)
         
-        # Этап 2
         elif data == "show_stage_2_intro":
             await show_stage_2_intro(callback, state)
         elif data == "start_stage_2":
@@ -3925,7 +4544,6 @@ async def callback_handler(callback: CallbackQuery, state: FSMContext):
         elif data.startswith("stage2_"):
             await handle_stage_2_answer(callback, state)
         
-        # Этап 3
         elif data == "show_stage_3_intro":
             await show_stage_3_intro(callback, state)
         elif data == "start_stage_3":
@@ -3933,7 +4551,6 @@ async def callback_handler(callback: CallbackQuery, state: FSMContext):
         elif data.startswith("stage3_"):
             await handle_stage_3_answer(callback, state)
         
-        # Этап 4
         elif data == "show_stage_4_intro":
             await show_stage_4_intro(callback, state)
         elif data == "start_stage_4":
@@ -3941,7 +4558,6 @@ async def callback_handler(callback: CallbackQuery, state: FSMContext):
         elif data.startswith("stage4_"):
             await handle_stage_4_answer(callback, state)
         
-        # Этап 5
         elif data == "show_stage_5_intro":
             await show_stage_5_intro(callback, state)
         elif data == "start_stage_5":
@@ -3949,7 +4565,6 @@ async def callback_handler(callback: CallbackQuery, state: FSMContext):
         elif data.startswith("stage5_"):
             await handle_stage_5_answer(callback, state)
         
-        # Подтверждение профиля
         elif data == "profile_confirm":
             await profile_confirm(callback, state)
         elif data == "profile_doubt":
@@ -3957,7 +4572,6 @@ async def callback_handler(callback: CallbackQuery, state: FSMContext):
         elif data == "profile_reject":
             await profile_reject(callback, state)
         
-        # Расхождения
         elif data.startswith("discrepancy_"):
             disc = data.replace("discrepancy_", "")
             await handle_discrepancy(callback, state, disc)
@@ -3966,7 +4580,6 @@ async def callback_handler(callback: CallbackQuery, state: FSMContext):
         elif data.startswith("clarify_answer_"):
             await handle_clarifying_answer(callback, state)
         
-        # Результаты и конфайнмент
         elif data == "show_results":
             await show_final_profile(callback, state)
         elif data == "ai_analysis":
@@ -4244,6 +4857,11 @@ async def main():
     dp.message.register(handle_pretest_question, TestStates.pretest_question)
     dp.message.register(handle_question_message, TestStates.awaiting_question)
     dp.message.register(handle_voice_message, F.voice)
+    
+    # НОВЫЕ ОБРАБОТЧИКИ ДЛЯ ПРОВЕРКИ РЕАЛЬНОСТИ
+    dp.message.register(process_life_context, TestStates.collecting_life_context)
+    dp.message.register(process_goal_context, TestStates.collecting_goal_context)
+    
     dp.message.register(handle_unknown_message)
     
     # Регистрируем callback хендлер
@@ -4258,7 +4876,7 @@ async def main():
     
     logger.info("Бот запущен...")
     print("\n" + "="*80)
-    print("🚀 ВИРТУАЛЬНЫЙ ПСИХОЛОГ - МАТРИЦА ПОВЕДЕНИЙ 4×6 v9.5")
+    print("🚀 ВИРТУАЛЬНЫЙ ПСИХОЛОГ - МАТРИЦА ПОВЕДЕНИЙ 4×6 v9.6")
     print("="*80)
     print(f"👤 Ваш Telegram ID: {ADMIN_IDS[0] if ADMIN_IDS else 'не указан'}")
     print("📊 Команды: /stats, /apistatus, /test_yandex, /test_voices, /test_weather, /tale, /context")
@@ -4270,6 +4888,7 @@ async def main():
     print("🧠 Динамическая генерация профиля: ✅")
     print("🎭 Режимы: 🔮 КОУЧ | 🧠 ПСИХОЛОГ | ⚡ ТРЕНЕР")
     print("🎯 Динамический подбор целей: ✅")
+    print("🔍 Проверка реальности целей: ✅")
     print("🧭 Навигатор по целям: ✅")
     print("📅 Напоминания: ✅")
     print("✨ Красивое оформление с жирным текстом и эмодзи: ✅")
