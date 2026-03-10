@@ -4,7 +4,7 @@ import random
 import json
 from .base_mode import BaseMode
 from profiles import VECTORS, LEVEL_PROFILES
-from hypno_module import HypnoticInduction, TherapeuticMetaphor
+from hypno_module import HypnoOrchestrator, TherapeuticTales, Anchoring  # Убрали HypnoticInduction
 
 
 class PsychologistMode(BaseMode):
@@ -17,13 +17,6 @@ class PsychologistMode(BaseMode):
     - Интерпретация типа привязанности
     - Использование гипнотических техник
     - Терапевтические сказки и метафоры
-    
-    ПРИНЦИПЫ РАБОТЫ С ГЛУБИННЫМИ ПАТТЕРНАМИ:
-    1. Идентифицировать тип привязанности
-    2. Распознавать защиты
-    3. Работать с переносом/контрпереносом
-    4. Использовать метафоры для обхода защит
-    5. Гипнотические техники для доступа к бессознательному
     """
     
     def __init__(self, user_id: int, user_data: Dict[str, Any], context=None):
@@ -43,7 +36,7 @@ class PsychologistMode(BaseMode):
         
         # Извлекаем глубинные паттерны из этапа 5
         self.attachment_type = self.deep_patterns.get('attachment', 'неопределенный')
-        self.defenses = self.deep_patterns.get('defenses', [])
+        self.defenses = self.deep_patterns.get('defense_mechanisms', [])
         self.core_beliefs = self.deep_patterns.get('core_beliefs', [])
         self.fears = self.deep_patterns.get('fears', [])
         
