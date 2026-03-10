@@ -97,7 +97,7 @@ async def call_deepseek(prompt: str, system_prompt: str = None, max_tokens: int 
 
 
 # ============================================
-# ГЕНЕРАЦИЯ ПСИХОЛОГИЧЕСКОГО ПОРТРЕТА (ПОЛНЫЙ ПРОМТ)
+# ГЕНЕРАЦИЯ ПСИХОЛОГИЧЕСКОГО ПОРТРЕТА (ПОЛНЫЙ ПРОМТ) С ОТЛАДКОЙ
 # ============================================
 
 async def generate_ai_profile(user_id: int, data: dict) -> Optional[str]:
@@ -105,6 +105,38 @@ async def generate_ai_profile(user_id: int, data: dict) -> Optional[str]:
     Генерирует психологический портрет на основе данных теста
     """
     logger.info(f"🧠 Генерация AI-профиля для пользователя {user_id}")
+    
+    # 🔍 ОТЛАДКА - проверяем все потенциально проблемные места
+    logger.info("=== ОТЛАДКА generate_ai_profile ===")
+    
+    # Проверяем confinement_model
+    if data.get("confinement_model"):
+        confinement = data["confinement_model"]
+        logger.info(f"🔍 Тип confinement_model: {type(confinement)}")
+        
+        if isinstance(confinement, dict):
+            logger.info(f"🔍 confinement_model - словарь, ключи: {list(confinement.keys())}")
+            # Проверяем элементы внутри
+            if "elements" in confinement:
+                elements = confinement["elements"]
+                logger.info(f"🔍 Тип elements: {type(elements)}")
+                if isinstance(elements, dict):
+                    for k, v in elements.items():
+                        if v and not isinstance(v, dict):
+                            logger.warning(f"⚠️ Элемент {k} не словарь: {type(v)}")
+        else:
+            logger.error(f"❌ confinement_model НЕ словарь: {type(confinement)}")
+            # Пробуем преобразовать, если есть метод to_dict
+            if hasattr(confinement, 'to_dict'):
+                data["confinement_model"] = confinement.to_dict()
+                logger.info("✅ Преобразовали в словарь через to_dict()")
+    else:
+        logger.info("ℹ️ confinement_model отсутствует")
+    
+    # Проверяем другие поля
+    for field in ["perception_type", "thinking_level", "behavioral_levels", "dilts_counts", "deep_patterns"]:
+        value = data.get(field)
+        logger.info(f"🔍 {field}: тип {type(value)}")
     
     system_prompt = """Ты — Фреди, виртуальный психолог, цифровая копия Андрея Мейстера. 
 Твоя задача — создавать глубокие, точные психологические портреты на основе теста «Матрица поведений 4×6».
@@ -132,7 +164,7 @@ async def generate_ai_profile(user_id: int, data: dict) -> Optional[str]:
         "deep_patterns": data.get("deep_patterns", {})
     }
     
-    # Добавляем конфайнмент-модель, если есть
+    # Добавляем конфайнмент-модель, если есть (уже должна быть словарём)
     if data.get("confinement_model"):
         profile_data["confinement_model"] = data["confinement_model"]
     
@@ -196,7 +228,7 @@ async def generate_ai_profile(user_id: int, data: dict) -> Optional[str]:
 
 
 # ============================================
-# ГЕНЕРАЦИЯ МЫСЛЕЙ ПСИХОЛОГА (ПОЛНЫЙ ПРОМТ)
+# ГЕНЕРАЦИЯ МЫСЛЕЙ ПСИХОЛОГА (ПОЛНЫЙ ПРОМТ) С ОТЛАДКОЙ
 # ============================================
 
 async def generate_psychologist_thought(user_id: int, data: dict) -> Optional[str]:
@@ -204,6 +236,21 @@ async def generate_psychologist_thought(user_id: int, data: dict) -> Optional[st
     Генерирует мысли психолога на основе конфайнмент-модели
     """
     logger.info(f"🧠 Генерация мыслей психолога для пользователя {user_id}")
+    
+    # 🔍 ОТЛАДКА
+    logger.info("=== ОТЛАДКА generate_psychologist_thought ===")
+    confinement_data = data.get("confinement_model", {})
+    logger.info(f"🔍 Тип confinement_data: {type(confinement_data)}")
+    
+    if isinstance(confinement_data, dict):
+        logger.info(f"🔍 confinement_data - словарь, ключи: {list(confinement_data.keys())}")
+    else:
+        logger.error(f"❌ confinement_data НЕ словарь: {type(confinement_data)}")
+        # Пробуем преобразовать
+        if hasattr(confinement_data, 'to_dict'):
+            confinement_data = confinement_data.to_dict()
+            data["confinement_model"] = confinement_data
+            logger.info("✅ Преобразовали в словарь через to_dict()")
     
     system_prompt = """Ты — Фреди, виртуальный психолог. Твоя задача — давать глубинный анализ через конфайнмент-модель.
 
@@ -220,8 +267,6 @@ async def generate_psychologist_thought(user_id: int, data: dict) -> Optional[st
         "behavioral_levels": data.get("behavioral_levels", {}),
         "profile_code": data.get("profile_data", {}).get("display_name", "СБ-4_ТФ-4_УБ-4_ЧВ-4")
     }
-    
-    confinement_data = data.get("confinement_model", {})
     
     # Полный промт для мыслей психолога
     prompt = f"""Проанализируй пользователя через конфайнмент-модель и дай 3 глубинные мысли.
