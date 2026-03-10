@@ -3978,59 +3978,63 @@ async def handle_context_message(message: Message, state: FSMContext):
     if not context or not context.awaiting_context:
         return False
     
-    success, next_question, keyboard = await context.process_context_answer(message.text)
+    text = message.text.strip()
     
-    if success:
-        if next_question:
-            await message.answer(
-                f"📝 {bold('Давайте познакомимся')}\n\n{next_question}",
-                reply_markup=keyboard
+    if context.awaiting_context == "city":
+        context.city = text
+        context.awaiting_context = None
+        await context.update_weather()
+        question, keyboard = await context.ask_for_context()
+        
+        if question:
+            # 👇 ИСПРАВЛЕНО: используем safe_send_message
+            await safe_send_message(
+                message,
+                f"📝 {bold('Давайте познакомимся')}\n\n{question}",
+                reply_markup=keyboard,
+                parse_mode='HTML',
+                delete_previous=True
             )
         else:
             await show_context_complete(message, state, context)
-    else:
-        await message.answer(next_question or "Пожалуйста, ответьте корректно.")
+    
+    elif context.awaiting_context == "age":
+        try:
+            age = int(text)
+            if 1 <= age <= 120:
+                context.age = age
+                context.awaiting_context = None
+                question, keyboard = await context.ask_for_context()
+                
+                if question:
+                    # 👇 ИСПРАВЛЕНО: используем safe_send_message
+                    await safe_send_message(
+                        message,
+                        f"📝 {bold('Давайте познакомимся')}\n\n{question}",
+                        reply_markup=keyboard,
+                        parse_mode='HTML',
+                        delete_previous=True
+                    )
+                else:
+                    await show_context_complete(message, state, context)
+            else:
+                # 👇 ИСПРАВЛЕНО: используем safe_send_message для ошибки
+                await safe_send_message(
+                    message,
+                    context.bold("❌ Возраст должен быть от 1 до 120 лет.\n\n📅 Сколько вам лет? (напишите число)"),
+                    parse_mode='HTML',
+                    delete_previous=True
+                )
+        except ValueError:
+            # 👇 ИСПРАВЛЕНО: используем safe_send_message для ошибки
+            await safe_send_message(
+                message,
+                context.bold("❌ Пожалуйста, введите число.\n\n📅 Сколько вам лет? (напишите число)"),
+                parse_mode='HTML',
+                delete_previous=True
+            )
     
     return True
-
-
-async def show_context_complete(message_or_callback, state: FSMContext, context: UserContext):
-    """Показывает итоговый экран после сбора контекста"""
-    
-    await context.update_weather()
-    
-    summary = f"✅ {bold('Отлично! Теперь я знаю о вас:')}\n\n"
-    
-    if context.city:
-        summary += f"📍 {bold('Город:')} {context.city}\n"
-    if context.gender:
-        gender_str = "Мужчина" if context.gender == "male" else "Женщина" if context.gender == "female" else "Другое"
-        summary += f"👤 {bold('Пол:')} {gender_str}\n"
-    if context.age:
-        summary += f"📅 {bold('Возраст:')} {context.age}\n"
-    if context.weather_cache:
-        summary += f"{context.weather_cache['icon']} {bold('Погода:')} {context.weather_cache['description']}, {context.weather_cache['temp']}°C\n"
-    
-    summary += f"\n🎯 Теперь я буду учитывать это в наших разговорах!\n\n"
-    summary += f"🧠 {bold('ЧТО ДАЛЬШЕ?')}\n\n"
-    summary += "Чтобы я мог помочь по-настоящему, нужно пройти тест (15 минут).\n"
-    summary += "Он определит ваш психологический профиль по 4 векторам и глубинным паттернам.\n\n"
-    summary += f"👇 {bold('Начинаем?')}"
-    
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🚀 НАЧАТЬ ТЕСТ", callback_data="show_stage_1_intro")],
-        [InlineKeyboardButton(text="📖 ЧТО ДАЕТ ТЕСТ", callback_data="show_benefits")],
-        [InlineKeyboardButton(text="❓ ЗАДАТЬ ВОПРОС", callback_data="ask_pretest")]
-    ])
-    
-    if isinstance(message_or_callback, Message):
-        await safe_send_message(message_or_callback, summary, reply_markup=keyboard)
-    else:
-        # Отправляем новое сообщение
-        await safe_send_message(message_or_callback.message, summary, reply_markup=keyboard, delete_previous=True)
-    
-    await state.clear()
-
 
 # ============================================
 # СТАРТ И НАВИГАЦИЯ
