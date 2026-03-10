@@ -13,7 +13,7 @@ import random
 import time
 from typing import Optional, Dict, List, Any
 
-from config import DEEPSEEK_API_KEY, DEEPGRAM_API_KEY, YANDEX_API_KEY, COMMUNICATION_MODES
+from config import DEEPSEEK_API_KEY, DEEPGRAM_API_KEY, YANDEX_API_KEY, COMMUNICATION_MODES, VOICE_SETTINGS
 from models import level
 
 logger = logging.getLogger(__name__)
@@ -98,9 +98,11 @@ async def text_to_speech(text: str, mode: str = "coach") -> Optional[bytes]:
         logger.error("❌ YANDEX_API_KEY не найден")
         return None
     
+    # Очищаем текст от Markdown
     clean_text = text.replace('*', '').replace('_', '').replace('`', '').replace('#', '')
     clean_text = re.sub(r'\[(.*?)\]\(.*?\)', r'\1', clean_text)
     
+    # Ограничиваем длину (Yandex ограничение)
     if len(clean_text) > 1000:
         clean_text = clean_text[:1000] + "..."
     
@@ -110,24 +112,23 @@ async def text_to_speech(text: str, mode: str = "coach") -> Optional[bytes]:
         "Authorization": f"Api-Key {YANDEX_API_KEY}",
     }
     
-    mode_config = COMMUNICATION_MODES.get(mode, COMMUNICATION_MODES["coach"])
-    voice = mode_config.get("voice", "filipp")
-    emotion = mode_config.get("voice_emotion", "neutral")
+    # Получаем настройки голоса из VOICE_SETTINGS (новое!)
+    voice_settings = VOICE_SETTINGS.get(mode, VOICE_SETTINGS["coach"])
+    voice = voice_settings["voice"]
+    emotion = voice_settings["emotion"]
+    speed = voice_settings["speed"]
     
-    if mode == "coach":
-        speed = "1.0"
-    elif mode == "friend":
-        speed = "0.9"
-    elif mode == "trainer":
-        speed = "1.1"
-    else:
-        speed = "1.0"
+    # Если в режиме есть свои настройки из COMMUNICATION_MODES, используем их как запасной вариант
+    if mode in COMMUNICATION_MODES:
+        mode_config = COMMUNICATION_MODES[mode]
+        voice = mode_config.get("voice", voice)
+        emotion = mode_config.get("voice_emotion", emotion)
     
     data = {
         "text": clean_text,
         "voice": voice,
         "emotion": emotion,
-        "speed": speed,
+        "speed": str(speed),  # Yandex ожидает строку
         "format": "oggopus",
     }
     
@@ -237,8 +238,16 @@ async def call_deepseek(prompt: str, system_message: str = "", max_tokens: int =
     return None
 
 
+# ============================================
+# УСТАРЕВШАЯ ФУНКЦИЯ - БУДЕТ ЗАМЕНЕНА НА generate_response_with_mode
+# ============================================
+
 async def generate_response_with_full_context(user_id: int, user_message: str, state_data: dict, user_contexts: dict) -> str:
-    """Генерирует ответ с учётом полного контекста пользователя"""
+    """
+    УСТАРЕВШАЯ ФУНКЦИЯ.
+    Используйте generate_response_with_mode из modes/
+    """
+    logger.warning("⚠️ generate_response_with_full_context устарела. Используйте generate_response_with_mode")
     
     user_context = user_contexts.get(user_id)
     
@@ -307,6 +316,10 @@ async def generate_response_with_full_context(user_id: int, user_message: str, s
     return response
 
 
+# ============================================
+# ГЕНЕРАЦИЯ AI-ПРОФИЛЯ
+# ============================================
+
 async def generate_ai_profile(user_id: int, state_data: dict) -> Optional[str]:
     """
     Отправляет все ответы в DeepSeek и получает развернутый профиль
@@ -365,6 +378,7 @@ async def generate_ai_profile(user_id: int, state_data: dict) -> Optional[str]:
    • Тип привязанности: {deep_patterns.get('attachment', 'не определен')}
    • Защитные механизмы: {', '.join(deep_patterns.get('defense_mechanisms', ['не определены']))}
    • Базовые убеждения: {', '.join(deep_patterns.get('core_beliefs', ['не определены']))}
+   • Базовые страхи: {', '.join(deep_patterns.get('fears', ['не определены']))}
 
 === ЗАДАЧА ===
 Напиши психологический портрет в 5 блоках:
@@ -468,6 +482,10 @@ def generate_fallback_profile(scores: dict, perception_type: str, thinking_level
     return text
 
 
+# ============================================
+# ГЕНЕРАЦИЯ МЫСЛЕЙ ПСИХОЛОГА (с конфайнмент-моделью)
+# ============================================
+
 async def generate_psychologist_thought(user_id: int, state_data: dict) -> str:
     """Генерирует мысли психолога с использованием конфайнмент-модели"""
     
@@ -491,15 +509,22 @@ async def generate_psychologist_thought(user_id: int, state_data: dict) -> str:
     # Получаем конфайнмент-модель
     model_data = data.get('confinement_model')
     model_summary = "не построена"
+    key_confinement_desc = ""
+    loops_desc = ""
+    
     if model_data:
         try:
             from models import ConfinementModel9
             model = ConfinementModel9.from_dict(model_data)
             if model.key_confinement:
                 elem = model.key_confinement['element']
-                model_summary = f"Ключевой элемент: {elem.name} - {elem.description[:100]}"
-        except:
-            pass
+                key_confinement_desc = f"Ключевой элемент: {elem.name} - {elem.description[:100]}"
+            
+            if model.loops:
+                strongest = max(model.loops, key=lambda x: x.get('strength', 0))
+                loops_desc = f"Главная петля: {strongest.get('description', 'не определена')} (сила {strongest.get('strength', 0):.1%})"
+        except Exception as e:
+            logger.error(f"Ошибка при парсинге конфайнмент-модели: {e}")
     
     prompt = f"""ТЫ — ПСИХОЛОГ-АНАЛИТИК. Используя конфайнмент-модель, проанализируй состояние пользователя.
 
@@ -514,7 +539,8 @@ async def generate_psychologist_thought(user_id: int, state_data: dict) -> str:
 {json.dumps(deep_patterns, ensure_ascii=False, indent=2) if deep_patterns else "не определены"}
 
 КОНФАЙНМЕНТ-МОДЕЛЬ:
-{model_summary}
+{key_confinement_desc}
+{loops_desc}
 
 === ЗАДАЧА ===
 Дай развернутый анализ по 4 пунктам:
@@ -552,6 +578,10 @@ async def generate_psychologist_thought(user_id: int, state_data: dict) -> str:
     
     return response
 
+
+# ============================================
+# ГЕНЕРАЦИЯ МАРШРУТА
+# ============================================
 
 async def generate_route_ai(user_id: int, state_data: dict, destination: dict) -> Optional[Dict]:
     """Генерирует маршрут через DeepSeek"""
@@ -601,3 +631,110 @@ async def generate_route_ai(user_id: int, state_data: dict, destination: dict) -
     
     # Парсим ответ в структуру
     return {"full_text": response, "steps": 3}
+
+
+# ============================================
+# НОВАЯ ФУНКЦИЯ: ГЕНЕРАЦИЯ ГИПНОТИЧЕСКОЙ ИНДУКЦИИ
+# ============================================
+
+async def generate_hypnotic_induction(user_id: int, state_data: dict, focus: str = "расслабление") -> str:
+    """
+    Генерирует гипнотическую индукцию для режима психолога
+    """
+    data = state_data
+    deep_patterns = data.get("deep_patterns", {})
+    
+    prompt = f"""ТЫ — ГИПНОТЕРАПЕВТ. Составь мягкую гипнотическую индукцию для пользователя.
+
+ФОКУС: {focus}
+
+ГЛУБИННЫЕ ПАТТЕРНЫ ПОЛЬЗОВАТЕЛЯ:
+{json.dumps(deep_patterns, ensure_ascii=False, indent=2) if deep_patterns else "не определены"}
+
+ТРЕБОВАНИЯ:
+- Используй эриксоновский подход (мягкий, разрешающий)
+- Начинай с присоединения к текущему состоянию
+- Используй диссоциативные обороты ("вы можете заметить...")
+- Включай встроенные команды
+- Завершай открытым внушением
+
+ДЛИНА: 300-400 слов.
+"""
+    
+    response = await call_deepseek(prompt, max_tokens=800)
+    
+    if not response:
+        response = """Устройтесь поудобнее, закройте глаза, если хотите...
+Сделайте глубокий вдох... и медленный выдох...
+И с каждым выдохом вы можете позволить себе расслабляться всё больше...
+
+Ваше бессознательное знает, что вам нужно...
+И оно может показать это в образах, чувствах, мыслях...
+
+Просто позвольте этому случиться...
+И когда будете готовы, вы можете вернуться... с новым пониманием..."""
+    
+    return response
+
+
+# ============================================
+# НОВАЯ ФУНКЦИЯ: ГЕНЕРАЦИЯ ТЕРАПЕВТИЧЕСКОЙ МЕТАФОРЫ
+# ============================================
+
+async def generate_therapeutic_metaphor(user_id: int, state_data: dict, issue: str) -> str:
+    """
+    Генерирует терапевтическую метафору для работы с конкретной проблемой
+    """
+    data = state_data
+    weak_vector = "СБ"
+    
+    # Определяем слабый вектор
+    scores = {}
+    for k in ["СБ", "ТФ", "УБ", "ЧВ"]:
+        levels = data.get("behavioral_levels", {}).get(k, [])
+        scores[k] = sum(levels) / len(levels) if levels else 3.0
+    
+    if scores:
+        min_vector = min(scores.items(), key=lambda x: level(x[1]))
+        weak_vector = min_vector[0]
+    
+    vector_names = {"СБ": "страх", "ТФ": "деньги", "УБ": "понимание", "ЧВ": "отношения"}
+    default_issue = vector_names.get(weak_vector, "рост")
+    
+    prompt = f"""ТЫ — ПСИХОТЕРАПЕВТ, ИСПОЛЬЗУЮЩИЙ МЕТАФОРЫ.
+Создай терапевтическую метафору для работы с проблемой: {issue or default_issue}
+
+ТРЕБОВАНИЯ:
+- Метафора должна быть изоморфна проблеме (иметь ту же структуру)
+- Содержать ресурсное решение
+- Работать на бессознательном уровне
+- Быть достаточно развернутой, чтобы вовлечь
+
+СТРУКТУРА:
+1. Описание героя и его ситуации (похожей на проблему клиента)
+2. Затруднение, тупик
+3. Неожиданная встреча/событие
+4. Новый способ решения
+5. Возвращение героя с новым опытом
+
+ДЛИНА: 400-500 слов.
+"""
+    
+    response = await call_deepseek(prompt, max_tokens=1000)
+    
+    if not response:
+        response = """Представьте себе сад...
+В этом саду есть дерево, которое не дает плодов.
+Садовник уже хотел его срубить...
+
+Но однажды он заметил, что корни дерева уходят глубоко...
+И там, глубоко под землей, они переплетаются с корнями других деревьев...
+И возможно, это дерево просто питает их...
+
+Садовник задумался: а что, если задача дерева — не плоды?
+Что, если оно — опора для других?
+Или хранитель воды в глубине?
+
+Иногда мы ищем плоды там, где наша задача — быть корнями..."""
+    
+    return response
