@@ -4563,7 +4563,7 @@ async def handle_question_message(message: Message, state: FSMContext):
 """
     
     # Получаем ответ от ИИ
-    response = await call_deepseek(prompt, max_tokens=1000)
+    response = await call_deepseek(prompt, max_tokens=600)
     
     if not response:
         response = "Извините, я немного задумался. Можете повторить вопрос?"
