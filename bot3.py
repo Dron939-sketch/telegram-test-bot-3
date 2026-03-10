@@ -4502,27 +4502,19 @@ async def handle_ask_question(callback: CallbackQuery, state: FSMContext):
 
 
 async def handle_question_message(message: Message, state: FSMContext):
-    """Обработка вопроса после теста с использованием режимов"""
+    """Обработка вопроса после теста с использованием только профиля"""
     user_id = message.from_user.id
     data = await state.get_data()
     
-    # 🔥 ИСПРАВЛЕНО: более тщательная проверка завершенности теста
-    # Проверяем разными способами
+    # 🔥 ПРОВЕРЯЕМ, ЕСТЬ ЛИ ПРОФИЛЬ
     test_completed = False
     
-    # Способ 1: через is_test_completed (проверяет наличие всех полей)
     if is_test_completed(data):
         test_completed = True
-    
-    # Способ 2: проверяем наличие ai_generated_profile
     elif data.get("ai_generated_profile"):
         test_completed = True
-    
-    # Способ 3: проверяем наличие profile_data
     elif data.get("profile_data"):
         test_completed = True
-    
-    # Способ 4: проверяем наличие всех ключевых полей по отдельности
     elif (data.get("perception_type") and 
           data.get("thinking_level") and 
           data.get("behavioral_levels")):
@@ -4536,54 +4528,81 @@ async def handle_question_message(message: Message, state: FSMContext):
     
     thinking = await message.answer("🤔 Думаю над ответом...")
     
-    # Используем новую функцию с режимами
-    context_obj = user_contexts.get(user_id)
-    mode_name = context_obj.communication_mode if context_obj else "coach"
+    # 🔥 ФОРМИРУЕМ ОТВЕТ НА ОСНОВЕ ПРОФИЛЯ, БЕЗ РЕЖИМОВ
+    # Получаем данные профиля
+    profile_data = data.get("profile_data", {})
+    scores = {}
+    for k in VECTORS:
+        levels = data.get("behavioral_levels", {}).get(k, [])
+        scores[k] = sum(levels) / len(levels) if levels else 3.0
     
-    # Создаём экземпляр режима
-    mode = get_mode(mode_name, user_id, data, context_obj)
+    # Формируем контекст для ответа
+    context_text = f"Профиль пользователя: {profile_data.get('display_name', 'не определен')}\n"
+    context_text += f"Тип восприятия: {data.get('perception_type', 'не определен')}\n"
+    context_text += f"Уровень мышления: {data.get('thinking_level', 5)}/9\n"
     
-    # Обрабатываем вопрос через режим
-    result = mode.process_question(message.text)
-    response = result["response"]
+    # Добавляем информацию о слабых и сильных сторонах
+    if scores:
+        weakest = min(scores.items(), key=lambda x: x[1])
+        strongest = max(scores.items(), key=lambda x: x[1])
+        context_text += f"Зона роста: {VECTORS[weakest[0]]['name']}\n"
+        context_text += f"Сильная сторона: {VECTORS[strongest[0]]['name']}\n"
     
-    # Обновляем данные с новой историей
-    await state.update_data(history=mode.history)
+    # Формируем промпт для ИИ
+    prompt = f"""
+Ты - психолог Фреди. Ответь на вопрос пользователя, учитывая его психологический профиль.
+
+Вопрос: {message.text}
+
+Профиль пользователя:
+{context_text}
+
+История диалога: {data.get('history', [])}
+
+Дай развернутый, полезный ответ, основанный на профиле пользователя.
+"""
+    
+    # Получаем ответ от ИИ
+    response = await call_deepseek(prompt, max_tokens=1000)
+    
+    if not response:
+        response = "Извините, я немного задумался. Можете повторить вопрос?"
+    
+    # Сохраняем в историю
+    history = data.get('history', [])
+    history.append({"role": "user", "content": message.text})
+    history.append({"role": "assistant", "content": response})
+    await state.update_data(history=history)
     
     await thinking.delete()
     
     # Очищаем ответ от форматирования
     clean_response = clean_text_for_safe_display(response)
     
+    # 🔥 НОВАЯ КЛАВИАТУРА БЕЗ РЕЖИМА
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
-    [
-        InlineKeyboardButton(text="🎤 ЗАДАТЬ ЕЩЁ", callback_data="ask_question"),
-        InlineKeyboardButton(text="🎯 К ЦЕЛИ", callback_data="show_dynamic_destinations")
-    ],
-    [InlineKeyboardButton(text="🧠 МЫСЛИ ПСИХОЛОГА", callback_data="psychologist_thought")],
-    [InlineKeyboardButton(text="⚙️ ВЫБРАТЬ РЕЖИМ", callback_data="show_mode_selection")]
-])
-    
-    # Добавляем предложения, если есть
-    if result.get("suggestions"):
-        suggestions_text = "\n\n" + "\n".join(result["suggestions"])
-    else:
-        suggestions_text = ""
+        [
+            InlineKeyboardButton(text="🎤 ЗАДАТЬ ЕЩЁ", callback_data="ask_question"),
+            InlineKeyboardButton(text="🎯 К ЦЕЛИ", callback_data="show_dynamic_destinations")
+        ],
+        [InlineKeyboardButton(text="🧠 МЫСЛИ ПСИХОЛОГА", callback_data="psychologist_thought")],
+        [InlineKeyboardButton(text="◀️ К ПОРТРЕТУ", callback_data="show_results")]
+    ])
     
     await safe_send_message(
         message,
-        f"{COMMUNICATION_MODES[mode_name]['emoji']} {bold('Ответ')}\n\n{clean_response}{suggestions_text}",
+        f"💭 {bold('Ответ')}\n\n{clean_response}",
         reply_markup=keyboard,
         delete_previous=True
     )
     
-    # Голосовой ответ
-    audio_data = await text_to_speech(response, mode_name)
+    # Голосовой ответ (используем голос коуча по умолчанию)
+    audio_data = await text_to_speech(response, "coach")
     if audio_data:
         audio_file = BufferedInputFile(audio_data, filename="response.ogg")
         await message.answer_voice(
             audio_file,
-            caption=f"🎙 Голосовой ответ ({COMMUNICATION_MODES[mode_name]['display_name']})"
+            caption="🎙 Голосовой ответ"
         )
     
     await state.set_state(TestStates.results)
