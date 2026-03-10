@@ -2378,10 +2378,23 @@ async def show_ai_generated_profile(callback: CallbackQuery, state: FSMContext, 
         [InlineKeyboardButton(text="⚙️ ВЫБРАТЬ РЕЖИМ", callback_data="show_mode_selection")]
     ])
     
-    # Отправляем с очисткой статусного сообщения
-    await send_with_status_cleanup(callback.message, text, status_msg, keyboard)
+    # 🔥 ИСПРАВЛЕНО: используем safe_send_message вместо send_with_status_cleanup
+    await safe_send_message(
+        callback.message,
+        text,
+        reply_markup=keyboard,
+        parse_mode='HTML',
+        delete_previous=True
+    )
+    
+    # Удаляем статусное сообщение, если оно есть
+    if status_msg:
+        try:
+            await status_msg.delete()
+        except:
+            pass
+    
     await state.set_state(TestStates.profile_generated)
-
 
 async def show_old_final_profile(callback: CallbackQuery, state: FSMContext, status_msg: Message = None):
     """Старая версия финального профиля (резерв)"""
@@ -2412,7 +2425,22 @@ async def show_old_final_profile(callback: CallbackQuery, state: FSMContext, sta
         [InlineKeyboardButton(text="⚙️ ВЫБРАТЬ РЕЖИМ", callback_data="show_mode_selection")]
     ])
     
-    await send_with_status_cleanup(callback.message, text, status_msg, keyboard)
+    # 🔥 Удаляем статусное сообщение, если оно есть
+    if status_msg:
+        try:
+            await status_msg.delete()
+        except:
+            pass
+    
+    # 🔥 ИСПОЛЬЗУЕМ safe_send_message вместо send_with_status_cleanup
+    await safe_send_message(
+        callback.message,
+        text,
+        reply_markup=keyboard,
+        parse_mode='HTML',
+        delete_previous=True
+    )
+    
     await state.set_state(TestStates.profile_generated)
 
 
