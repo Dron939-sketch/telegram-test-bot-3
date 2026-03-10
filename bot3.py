@@ -2203,10 +2203,18 @@ async def show_route_step(callback: CallbackQuery, state: FSMContext, step: int,
     mode = data.get("communication_mode", "coach")
     mode_config = COMMUNICATION_MODES.get(mode, COMMUNICATION_MODES["coach"])
     
-    # 🔥 ОЧИЩАЕМ ТЕКСТ ОТ MARKDOWN
+    # 🔥 ПОЛУЧАЕМ ТЕКСТ МАРШРУТА
     route_text = route.get('full_text', 'Маршрут строится...')
-    # Убираем Markdown-жирный (**), оставляем обычный текст
+    
+    # 🔥 ОЧИЩАЕМ ТЕКСТ ОТ MARKDOWN
+    # Убираем Markdown-жирный (**текст**)
     route_text = re.sub(r'\*\*(.*?)\*\*', r'\1', route_text)
+    # Убираем Markdown-курсив (*текст*)
+    route_text = re.sub(r'\*(.*?)\*', r'\1', route_text)
+    # Убираем Markdown-подчеркивание (_текст_)
+    route_text = re.sub(r'_(.*?)_', r'\1', route_text)
+    # Убираем Markdown-ссылки [текст](url)
+    route_text = re.sub(r'\[(.*?)\]\(.*?\)', r'\1', route_text)
     
     text = f"""
 {mode_config['emoji']} {bold('МАРШРУТ К ЦЕЛИ')}
@@ -2236,7 +2244,6 @@ async def show_route_step(callback: CallbackQuery, state: FSMContext, step: int,
     
     await state.set_state(TestStates.route_active)
     await reminder_manager.schedule_motivation_sequence(callback.from_user.id, destination)
-
 async def route_step_done(callback: CallbackQuery, state: FSMContext):
     """Отмечает выполнение этапа"""
     
