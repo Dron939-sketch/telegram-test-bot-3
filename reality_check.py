@@ -1,6 +1,6 @@
 """
 Модуль проверки реальности целей
-Версия 1.0
+Версия 2.0 - ПОЛНЫЙ НАБОР ЦЕЛЕЙ
 """
 
 import logging
@@ -230,7 +230,7 @@ def parse_goal_context_answers(text: str) -> Dict[str, Any]:
 
 
 # ============================================
-# ТЕОРЕТИЧЕСКИЕ ПУТИ К ЦЕЛЯМ
+# ТЕОРЕТИЧЕСКИЕ ПУТИ К ЦЕЛЯМ (ПОЛНЫЙ НАБОР)
 # ============================================
 
 def get_theoretical_path(goal_id: str, mode: str) -> Dict[str, Any]:
@@ -254,7 +254,7 @@ def get_theoretical_path(goal_id: str, mode: str) -> Dict[str, Any]:
         - formatted_text: отформатированный текст для вывода
     """
     paths = {
-        # ДЕНЬГИ
+        # ========== ДЕНЬГИ И ФИНАНСЫ ==========
         "income_growth": {
             "coach": {
                 "time_total": 340,
@@ -357,7 +357,568 @@ def get_theoretical_path(goal_id: str, mode: str) -> Dict[str, Any]:
             }
         },
         
-        # ОТНОШЕНИЯ
+        "financial_plan": {
+            "coach": {
+                "time_total": 120,
+                "time_per_week": 5,
+                "duration_weeks": 24,
+                "energy_required": 5,
+                "space_required": False,
+                "budget": 0,
+                "support_required": False,
+                "steps": [
+                    "Анализ текущих доходов и расходов",
+                    "Определение финансовых целей",
+                    "Создание бюджета",
+                    "Планирование накоплений",
+                    "Еженедельный контроль"
+                ]
+            },
+            "psychologist": {
+                "time_total": 150,
+                "time_per_week": 6,
+                "duration_weeks": 25,
+                "energy_required": 6,
+                "space_required": False,
+                "budget": 0,
+                "support_required": False,
+                "steps": [
+                    "Исследование отношения к деньгам",
+                    "Проработка страха бедности",
+                    "Анализ денежных сценариев",
+                    "Формирование здоровых привычек",
+                    "Интеграция"
+                ]
+            },
+            "trainer": {
+                "time_total": 100,
+                "time_per_week": 4,
+                "duration_weeks": 24,
+                "energy_required": 4,
+                "space_required": False,
+                "budget": 0,
+                "support_required": False,
+                "steps": [
+                    "Ведение финансового дневника",
+                    "Освоение инструментов учёта",
+                    "Создание финансового плана",
+                    "Автоматизация сбережений",
+                    "Еженедельный анализ"
+                ]
+            }
+        },
+        
+        "money_skills": {
+            "coach": {
+                "time_total": 150,
+                "time_per_week": 6,
+                "duration_weeks": 25,
+                "energy_required": 5,
+                "space_required": False,
+                "budget": 0,
+                "support_required": False,
+                "steps": [
+                    "Оценка текущих финансовых навыков",
+                    "Определение зон развития",
+                    "Изучение базовых принципов",
+                    "Практика управления бюджетом",
+                    "Рефлексия и корректировка"
+                ]
+            },
+            "psychologist": {
+                "time_total": 180,
+                "time_per_week": 7,
+                "duration_weeks": 26,
+                "energy_required": 6,
+                "space_required": False,
+                "budget": 0,
+                "support_required": False,
+                "steps": [
+                    "Исследование страхов, связанных с деньгами",
+                    "Проработка чувства нехватки",
+                    "Работа с самооценкой",
+                    "Формирование мышления изобилия",
+                    "Интеграция"
+                ]
+            },
+            "trainer": {
+                "time_total": 120,
+                "time_per_week": 5,
+                "duration_weeks": 24,
+                "energy_required": 5,
+                "space_required": False,
+                "budget": 0,
+                "support_required": False,
+                "steps": [
+                    "Обучение основам финансовой грамотности",
+                    "Практика составления бюджета",
+                    "Освоение инструментов инвестирования",
+                    "Создание финансовой подушки",
+                    "Автоматизация процессов"
+                ]
+            }
+        },
+        
+        "income_skills": {
+            "coach": {
+                "time_total": 200,
+                "time_per_week": 8,
+                "duration_weeks": 25,
+                "energy_required": 6,
+                "space_required": False,
+                "budget": 0,
+                "support_required": False,
+                "steps": [
+                    "Анализ текущих источников дохода",
+                    "Поиск новых возможностей",
+                    "Развитие востребованных навыков",
+                    "Создание стратегии роста",
+                    "Еженедельный анализ"
+                ]
+            },
+            "psychologist": {
+                "time_total": 220,
+                "time_per_week": 9,
+                "duration_weeks": 24,
+                "energy_required": 7,
+                "space_required": False,
+                "budget": 0,
+                "support_required": False,
+                "steps": [
+                    "Исследование блоков, мешающих росту дохода",
+                    "Проработка чувства недостойности",
+                    "Работа со страхом успеха",
+                    "Формирование новой идентичности",
+                    "Интеграция"
+                ]
+            },
+            "trainer": {
+                "time_total": 180,
+                "time_per_week": 7,
+                "duration_weeks": 26,
+                "energy_required": 6,
+                "space_required": True,
+                "budget": 5000,
+                "support_required": False,
+                "steps": [
+                    "Обучение навыкам повышения дохода",
+                    "Практика переговоров о зарплате",
+                    "Развитие дополнительных источников",
+                    "Создание личного бренда",
+                    "Масштабирование"
+                ]
+            }
+        },
+        
+        "investment_skills": {
+            "coach": {
+                "time_total": 250,
+                "time_per_week": 10,
+                "duration_weeks": 25,
+                "energy_required": 7,
+                "space_required": True,
+                "budget": 0,
+                "support_required": False,
+                "steps": [
+                    "Определение инвестиционных целей",
+                    "Изучение базовых принципов",
+                    "Анализ инструментов",
+                    "Создание стратегии",
+                    "Еженедельный анализ"
+                ]
+            },
+            "psychologist": {
+                "time_total": 280,
+                "time_per_week": 11,
+                "duration_weeks": 25,
+                "energy_required": 7,
+                "space_required": False,
+                "budget": 0,
+                "support_required": False,
+                "steps": [
+                    "Исследование страхов, связанных с риском",
+                    "Проработка отношения к деньгам",
+                    "Анализ семейных паттернов",
+                    "Формирование доверия к процессу",
+                    "Интеграция"
+                ]
+            },
+            "trainer": {
+                "time_total": 220,
+                "time_per_week": 9,
+                "duration_weeks": 24,
+                "energy_required": 7,
+                "space_required": True,
+                "budget": 10000,
+                "support_required": True,
+                "steps": [
+                    "Обучение основам инвестирования",
+                    "Практика с демо-счетом",
+                    "Анализ рынка и инструментов",
+                    "Создание инвестиционного портфеля",
+                    "Мониторинг и корректировка"
+                ]
+            }
+        },
+        
+        "wealth_building": {
+            "coach": {
+                "time_total": 300,
+                "time_per_week": 12,
+                "duration_weeks": 25,
+                "energy_required": 8,
+                "space_required": True,
+                "budget": 0,
+                "support_required": True,
+                "steps": [
+                    "Анализ текущего финансового положения",
+                    "Определение целей по созданию капитала",
+                    "Разработка стратегии",
+                    "Поиск источников дохода",
+                    "Еженедельный контроль"
+                ]
+            },
+            "psychologist": {
+                "time_total": 320,
+                "time_per_week": 13,
+                "duration_weeks": 25,
+                "energy_required": 8,
+                "space_required": False,
+                "budget": 0,
+                "support_required": True,
+                "steps": [
+                    "Исследование отношения к богатству",
+                    "Проработка чувства вины",
+                    "Анализ семейных сценариев",
+                    "Формирование мышления изобилия",
+                    "Интеграция"
+                ]
+            },
+            "trainer": {
+                "time_total": 280,
+                "time_per_week": 11,
+                "duration_weeks": 25,
+                "energy_required": 8,
+                "space_required": True,
+                "budget": 20000,
+                "support_required": True,
+                "steps": [
+                    "Обучение стратегиям создания капитала",
+                    "Практика инвестирования",
+                    "Создание нескольких источников дохода",
+                    "Оптимизация налогов",
+                    "Защита капитала"
+                ]
+            }
+        },
+        
+        "financial_strategy": {
+            "coach": {
+                "time_total": 220,
+                "time_per_week": 9,
+                "duration_weeks": 24,
+                "energy_required": 7,
+                "space_required": True,
+                "budget": 0,
+                "support_required": False,
+                "steps": [
+                    "Анализ текущей финансовой стратегии",
+                    "Определение долгосрочных целей",
+                    "Разработка новой стратегии",
+                    "Планирование этапов",
+                    "Еженедельный контроль"
+                ]
+            },
+            "psychologist": {
+                "time_total": 240,
+                "time_per_week": 10,
+                "duration_weeks": 24,
+                "energy_required": 7,
+                "space_required": False,
+                "budget": 0,
+                "support_required": False,
+                "steps": [
+                    "Исследование страхов, связанных с деньгами",
+                    "Проработка ограничивающих убеждений",
+                    "Анализ финансовых сценариев",
+                    "Формирование новой стратегии",
+                    "Интеграция"
+                ]
+            },
+            "trainer": {
+                "time_total": 200,
+                "time_per_week": 8,
+                "duration_weeks": 25,
+                "energy_required": 7,
+                "space_required": True,
+                "budget": 15000,
+                "support_required": True,
+                "steps": [
+                    "Обучение стратегическому планированию",
+                    "Анализ рынка и возможностей",
+                    "Создание финансовой модели",
+                    "Разработка дорожной карты",
+                    "Мониторинг и корректировка"
+                ]
+            }
+        },
+        
+        "money_psychology": {
+            "coach": {
+                "time_total": 180,
+                "time_per_week": 7,
+                "duration_weeks": 26,
+                "energy_required": 6,
+                "space_required": False,
+                "budget": 0,
+                "support_required": False,
+                "steps": [
+                    "Исследование отношения к деньгам",
+                    "Анализ денежных привычек",
+                    "Выявление паттернов",
+                    "Поиск новых подходов",
+                    "Рефлексия"
+                ]
+            },
+            "psychologist": {
+                "time_total": 220,
+                "time_per_week": 9,
+                "duration_weeks": 24,
+                "energy_required": 6,
+                "space_required": False,
+                "budget": 0,
+                "support_required": False,
+                "steps": [
+                    "Глубинный анализ денежных сценариев",
+                    "Проработка детских посланий",
+                    "Работа с чувством вины и стыда",
+                    "Исцеление денежных травм",
+                    "Интеграция"
+                ]
+            },
+            "trainer": {
+                "time_total": 150,
+                "time_per_week": 6,
+                "duration_weeks": 25,
+                "energy_required": 5,
+                "space_required": False,
+                "budget": 0,
+                "support_required": False,
+                "steps": [
+                    "Практика новых денежных привычек",
+                    "Ведение дневника отношений с деньгами",
+                    "Упражнения на принятие",
+                    "Работа с аффирмациями",
+                    "Закрепление"
+                ]
+            }
+        },
+        
+        "worth": {
+            "coach": {
+                "time_total": 160,
+                "time_per_week": 6,
+                "duration_weeks": 27,
+                "energy_required": 6,
+                "space_required": False,
+                "budget": 0,
+                "support_required": False,
+                "steps": [
+                    "Анализ самооценки",
+                    "Выявление зон неуверенности",
+                    "Поиск сильных сторон",
+                    "Постановка целей",
+                    "Еженедельная рефлексия"
+                ]
+            },
+            "psychologist": {
+                "time_total": 200,
+                "time_per_week": 8,
+                "duration_weeks": 25,
+                "energy_required": 6,
+                "space_required": False,
+                "budget": 0,
+                "support_required": False,
+                "steps": [
+                    "Поиск корней низкой самооценки",
+                    "Проработка детских травм",
+                    "Работа с внутренним критиком",
+                    "Формирование здоровой самооценки",
+                    "Интеграция"
+                ]
+            },
+            "trainer": {
+                "time_total": 140,
+                "time_per_week": 5,
+                "duration_weeks": 28,
+                "energy_required": 5,
+                "space_required": False,
+                "budget": 0,
+                "support_required": False,
+                "steps": [
+                    "Ежедневные практики самопринятия",
+                    "Ведение дневника достижений",
+                    "Упражнения на уверенность",
+                    "Практика публичных выступлений",
+                    "Закрепление"
+                ]
+            }
+        },
+        
+        "scarcity": {
+            "coach": {
+                "time_total": 170,
+                "time_per_week": 7,
+                "duration_weeks": 24,
+                "energy_required": 6,
+                "space_required": False,
+                "budget": 0,
+                "support_required": False,
+                "steps": [
+                    "Анализ проявлений сценария дефицита",
+                    "Выявление триггеров",
+                    "Поиск альтернатив",
+                    "Практика изобилия",
+                    "Рефлексия"
+                ]
+            },
+            "psychologist": {
+                "time_total": 210,
+                "time_per_week": 8,
+                "duration_weeks": 26,
+                "energy_required": 6,
+                "space_required": False,
+                "budget": 0,
+                "support_required": False,
+                "steps": [
+                    "Поиск корней сценария дефицита",
+                    "Проработка детских посланий",
+                    "Работа со страхом нехватки",
+                    "Формирование мышления изобилия",
+                    "Интеграция"
+                ]
+            },
+            "trainer": {
+                "time_total": 150,
+                "time_per_week": 6,
+                "duration_weeks": 25,
+                "energy_required": 5,
+                "space_required": False,
+                "budget": 0,
+                "support_required": False,
+                "steps": [
+                    "Практика благодарности",
+                    "Ведение дневника изобилия",
+                    "Упражнения на щедрость",
+                    "Перепрограммирование привычек",
+                    "Закрепление"
+                ]
+            }
+        },
+        
+        "abundance": {
+            "coach": {
+                "time_total": 180,
+                "time_per_week": 7,
+                "duration_weeks": 26,
+                "energy_required": 6,
+                "space_required": False,
+                "budget": 0,
+                "support_required": False,
+                "steps": [
+                    "Исследование текущего мышления",
+                    "Выявление ограничений",
+                    "Поиск возможностей",
+                    "Практика изобилия",
+                    "Рефлексия"
+                ]
+            },
+            "psychologist": {
+                "time_total": 220,
+                "time_per_week": 9,
+                "duration_weeks": 24,
+                "energy_required": 6,
+                "space_required": False,
+                "budget": 0,
+                "support_required": False,
+                "steps": [
+                    "Проработка страха изобилия",
+                    "Анализ семейных паттернов",
+                    "Работа с чувством вины",
+                    "Формирование новой идентичности",
+                    "Интеграция"
+                ]
+            },
+            "trainer": {
+                "time_total": 160,
+                "time_per_week": 6,
+                "duration_weeks": 27,
+                "energy_required": 5,
+                "space_required": False,
+                "budget": 0,
+                "support_required": False,
+                "steps": [
+                    "Ежедневные практики изобилия",
+                    "Ведение дневника благодарности",
+                    "Упражнения на расширение",
+                    "Создание новых привычек",
+                    "Закрепление"
+                ]
+            }
+        },
+        
+        "money_freedom": {
+            "coach": {
+                "time_total": 240,
+                "time_per_week": 10,
+                "duration_weeks": 24,
+                "energy_required": 7,
+                "space_required": True,
+                "budget": 0,
+                "support_required": True,
+                "steps": [
+                    "Определение целей финансовой свободы",
+                    "Анализ текущей ситуации",
+                    "Разработка стратегии",
+                    "Планирование этапов",
+                    "Еженедельный контроль"
+                ]
+            },
+            "psychologist": {
+                "time_total": 260,
+                "time_per_week": 10,
+                "duration_weeks": 26,
+                "energy_required": 7,
+                "space_required": False,
+                "budget": 0,
+                "support_required": True,
+                "steps": [
+                    "Исследование отношения к свободе",
+                    "Проработка страхов",
+                    "Анализ ограничений",
+                    "Формирование новой идентичности",
+                    "Интеграция"
+                ]
+            },
+            "trainer": {
+                "time_total": 220,
+                "time_per_week": 9,
+                "duration_weeks": 24,
+                "energy_required": 7,
+                "space_required": True,
+                "budget": 25000,
+                "support_required": True,
+                "steps": [
+                    "Обучение стратегиям достижения свободы",
+                    "Создание пассивного дохода",
+                    "Оптимизация расходов",
+                    "Инвестирование",
+                    "Мониторинг"
+                ]
+            }
+        },
+        
+        # ========== ОТНОШЕНИЯ ==========
         "relations": {
             "coach": {
                 "time_total": 120,
@@ -409,7 +970,619 @@ def get_theoretical_path(goal_id: str, mode: str) -> Dict[str, Any]:
             }
         },
         
-        # ТРЕВОГА
+        "attachment": {
+            "coach": {
+                "time_total": 150,
+                "time_per_week": 6,
+                "duration_weeks": 25,
+                "energy_required": 6,
+                "space_required": False,
+                "budget": 0,
+                "support_required": False,
+                "steps": [
+                    "Исследование паттернов в отношениях",
+                    "Анализ повторяющихся сценариев",
+                    "Выявление типа привязанности",
+                    "Поиск новых моделей",
+                    "Рефлексия"
+                ]
+            },
+            "psychologist": {
+                "time_total": 200,
+                "time_per_week": 8,
+                "duration_weeks": 25,
+                "energy_required": 7,
+                "space_required": False,
+                "budget": 0,
+                "support_required": False,
+                "steps": [
+                    "Глубинный анализ типа привязанности",
+                    "Проработка детских травм",
+                    "Работа со страхом близости",
+                    "Формирование надежной привязанности",
+                    "Интеграция"
+                ]
+            },
+            "trainer": {
+                "time_total": 120,
+                "time_per_week": 5,
+                "duration_weeks": 24,
+                "energy_required": 5,
+                "space_required": False,
+                "budget": 0,
+                "support_required": False,
+                "steps": [
+                    "Практика новых паттернов",
+                    "Упражнения на доверие",
+                    "Развитие эмоциональной близости",
+                    "Коммуникативные навыки",
+                    "Закрепление"
+                ]
+            }
+        },
+        
+        "attachment_style": {
+            "coach": {
+                "time_total": 150,
+                "time_per_week": 6,
+                "duration_weeks": 25,
+                "energy_required": 6,
+                "space_required": False,
+                "budget": 0,
+                "support_required": False,
+                "steps": [
+                    "Исследование паттернов в отношениях",
+                    "Анализ повторяющихся сценариев",
+                    "Выявление типа привязанности",
+                    "Поиск новых моделей",
+                    "Рефлексия"
+                ]
+            },
+            "psychologist": {
+                "time_total": 200,
+                "time_per_week": 8,
+                "duration_weeks": 25,
+                "energy_required": 7,
+                "space_required": False,
+                "budget": 0,
+                "support_required": False,
+                "steps": [
+                    "Глубинный анализ типа привязанности",
+                    "Проработка детских травм",
+                    "Работа со страхом близости",
+                    "Формирование надежной привязанности",
+                    "Интеграция"
+                ]
+            },
+            "trainer": {
+                "time_total": 120,
+                "time_per_week": 5,
+                "duration_weeks": 24,
+                "energy_required": 5,
+                "space_required": False,
+                "budget": 0,
+                "support_required": False,
+                "steps": [
+                    "Практика новых паттернов",
+                    "Упражнения на доверие",
+                    "Развитие эмоциональной близости",
+                    "Коммуникативные навыки",
+                    "Закрепление"
+                ]
+            }
+        },
+        
+        "intimacy": {
+            "coach": {
+                "time_total": 140,
+                "time_per_week": 5,
+                "duration_weeks": 28,
+                "energy_required": 6,
+                "space_required": False,
+                "budget": 0,
+                "support_required": False,
+                "steps": [
+                    "Исследование страха близости",
+                    "Анализ прошлого опыта",
+                    "Выявление барьеров",
+                    "Постепенное сближение",
+                    "Рефлексия"
+                ]
+            },
+            "psychologist": {
+                "time_total": 180,
+                "time_per_week": 7,
+                "duration_weeks": 26,
+                "energy_required": 7,
+                "space_required": False,
+                "budget": 0,
+                "support_required": False,
+                "steps": [
+                    "Глубинный анализ страха близости",
+                    "Проработка травм",
+                    "Работа с уязвимостью",
+                    "Формирование способности к близости",
+                    "Интеграция"
+                ]
+            },
+            "trainer": {
+                "time_total": 120,
+                "time_per_week": 5,
+                "duration_weeks": 24,
+                "energy_required": 5,
+                "space_required": False,
+                "budget": 0,
+                "support_required": False,
+                "steps": [
+                    "Практика открытости",
+                    "Упражнения на уязвимость",
+                    "Развитие эмпатии",
+                    "Навыки глубокого общения",
+                    "Закрепление"
+                ]
+            }
+        },
+        
+        "love": {
+            "coach": {
+                "time_total": 160,
+                "time_per_week": 6,
+                "duration_weeks": 27,
+                "energy_required": 6,
+                "space_required": False,
+                "budget": 0,
+                "support_required": False,
+                "steps": [
+                    "Исследование способности любить",
+                    "Анализ прошлого опыта",
+                    "Выявление блоков",
+                    "Развитие любви к себе",
+                    "Рефлексия"
+                ]
+            },
+            "psychologist": {
+                "time_total": 200,
+                "time_per_week": 8,
+                "duration_weeks": 25,
+                "energy_required": 7,
+                "space_required": False,
+                "budget": 0,
+                "support_required": False,
+                "steps": [
+                    "Глубинный анализ способности любить",
+                    "Проработка детских травм",
+                    "Работа с самооценкой",
+                    "Формирование здоровой любви",
+                    "Интеграция"
+                ]
+            },
+            "trainer": {
+                "time_total": 140,
+                "time_per_week": 5,
+                "duration_weeks": 28,
+                "energy_required": 5,
+                "space_required": False,
+                "budget": 0,
+                "support_required": False,
+                "steps": [
+                    "Практика любви к себе",
+                    "Упражнения на принятие",
+                    "Развитие эмпатии",
+                    "Навыки проявления любви",
+                    "Закрепление"
+                ]
+            }
+        },
+        
+        "communication_skills": {
+            "coach": {
+                "time_total": 100,
+                "time_per_week": 4,
+                "duration_weeks": 25,
+                "energy_required": 5,
+                "space_required": False,
+                "budget": 0,
+                "support_required": False,
+                "steps": [
+                    "Анализ текущих навыков общения",
+                    "Определение зон роста",
+                    "Практика активного слушания",
+                    "Развитие уверенности",
+                    "Рефлексия"
+                ]
+            },
+            "psychologist": {
+                "time_total": 130,
+                "time_per_week": 5,
+                "duration_weeks": 26,
+                "energy_required": 5,
+                "space_required": False,
+                "budget": 0,
+                "support_required": False,
+                "steps": [
+                    "Исследование страхов в общении",
+                    "Проработка социальной тревоги",
+                    "Анализ коммуникативных паттернов",
+                    "Формирование новых моделей",
+                    "Интеграция"
+                ]
+            },
+            "trainer": {
+                "time_total": 90,
+                "time_per_week": 3.5,
+                "duration_weeks": 26,
+                "energy_required": 4,
+                "space_required": False,
+                "budget": 0,
+                "support_required": False,
+                "steps": [
+                    "Техники эффективной коммуникации",
+                    "Практика публичных выступлений",
+                    "Навыки убеждения",
+                    "Невербальное общение",
+                    "Отработка в реальных ситуациях"
+                ]
+            }
+        },
+        
+        "negotiation": {
+            "coach": {
+                "time_total": 120,
+                "time_per_week": 5,
+                "duration_weeks": 24,
+                "energy_required": 6,
+                "space_required": False,
+                "budget": 0,
+                "support_required": False,
+                "steps": [
+                    "Анализ текущих навыков",
+                    "Изучение основ переговоров",
+                    "Практика в безопасной среде",
+                    "Анализ результатов",
+                    "Корректировка"
+                ]
+            },
+            "psychologist": {
+                "time_total": 150,
+                "time_per_week": 6,
+                "duration_weeks": 25,
+                "energy_required": 6,
+                "space_required": False,
+                "budget": 0,
+                "support_required": False,
+                "steps": [
+                    "Исследование страха конфликтов",
+                    "Проработка неуверенности",
+                    "Анализ паттернов в переговорах",
+                    "Формирование уверенности",
+                    "Интеграция"
+                ]
+            },
+            "trainer": {
+                "time_total": 110,
+                "time_per_week": 4.5,
+                "duration_weeks": 24,
+                "energy_required": 6,
+                "space_required": False,
+                "budget": 3000,
+                "support_required": False,
+                "steps": [
+                    "Изучение стратегий переговоров",
+                    "Практика с кейсами",
+                    "Ролевые игры",
+                    "Анализ реальных ситуаций",
+                    "Отработка навыков"
+                ]
+            }
+        },
+        
+        "influence": {
+            "coach": {
+                "time_total": 130,
+                "time_per_week": 5,
+                "duration_weeks": 26,
+                "energy_required": 6,
+                "space_required": False,
+                "budget": 0,
+                "support_required": False,
+                "steps": [
+                    "Анализ текущего влияния",
+                    "Изучение принципов",
+                    "Практика",
+                    "Анализ результатов",
+                    "Корректировка"
+                ]
+            },
+            "psychologist": {
+                "time_total": 160,
+                "time_per_week": 6,
+                "duration_weeks": 27,
+                "energy_required": 6,
+                "space_required": False,
+                "budget": 0,
+                "support_required": False,
+                "steps": [
+                    "Исследование страха влияния",
+                    "Проработка ответственности",
+                    "Анализ этических аспектов",
+                    "Формирование здорового влияния",
+                    "Интеграция"
+                ]
+            },
+            "trainer": {
+                "time_total": 120,
+                "time_per_week": 5,
+                "duration_weeks": 24,
+                "energy_required": 6,
+                "space_required": False,
+                "budget": 5000,
+                "support_required": False,
+                "steps": [
+                    "Техники убеждения",
+                    "Практика харизмы",
+                    "Развитие авторитета",
+                    "Нетворкинг",
+                    "Отработка навыков"
+                ]
+            }
+        },
+        
+        "empathy": {
+            "coach": {
+                "time_total": 100,
+                "time_per_week": 4,
+                "duration_weeks": 25,
+                "energy_required": 5,
+                "space_required": False,
+                "budget": 0,
+                "support_required": False,
+                "steps": [
+                    "Анализ текущего уровня эмпатии",
+                    "Практика активного слушания",
+                    "Развитие понимания",
+                    "Рефлексия",
+                    "Корректировка"
+                ]
+            },
+            "psychologist": {
+                "time_total": 130,
+                "time_per_week": 5,
+                "duration_weeks": 26,
+                "energy_required": 5,
+                "space_required": False,
+                "budget": 0,
+                "support_required": False,
+                "steps": [
+                    "Исследование блоков эмпатии",
+                    "Проработка эмоциональных травм",
+                    "Развитие эмоционального интеллекта",
+                    "Интеграция",
+                    "Закрепление"
+                ]
+            },
+            "trainer": {
+                "time_total": 90,
+                "time_per_week": 3.5,
+                "duration_weeks": 26,
+                "energy_required": 4,
+                "space_required": False,
+                "budget": 0,
+                "support_required": False,
+                "steps": [
+                    "Упражнения на эмпатию",
+                    "Практика в общении",
+                    "Развитие эмоционального слуха",
+                    "Отработка навыков",
+                    "Закрепление"
+                ]
+            }
+        },
+        
+        "community": {
+            "coach": {
+                "time_total": 150,
+                "time_per_week": 6,
+                "duration_weeks": 25,
+                "energy_required": 6,
+                "space_required": False,
+                "budget": 0,
+                "support_required": True,
+                "steps": [
+                    "Определение целей сообщества",
+                    "Поиск единомышленников",
+                    "Создание площадки",
+                    "Развитие активности",
+                    "Анализ и корректировка"
+                ]
+            },
+            "psychologist": {
+                "time_total": 170,
+                "time_per_week": 7,
+                "duration_weeks": 24,
+                "energy_required": 6,
+                "space_required": False,
+                "budget": 0,
+                "support_required": True,
+                "steps": [
+                    "Исследование страха сообщества",
+                    "Проработка опыта",
+                    "Развитие доверия",
+                    "Формирование принадлежности",
+                    "Интеграция"
+                ]
+            },
+            "trainer": {
+                "time_total": 140,
+                "time_per_week": 5.5,
+                "duration_weeks": 25,
+                "energy_required": 6,
+                "space_required": True,
+                "budget": 10000,
+                "support_required": True,
+                "steps": [
+                    "Стратегии создания сообщества",
+                    "Навыки фасилитации",
+                    "Модерация и управление",
+                    "Мероприятия и события",
+                    "Масштабирование"
+                ]
+            }
+        },
+        
+        "team_building": {
+            "coach": {
+                "time_total": 120,
+                "time_per_week": 5,
+                "duration_weeks": 24,
+                "energy_required": 6,
+                "space_required": True,
+                "budget": 0,
+                "support_required": True,
+                "steps": [
+                    "Анализ текущей команды",
+                    "Определение целей",
+                    "Планирование активностей",
+                    "Проведение мероприятий",
+                    "Анализ результатов"
+                ]
+            },
+            "psychologist": {
+                "time_total": 140,
+                "time_per_week": 5.5,
+                "duration_weeks": 25,
+                "energy_required": 6,
+                "space_required": False,
+                "budget": 0,
+                "support_required": True,
+                "steps": [
+                    "Исследование динамики команды",
+                    "Проработка конфликтов",
+                    "Развитие доверия",
+                    "Укрепление связей",
+                    "Интеграция"
+                ]
+            },
+            "trainer": {
+                "time_total": 110,
+                "time_per_week": 4.5,
+                "duration_weeks": 24,
+                "energy_required": 5,
+                "space_required": True,
+                "budget": 15000,
+                "support_required": True,
+                "steps": [
+                    "Методики тимбилдинга",
+                    "Практика упражнений",
+                    "Фасилитация командных сессий",
+                    "Разрешение конфликтов",
+                    "Оценка эффективности"
+                ]
+            }
+        },
+        
+        # ========== СТРАХИ И ТРЕВОГА ==========
+        "fear_work": {
+            "coach": {
+                "time_total": 120,
+                "time_per_week": 5,
+                "duration_weeks": 24,
+                "energy_required": 6,
+                "space_required": False,
+                "budget": 0,
+                "support_required": False,
+                "steps": [
+                    "Определение основных страхов",
+                    "Анализ их причин",
+                    "Постановка маленьких целей",
+                    "Практика преодоления",
+                    "Рефлексия"
+                ]
+            },
+            "psychologist": {
+                "time_total": 160,
+                "time_per_week": 6,
+                "duration_weeks": 27,
+                "energy_required": 6,
+                "space_required": False,
+                "budget": 0,
+                "support_required": False,
+                "steps": [
+                    "Поиск корней страхов",
+                    "Проработка травм",
+                    "Работа с защитами",
+                    "Интеграция",
+                    "Закрепление"
+                ]
+            },
+            "trainer": {
+                "time_total": 100,
+                "time_per_week": 4,
+                "duration_weeks": 25,
+                "energy_required": 5,
+                "space_required": False,
+                "budget": 0,
+                "support_required": False,
+                "steps": [
+                    "Техники работы со страхом",
+                    "Ежедневные упражнения",
+                    "Экспозиционная терапия",
+                    "Закрепление результатов",
+                    "Поддержка"
+                ]
+            }
+        },
+        
+        "fear_origin": {
+            "coach": {
+                "time_total": 130,
+                "time_per_week": 5,
+                "duration_weeks": 26,
+                "energy_required": 6,
+                "space_required": False,
+                "budget": 0,
+                "support_required": False,
+                "steps": [
+                    "Исследование страхов",
+                    "Поиск их источников",
+                    "Анализ связей",
+                    "Понимание причин",
+                    "Рефлексия"
+                ]
+            },
+            "psychologist": {
+                "time_total": 180,
+                "time_per_week": 7,
+                "duration_weeks": 26,
+                "energy_required": 7,
+                "space_required": False,
+                "budget": 0,
+                "support_required": False,
+                "steps": [
+                    "Глубинный анализ происхождения страхов",
+                    "Проработка детских травм",
+                    "Работа с семейными сценариями",
+                    "Интеграция",
+                    "Исцеление"
+                ]
+            },
+            "trainer": {
+                "time_total": 110,
+                "time_per_week": 4.5,
+                "duration_weeks": 24,
+                "energy_required": 5,
+                "space_required": False,
+                "budget": 0,
+                "support_required": False,
+                "steps": [
+                    "Техники отслеживания страхов",
+                    "Дневник страхов",
+                    "Практики осознанности",
+                    "Работа с триггерами",
+                    "Закрепление"
+                ]
+            }
+        },
+        
         "anxiety_reduce": {
             "coach": {
                 "time_total": 80,
@@ -461,7 +1634,109 @@ def get_theoretical_path(goal_id: str, mode: str) -> Dict[str, Any]:
             }
         },
         
-        # ЭНЕРГИЯ
+        "calm": {
+            "coach": {
+                "time_total": 90,
+                "time_per_week": 3.5,
+                "duration_weeks": 26,
+                "energy_required": 5,
+                "space_required": True,
+                "budget": 0,
+                "support_required": False,
+                "steps": [
+                    "Определение источников беспокойства",
+                    "Поиск ресурсных состояний",
+                    "Практика спокойствия",
+                    "Отслеживание прогресса",
+                    "Закрепление"
+                ]
+            },
+            "psychologist": {
+                "time_total": 140,
+                "time_per_week": 5.5,
+                "duration_weeks": 25,
+                "energy_required": 6,
+                "space_required": False,
+                "budget": 0,
+                "support_required": False,
+                "steps": [
+                    "Поиск причин беспокойства",
+                    "Проработка травм",
+                    "Работа с гиперконтролем",
+                    "Формирование спокойствия",
+                    "Интеграция"
+                ]
+            },
+            "trainer": {
+                "time_total": 70,
+                "time_per_week": 3,
+                "duration_weeks": 23,
+                "energy_required": 4,
+                "space_required": True,
+                "budget": 0,
+                "support_required": False,
+                "steps": [
+                    "Медитативные практики",
+                    "Дыхательные техники",
+                    "Релаксация",
+                    "Mindfulness",
+                    "Ежедневная практика"
+                ]
+            }
+        },
+        
+        "safety": {
+            "coach": {
+                "time_total": 120,
+                "time_per_week": 5,
+                "duration_weeks": 24,
+                "energy_required": 6,
+                "space_required": True,
+                "budget": 0,
+                "support_required": False,
+                "steps": [
+                    "Анализ чувства безопасности",
+                    "Выявление угроз",
+                    "Создание безопасной среды",
+                    "Практика",
+                    "Рефлексия"
+                ]
+            },
+            "psychologist": {
+                "time_total": 160,
+                "time_per_week": 6,
+                "duration_weeks": 27,
+                "energy_required": 6,
+                "space_required": False,
+                "budget": 0,
+                "support_required": False,
+                "steps": [
+                    "Поиск корней небезопасности",
+                    "Проработка травм",
+                    "Работа с базовым доверием",
+                    "Формирование безопасности",
+                    "Интеграция"
+                ]
+            },
+            "trainer": {
+                "time_total": 100,
+                "time_per_week": 4,
+                "duration_weeks": 25,
+                "energy_required": 5,
+                "space_required": True,
+                "budget": 0,
+                "support_required": False,
+                "steps": [
+                    "Техники заземления",
+                    "Практики безопасности",
+                    "Создание ритуалов",
+                    "Укрепление границ",
+                    "Закрепление"
+                ]
+            }
+        },
+        
+        # ========== ЭНЕРГИЯ ==========
         "energy_boost": {
             "coach": {
                 "time_total": 60,
@@ -513,7 +1788,7 @@ def get_theoretical_path(goal_id: str, mode: str) -> Dict[str, Any]:
             }
         },
         
-        # САМОПОЗНАНИЕ
+        # ========== САМОПОЗНАНИЕ И РАЗВИТИЕ ==========
         "purpose": {
             "coach": {
                 "time_total": 150,
@@ -565,54 +1840,359 @@ def get_theoretical_path(goal_id: str, mode: str) -> Dict[str, Any]:
             }
         },
         
-        # ДОПОЛНИТЕЛЬНЫЕ ЦЕЛИ
-        "boundaries": {
+        "meaning": {
             "coach": {
-                "time_total": 80,
-                "time_per_week": 3,
-                "duration_weeks": 26,
-                "energy_required": 5,
-                "space_required": False,
+                "time_total": 140,
+                "time_per_week": 5.5,
+                "duration_weeks": 25,
+                "energy_required": 6,
+                "space_required": True,
                 "budget": 0,
                 "support_required": False,
                 "steps": [
-                    "Осознание своих границ",
-                    "Определение личных прав",
-                    "Практика маленьких отказов",
-                    "Анализ реакций окружающих",
-                    "Закрепление новых паттернов"
+                    "Исследование ценностей",
+                    "Анализ значимых моментов",
+                    "Поиск смыслов",
+                    "Рефлексия",
+                    "Интеграция"
                 ]
             },
             "psychologist": {
-                "time_total": 120,
-                "time_per_week": 5,
-                "duration_weeks": 24,
+                "time_total": 180,
+                "time_per_week": 7,
+                "duration_weeks": 26,
                 "energy_required": 6,
                 "space_required": False,
                 "budget": 0,
                 "support_required": False,
                 "steps": [
-                    "Поиск причин размытых границ",
-                    "Проработка страха отвержения",
-                    "Работа с чувством вины",
-                    "Восстановление целостности",
+                    "Экзистенциальный анализ",
+                    "Проработка страха смерти",
+                    "Поиск уникальности",
+                    "Формирование смыслов",
                     "Интеграция"
                 ]
             },
             "trainer": {
-                "time_total": 60,
-                "time_per_week": 2.5,
+                "time_total": 120,
+                "time_per_week": 5,
                 "duration_weeks": 24,
-                "energy_required": 4,
+                "energy_required": 5,
+                "space_required": True,
+                "budget": 0,
+                "support_required": False,
+                "steps": [
+                    "Практики осознанности",
+                    "Ведение дневника смыслов",
+                    "Создание проектов",
+                    "Волонтерство",
+                    "Рефлексия"
+                ]
+            }
+        },
+        
+        "meaning_deep": {
+            "coach": {
+                "time_total": 160,
+                "time_per_week": 6,
+                "duration_weeks": 27,
+                "energy_required": 6,
+                "space_required": True,
+                "budget": 0,
+                "support_required": False,
+                "steps": [
+                    "Глубинное исследование ценностей",
+                    "Анализ жизненных этапов",
+                    "Поиск экзистенциальных смыслов",
+                    "Рефлексия",
+                    "Интеграция"
+                ]
+            },
+            "psychologist": {
+                "time_total": 220,
+                "time_per_week": 8.5,
+                "duration_weeks": 26,
+                "energy_required": 7,
+                "space_required": False,
+                "budget": 0,
+                "support_required": True,
+                "steps": [
+                    "Экзистенциальная терапия",
+                    "Проработка кризисов",
+                    "Работа со свободой и ответственностью",
+                    "Поиск подлинности",
+                    "Интеграция"
+                ]
+            },
+            "trainer": {
+                "time_total": 140,
+                "time_per_week": 5.5,
+                "duration_weeks": 25,
+                "energy_required": 6,
+                "space_required": True,
+                "budget": 0,
+                "support_required": False,
+                "steps": [
+                    "Философские практики",
+                    "Медитации",
+                    "Творческие проекты",
+                    "Рефлексивные практики",
+                    "Закрепление"
+                ]
+            }
+        },
+        
+        "self_discovery": {
+            "coach": {
+                "time_total": 130,
+                "time_per_week": 5,
+                "duration_weeks": 26,
+                "energy_required": 5,
+                "space_required": True,
+                "budget": 0,
+                "support_required": False,
+                "steps": [
+                    "Исследование себя",
+                    "Анализ интересов",
+                    "Поиск талантов",
+                    "Рефлексия",
+                    "Интеграция"
+                ]
+            },
+            "psychologist": {
+                "time_total": 170,
+                "time_per_week": 6.5,
+                "duration_weeks": 26,
+                "energy_required": 6,
                 "space_required": False,
                 "budget": 0,
                 "support_required": False,
                 "steps": [
-                    "Техники твердого 'нет'",
-                    "Я-высказывания",
-                    "Управление дистанцией",
-                    "Телесные практики границ",
-                    "Ролевые игры"
+                    "Глубинный анализ личности",
+                    "Работа с тенью",
+                    "Интеграция частей",
+                    "Самопринятие",
+                    "Интеграция"
+                ]
+            },
+            "trainer": {
+                "time_total": 110,
+                "time_per_week": 4.5,
+                "duration_weeks": 24,
+                "energy_required": 5,
+                "space_required": True,
+                "budget": 0,
+                "support_required": False,
+                "steps": [
+                    "Практики самопознания",
+                    "Ведение дневника",
+                    "Тестирование активностей",
+                    "Рефлексия",
+                    "Закрепление"
+                ]
+            }
+        },
+        
+        "integration": {
+            "coach": {
+                "time_total": 140,
+                "time_per_week": 5.5,
+                "duration_weeks": 25,
+                "energy_required": 6,
+                "space_required": True,
+                "budget": 0,
+                "support_required": False,
+                "steps": [
+                    "Анализ разных аспектов себя",
+                    "Выявление противоречий",
+                    "Поиск целостности",
+                    "Практика",
+                    "Рефлексия"
+                ]
+            },
+            "psychologist": {
+                "time_total": 190,
+                "time_per_week": 7.5,
+                "duration_weeks": 25,
+                "energy_required": 7,
+                "space_required": False,
+                "budget": 0,
+                "support_required": True,
+                "steps": [
+                    "Работа с теневыми частями",
+                    "Интеграция субличностей",
+                    "Исцеление расколов",
+                    "Формирование целостности",
+                    "Интеграция"
+                ]
+            },
+            "trainer": {
+                "time_total": 120,
+                "time_per_week": 5,
+                "duration_weeks": 24,
+                "energy_required": 5,
+                "space_required": True,
+                "budget": 0,
+                "support_required": False,
+                "steps": [
+                    "Практики целостности",
+                    "Телесные практики",
+                    "Творческое выражение",
+                    "Рефлексия",
+                    "Закрепление"
+                ]
+            }
+        },
+        
+        "integration_deep": {
+            "coach": {
+                "time_total": 160,
+                "time_per_week": 6,
+                "duration_weeks": 27,
+                "energy_required": 6,
+                "space_required": True,
+                "budget": 0,
+                "support_required": True,
+                "steps": [
+                    "Глубинный анализ личности",
+                    "Выявление конфликтов",
+                    "Поиск целостности",
+                    "Практика",
+                    "Рефлексия"
+                ]
+            },
+            "psychologist": {
+                "time_total": 220,
+                "time_per_week": 8.5,
+                "duration_weeks": 26,
+                "energy_required": 7,
+                "space_required": False,
+                "budget": 0,
+                "support_required": True,
+                "steps": [
+                    "Юнгианский анализ",
+                    "Работа с архетипами",
+                    "Интеграция тени",
+                    "Индивидуация",
+                    "Интеграция"
+                ]
+            },
+            "trainer": {
+                "time_total": 140,
+                "time_per_week": 5.5,
+                "duration_weeks": 25,
+                "energy_required": 6,
+                "space_required": True,
+                "budget": 0,
+                "support_required": True,
+                "steps": [
+                    "Продвинутые практики",
+                    "Ритуалы интеграции",
+                    "Творческие проекты",
+                    "Менторство",
+                    "Закрепление"
+                ]
+            }
+        },
+        
+        "wisdom": {
+            "coach": {
+                "time_total": 130,
+                "time_per_week": 5,
+                "duration_weeks": 26,
+                "energy_required": 5,
+                "space_required": True,
+                "budget": 0,
+                "support_required": False,
+                "steps": [
+                    "Анализ жизненного опыта",
+                    "Извлечение уроков",
+                    "Развитие понимания",
+                    "Рефлексия",
+                    "Интеграция"
+                ]
+            },
+            "psychologist": {
+                "time_total": 170,
+                "time_per_week": 6.5,
+                "duration_weeks": 26,
+                "energy_required": 6,
+                "space_required": False,
+                "budget": 0,
+                "support_required": False,
+                "steps": [
+                    "Глубинная рефлексия",
+                    "Работа с жизненными уроками",
+                    "Развитие мудрости",
+                    "Интеграция",
+                    "Передача опыта"
+                ]
+            },
+            "trainer": {
+                "time_total": 110,
+                "time_per_week": 4.5,
+                "duration_weeks": 24,
+                "energy_required": 5,
+                "space_required": True,
+                "budget": 0,
+                "support_required": False,
+                "steps": [
+                    "Практики рефлексии",
+                    "Ведение дневника мудрости",
+                    "Медитации",
+                    "Наставничество",
+                    "Закрепление"
+                ]
+            }
+        },
+        
+        "wisdom_deep": {
+            "coach": {
+                "time_total": 150,
+                "time_per_week": 6,
+                "duration_weeks": 25,
+                "energy_required": 6,
+                "space_required": True,
+                "budget": 0,
+                "support_required": False,
+                "steps": [
+                    "Глубинный анализ опыта",
+                    "Извлечение мудрости",
+                    "Применение в жизни",
+                    "Рефлексия",
+                    "Интеграция"
+                ]
+            },
+            "psychologist": {
+                "time_total": 200,
+                "time_per_week": 8,
+                "duration_weeks": 25,
+                "energy_required": 7,
+                "space_required": False,
+                "budget": 0,
+                "support_required": True,
+                "steps": [
+                    "Трансперсональный подход",
+                    "Работа с мудростью веков",
+                    "Интеграция духовного опыта",
+                    "Мудрость тела",
+                    "Интеграция"
+                ]
+            },
+            "trainer": {
+                "time_total": 130,
+                "time_per_week": 5,
+                "duration_weeks": 26,
+                "energy_required": 5,
+                "space_required": True,
+                "budget": 0,
+                "support_required": False,
+                "steps": [
+                    "Практики созерцания",
+                    "Изучение философии",
+                    "Менторство",
+                    "Передача мудрости",
+                    "Закрепление"
                 ]
             }
         },
@@ -664,6 +2244,1643 @@ def get_theoretical_path(goal_id: str, mode: str) -> Dict[str, Any]:
                     "Ведение дневника достижений",
                     "Телесные практики уверенности",
                     "Публичные выступления"
+                ]
+            }
+        },
+        
+        "healing": {
+            "coach": {
+                "time_total": 120,
+                "time_per_week": 5,
+                "duration_weeks": 24,
+                "energy_required": 5,
+                "space_required": True,
+                "budget": 0,
+                "support_required": False,
+                "steps": [
+                    "Осознание ран",
+                    "Принятие",
+                    "Поиск ресурсов",
+                    "Исцеление",
+                    "Интеграция"
+                ]
+            },
+            "psychologist": {
+                "time_total": 180,
+                "time_per_week": 7,
+                "duration_weeks": 26,
+                "energy_required": 7,
+                "space_required": False,
+                "budget": 0,
+                "support_required": True,
+                "steps": [
+                    "Терапия травмы",
+                    "Работа с внутренним ребенком",
+                    "Исцеление привязанности",
+                    "Интеграция",
+                    "Посттравматический рост"
+                ]
+            },
+            "trainer": {
+                "time_total": 100,
+                "time_per_week": 4,
+                "duration_weeks": 25,
+                "energy_required": 5,
+                "space_required": True,
+                "budget": 0,
+                "support_required": False,
+                "steps": [
+                    "Телесные практики",
+                    "Дыхательные техники",
+                    "Творческое выражение",
+                    "Поддерживающие ритуалы",
+                    "Закрепление"
+                ]
+            }
+        },
+        
+        "inner_child": {
+            "coach": {
+                "time_total": 110,
+                "time_per_week": 4.5,
+                "duration_weeks": 24,
+                "energy_required": 5,
+                "space_required": True,
+                "budget": 0,
+                "support_required": False,
+                "steps": [
+                    "Знакомство с внутренним ребенком",
+                    "Выявление его потребностей",
+                    "Диалог",
+                    "Забота",
+                    "Интеграция"
+                ]
+            },
+            "psychologist": {
+                "time_total": 160,
+                "time_per_week": 6,
+                "duration_weeks": 27,
+                "energy_required": 6,
+                "space_required": False,
+                "budget": 0,
+                "support_required": True,
+                "steps": [
+                    "Исцеление детских травм",
+                    "Репарентинг",
+                    "Работа с привязанностью",
+                    "Интеграция",
+                    "Закрепление"
+                ]
+            },
+            "trainer": {
+                "time_total": 90,
+                "time_per_week": 3.5,
+                "duration_weeks": 26,
+                "energy_required": 4,
+                "space_required": True,
+                "budget": 0,
+                "support_required": False,
+                "steps": [
+                    "Игровые практики",
+                    "Творчество",
+                    "Забота о себе",
+                    "Радость и спонтанность",
+                    "Закрепление"
+                ]
+            }
+        },
+        
+        "family_system": {
+            "coach": {
+                "time_total": 140,
+                "time_per_week": 5.5,
+                "duration_weeks": 25,
+                "energy_required": 6,
+                "space_required": False,
+                "budget": 0,
+                "support_required": False,
+                "steps": [
+                    "Анализ семейной системы",
+                    "Выявление паттернов",
+                    "Понимание ролей",
+                    "Поиск изменений",
+                    "Рефлексия"
+                ]
+            },
+            "psychologist": {
+                "time_total": 190,
+                "time_per_week": 7.5,
+                "duration_weeks": 25,
+                "energy_required": 7,
+                "space_required": False,
+                "budget": 0,
+                "support_required": True,
+                "steps": [
+                    "Системная терапия",
+                    "Работа с семейными сценариями",
+                    "Освобождение от лояльностей",
+                    "Интеграция",
+                    "Новые паттерны"
+                ]
+            },
+            "trainer": {
+                "time_total": 120,
+                "time_per_week": 5,
+                "duration_weeks": 24,
+                "energy_required": 5,
+                "space_required": False,
+                "budget": 0,
+                "support_required": False,
+                "steps": [
+                    "Практики дифференциации",
+                    "Установление границ",
+                    "Коммуникативные навыки",
+                    "Семейные ритуалы",
+                    "Закрепление"
+                ]
+            }
+        },
+        
+        "trauma": {
+            "coach": {
+                "time_total": 150,
+                "time_per_week": 6,
+                "duration_weeks": 25,
+                "energy_required": 6,
+                "space_required": True,
+                "budget": 0,
+                "support_required": True,
+                "steps": [
+                    "Осознание травмы",
+                    "Создание безопасности",
+                    "Поиск ресурсов",
+                    "Постепенная проработка",
+                    "Интеграция"
+                ]
+            },
+            "psychologist": {
+                "time_total": 250,
+                "time_per_week": 10,
+                "duration_weeks": 25,
+                "energy_required": 8,
+                "space_required": True,
+                "budget": 0,
+                "support_required": True,
+                "steps": [
+                    "Терапия травмы (EMDR, соматика)",
+                    "Работа с телом",
+                    "Регуляция нервной системы",
+                    "Интеграция",
+                    "Посттравматический рост"
+                ]
+            },
+            "trainer": {
+                "time_total": 120,
+                "time_per_week": 5,
+                "duration_weeks": 24,
+                "energy_required": 5,
+                "space_required": True,
+                "budget": 0,
+                "support_required": True,
+                "steps": [
+                    "Телесные практики",
+                    "Дыхательные техники",
+                    "Заземление",
+                    "Регуляция",
+                    "Поддержка"
+                ]
+            }
+        },
+        
+        "core_beliefs": {
+            "coach": {
+                "time_total": 130,
+                "time_per_week": 5,
+                "duration_weeks": 26,
+                "energy_required": 6,
+                "space_required": True,
+                "budget": 0,
+                "support_required": False,
+                "steps": [
+                    "Выявление убеждений",
+                    "Анализ их влияния",
+                    "Поиск альтернатив",
+                    "Тестирование",
+                    "Интеграция"
+                ]
+            },
+            "psychologist": {
+                "time_total": 180,
+                "time_per_week": 7,
+                "duration_weeks": 26,
+                "energy_required": 7,
+                "space_required": False,
+                "budget": 0,
+                "support_required": True,
+                "steps": [
+                    "Когнитивная терапия",
+                    "Поиск корней убеждений",
+                    "Проработка",
+                    "Формирование новых",
+                    "Интеграция"
+                ]
+            },
+            "trainer": {
+                "time_total": 110,
+                "time_per_week": 4.5,
+                "duration_weeks": 24,
+                "energy_required": 5,
+                "space_required": True,
+                "budget": 0,
+                "support_required": False,
+                "steps": [
+                    "Практики осознанности",
+                    "Аффирмации",
+                    "Дневник мыслей",
+                    "Поведенческие эксперименты",
+                    "Закрепление"
+                ]
+            }
+        },
+        
+        "schemas": {
+            "coach": {
+                "time_total": 140,
+                "time_per_week": 5.5,
+                "duration_weeks": 25,
+                "energy_required": 6,
+                "space_required": True,
+                "budget": 0,
+                "support_required": False,
+                "steps": [
+                    "Выявление жизненных сценариев",
+                    "Анализ повторений",
+                    "Понимание паттернов",
+                    "Поиск изменений",
+                    "Рефлексия"
+                ]
+            },
+            "psychologist": {
+                "time_total": 200,
+                "time_per_week": 8,
+                "duration_weeks": 25,
+                "energy_required": 7,
+                "space_required": False,
+                "budget": 0,
+                "support_required": True,
+                "steps": [
+                    "Схема-терапия",
+                    "Работа с ранними дезадаптивными схемами",
+                    "Репарентинг",
+                    "Изменение паттернов",
+                    "Интеграция"
+                ]
+            },
+            "trainer": {
+                "time_total": 120,
+                "time_per_week": 5,
+                "duration_weeks": 24,
+                "energy_required": 5,
+                "space_required": True,
+                "budget": 0,
+                "support_required": False,
+                "steps": [
+                    "Практики новых реакций",
+                    "Поведенческие эксперименты",
+                    "Дневник сценариев",
+                    "Ролевые игры",
+                    "Закрепление"
+                ]
+            }
+        },
+        
+        "resilience": {
+            "coach": {
+                "time_total": 110,
+                "time_per_week": 4.5,
+                "duration_weeks": 24,
+                "energy_required": 5,
+                "space_required": False,
+                "budget": 0,
+                "support_required": False,
+                "steps": [
+                    "Анализ стрессоустойчивости",
+                    "Поиск ресурсов",
+                    "Развитие навыков",
+                    "Практика",
+                    "Рефлексия"
+                ]
+            },
+            "psychologist": {
+                "time_total": 140,
+                "time_per_week": 5.5,
+                "duration_weeks": 25,
+                "energy_required": 6,
+                "space_required": False,
+                "budget": 0,
+                "support_required": False,
+                "steps": [
+                    "Укрепление психологической устойчивости",
+                    "Работа с травмами",
+                    "Развитие адаптивности",
+                    "Интеграция",
+                    "Закрепление"
+                ]
+            },
+            "trainer": {
+                "time_total": 100,
+                "time_per_week": 4,
+                "duration_weeks": 25,
+                "energy_required": 5,
+                "space_required": False,
+                "budget": 0,
+                "support_required": False,
+                "steps": [
+                    "Стресс-менеджмент",
+                    "Техники саморегуляции",
+                    "Физическая выносливость",
+                    "Практики восстановления",
+                    "Закрепление"
+                ]
+            }
+        },
+        
+        "protection": {
+            "coach": {
+                "time_total": 120,
+                "time_per_week": 5,
+                "duration_weeks": 24,
+                "energy_required": 5,
+                "space_required": False,
+                "budget": 0,
+                "support_required": False,
+                "steps": [
+                    "Анализ защитных механизмов",
+                    "Осознание",
+                    "Поиск альтернатив",
+                    "Практика",
+                    "Рефлексия"
+                ]
+            },
+            "psychologist": {
+                "time_total": 160,
+                "time_per_week": 6,
+                "duration_weeks": 27,
+                "energy_required": 6,
+                "space_required": False,
+                "budget": 0,
+                "support_required": True,
+                "steps": [
+                    "Психоанализ защит",
+                    "Работа с сопротивлением",
+                    "Трансформация",
+                    "Интеграция",
+                    "Зрелые защиты"
+                ]
+            },
+            "trainer": {
+                "time_total": 100,
+                "time_per_week": 4,
+                "duration_weeks": 25,
+                "energy_required": 5,
+                "space_required": False,
+                "budget": 0,
+                "support_required": False,
+                "steps": [
+                    "Осознанность",
+                    "Практики новых реакций",
+                    "Телесные практики",
+                    "Дневник",
+                    "Закрепление"
+                ]
+            }
+        },
+        
+        # ========== ГРАНИЦЫ ==========
+        "boundaries": {
+            "coach": {
+                "time_total": 80,
+                "time_per_week": 3,
+                "duration_weeks": 26,
+                "energy_required": 5,
+                "space_required": False,
+                "budget": 0,
+                "support_required": False,
+                "steps": [
+                    "Осознание своих границ",
+                    "Определение личных прав",
+                    "Практика маленьких отказов",
+                    "Анализ реакций окружающих",
+                    "Закрепление новых паттернов"
+                ]
+            },
+            "psychologist": {
+                "time_total": 120,
+                "time_per_week": 5,
+                "duration_weeks": 24,
+                "energy_required": 6,
+                "space_required": False,
+                "budget": 0,
+                "support_required": False,
+                "steps": [
+                    "Поиск причин размытых границ",
+                    "Проработка страха отвержения",
+                    "Работа с чувством вины",
+                    "Восстановление целостности",
+                    "Интеграция"
+                ]
+            },
+            "trainer": {
+                "time_total": 60,
+                "time_per_week": 2.5,
+                "duration_weeks": 24,
+                "energy_required": 4,
+                "space_required": False,
+                "budget": 0,
+                "support_required": False,
+                "steps": [
+                    "Техники твердого 'нет'",
+                    "Я-высказывания",
+                    "Управление дистанцией",
+                    "Телесные практики границ",
+                    "Ролевые игры"
+                ]
+            }
+        },
+        
+        "boundaries_people": {
+            "coach": {
+                "time_total": 80,
+                "time_per_week": 3,
+                "duration_weeks": 26,
+                "energy_required": 5,
+                "space_required": False,
+                "budget": 0,
+                "support_required": False,
+                "steps": [
+                    "Осознание своих границ",
+                    "Определение личных прав",
+                    "Практика маленьких отказов",
+                    "Анализ реакций окружающих",
+                    "Закрепление новых паттернов"
+                ]
+            },
+            "psychologist": {
+                "time_total": 120,
+                "time_per_week": 5,
+                "duration_weeks": 24,
+                "energy_required": 6,
+                "space_required": False,
+                "budget": 0,
+                "support_required": False,
+                "steps": [
+                    "Поиск причин размытых границ",
+                    "Проработка страха отвержения",
+                    "Работа с чувством вины",
+                    "Восстановление целостности",
+                    "Интеграция"
+                ]
+            },
+            "trainer": {
+                "time_total": 60,
+                "time_per_week": 2.5,
+                "duration_weeks": 24,
+                "energy_required": 4,
+                "space_required": False,
+                "budget": 0,
+                "support_required": False,
+                "steps": [
+                    "Техники твердого 'нет'",
+                    "Я-высказывания",
+                    "Управление дистанцией",
+                    "Телесные практики границ",
+                    "Ролевые игры"
+                ]
+            }
+        },
+        
+        "assertiveness": {
+            "coach": {
+                "time_total": 80,
+                "time_per_week": 3,
+                "duration_weeks": 24,
+                "energy_required": 5,
+                "space_required": False,
+                "budget": 0,
+                "support_required": False,
+                "steps": [
+                    "Осознание своих прав",
+                    "Практика уверенного поведения",
+                    "Работа со страхом",
+                    "Анализ результатов",
+                    "Закрепление"
+                ]
+            },
+            "psychologist": {
+                "time_total": 110,
+                "time_per_week": 4.5,
+                "duration_weeks": 24,
+                "energy_required": 6,
+                "space_required": False,
+                "budget": 0,
+                "support_required": False,
+                "steps": [
+                    "Поиск корней неуверенности",
+                    "Проработка страха",
+                    "Работа с самооценкой",
+                    "Формирование уверенности",
+                    "Интеграция"
+                ]
+            },
+            "trainer": {
+                "time_total": 70,
+                "time_per_week": 3,
+                "duration_weeks": 23,
+                "energy_required": 4,
+                "space_required": False,
+                "budget": 0,
+                "support_required": False,
+                "steps": [
+                    "Техники уверенного поведения",
+                    "Ролевые игры",
+                    "Практика в реальных ситуациях",
+                    "Анализ",
+                    "Закрепление"
+                ]
+            }
+        },
+        
+        "conflict_skills": {
+            "coach": {
+                "time_total": 90,
+                "time_per_week": 3.5,
+                "duration_weeks": 26,
+                "energy_required": 6,
+                "space_required": False,
+                "budget": 0,
+                "support_required": False,
+                "steps": [
+                    "Анализ отношения к конфликтам",
+                    "Понимание своих паттернов",
+                    "Изучение стратегий",
+                    "Практика",
+                    "Рефлексия"
+                ]
+            },
+            "psychologist": {
+                "time_total": 120,
+                "time_per_week": 5,
+                "duration_weeks": 24,
+                "energy_required": 6,
+                "space_required": False,
+                "budget": 0,
+                "support_required": False,
+                "steps": [
+                    "Поиск корней страха конфликтов",
+                    "Проработка травм",
+                    "Работа с агрессией",
+                    "Формирование здорового подхода",
+                    "Интеграция"
+                ]
+            },
+            "trainer": {
+                "time_total": 80,
+                "time_per_week": 3,
+                "duration_weeks": 27,
+                "energy_required": 5,
+                "space_required": False,
+                "budget": 0,
+                "support_required": False,
+                "steps": [
+                    "Техники разрешения конфликтов",
+                    "Медиация",
+                    "Ролевые игры",
+                    "Практика",
+                    "Закрепление"
+                ]
+            }
+        },
+        
+        # ========== ЛИДЕРСТВО ==========
+        "leadership": {
+            "coach": {
+                "time_total": 120,
+                "time_per_week": 5,
+                "duration_weeks": 24,
+                "energy_required": 6,
+                "space_required": True,
+                "budget": 0,
+                "support_required": True,
+                "steps": [
+                    "Анализ лидерских качеств",
+                    "Определение стиля",
+                    "Развитие навыков",
+                    "Практика",
+                    "Обратная связь"
+                ]
+            },
+            "psychologist": {
+                "time_total": 150,
+                "time_per_week": 6,
+                "duration_weeks": 25,
+                "energy_required": 6,
+                "space_required": False,
+                "budget": 0,
+                "support_required": True,
+                "steps": [
+                    "Исследование страха лидерства",
+                    "Проработка синдрома самозванца",
+                    "Работа с авторитетом",
+                    "Формирование лидерской идентичности",
+                    "Интеграция"
+                ]
+            },
+            "trainer": {
+                "time_total": 110,
+                "time_per_week": 4.5,
+                "duration_weeks": 24,
+                "energy_required": 6,
+                "space_required": True,
+                "budget": 15000,
+                "support_required": True,
+                "steps": [
+                    "Навыки лидерства",
+                    "Управление командой",
+                    "Принятие решений",
+                    "Коммуникация",
+                    "Практика"
+                ]
+            }
+        },
+        
+        "leader_courage": {
+            "coach": {
+                "time_total": 100,
+                "time_per_week": 4,
+                "duration_weeks": 25,
+                "energy_required": 6,
+                "space_required": True,
+                "budget": 0,
+                "support_required": True,
+                "steps": [
+                    "Анализ зон страха",
+                    "Поиск ресурсов",
+                    "Развитие смелости",
+                    "Практика",
+                    "Рефлексия"
+                ]
+            },
+            "psychologist": {
+                "time_total": 130,
+                "time_per_week": 5,
+                "duration_weeks": 26,
+                "energy_required": 6,
+                "space_required": False,
+                "budget": 0,
+                "support_required": True,
+                "steps": [
+                    "Поиск корней страха",
+                    "Проработка травм",
+                    "Работа с уязвимостью",
+                    "Формирование мужества",
+                    "Интеграция"
+                ]
+            },
+            "trainer": {
+                "time_total": 90,
+                "time_per_week": 3.5,
+                "duration_weeks": 26,
+                "energy_required": 5,
+                "space_required": True,
+                "budget": 5000,
+                "support_required": True,
+                "steps": [
+                    "Упражнения на смелость",
+                    "Публичные выступления",
+                    "Принятие рисков",
+                    "Анализ",
+                    "Закрепление"
+                ]
+            }
+        },
+        
+        "crisis_management": {
+            "coach": {
+                "time_total": 110,
+                "time_per_week": 4.5,
+                "duration_weeks": 24,
+                "energy_required": 6,
+                "space_required": False,
+                "budget": 0,
+                "support_required": True,
+                "steps": [
+                    "Анализ реакций на кризис",
+                    "Разработка стратегий",
+                    "Практика",
+                    "Оценка",
+                    "Корректировка"
+                ]
+            },
+            "psychologist": {
+                "time_total": 140,
+                "time_per_week": 5.5,
+                "duration_weeks": 25,
+                "energy_required": 7,
+                "space_required": False,
+                "budget": 0,
+                "support_required": True,
+                "steps": [
+                    "Работа со стрессом",
+                    "Проработка травм",
+                    "Укрепление устойчивости",
+                    "Интеграция",
+                    "Посткризисный рост"
+                ]
+            },
+            "trainer": {
+                "time_total": 100,
+                "time_per_week": 4,
+                "duration_weeks": 25,
+                "energy_required": 6,
+                "space_required": True,
+                "budget": 10000,
+                "support_required": True,
+                "steps": [
+                    "Антикризисные стратегии",
+                    "Быстрое принятие решений",
+                    "Управление командой в кризисе",
+                    "Коммуникация",
+                    "Практика"
+                ]
+            }
+        },
+        
+        # ========== МЫШЛЕНИЕ ==========
+        "system_thinking": {
+            "coach": {
+                "time_total": 120,
+                "time_per_week": 5,
+                "duration_weeks": 24,
+                "energy_required": 6,
+                "space_required": True,
+                "budget": 0,
+                "support_required": False,
+                "steps": [
+                    "Введение в системное мышление",
+                    "Анализ текущих паттернов",
+                    "Практика",
+                    "Применение",
+                    "Рефлексия"
+                ]
+            },
+            "psychologist": {
+                "time_total": 150,
+                "time_per_week": 6,
+                "duration_weeks": 25,
+                "energy_required": 6,
+                "space_required": False,
+                "budget": 0,
+                "support_required": False,
+                "steps": [
+                    "Исследование ограничений мышления",
+                    "Работа с когнитивными искажениями",
+                    "Развитие гибкости",
+                    "Интеграция",
+                    "Закрепление"
+                ]
+            },
+            "trainer": {
+                "time_total": 110,
+                "time_per_week": 4.5,
+                "duration_weeks": 24,
+                "energy_required": 6,
+                "space_required": True,
+                "budget": 5000,
+                "support_required": False,
+                "steps": [
+                    "Инструменты системного анализа",
+                    "Практика на кейсах",
+                    "Моделирование",
+                    "Применение в жизни",
+                    "Закрепление"
+                ]
+            }
+        },
+        
+        "system_analysis": {
+            "coach": {
+                "time_total": 130,
+                "time_per_week": 5,
+                "duration_weeks": 26,
+                "energy_required": 6,
+                "space_required": True,
+                "budget": 0,
+                "support_required": False,
+                "steps": [
+                    "Основы системного анализа",
+                    "Изучение методов",
+                    "Практика",
+                    "Применение",
+                    "Рефлексия"
+                ]
+            },
+            "psychologist": {
+                "time_total": 160,
+                "time_per_week": 6,
+                "duration_weeks": 27,
+                "energy_required": 6,
+                "space_required": False,
+                "budget": 0,
+                "support_required": False,
+                "steps": [
+                    "Анализ мыслительных паттернов",
+                    "Работа с ограничениями",
+                    "Развитие аналитических способностей",
+                    "Интеграция",
+                    "Закрепление"
+                ]
+            },
+            "trainer": {
+                "time_total": 120,
+                "time_per_week": 5,
+                "duration_weeks": 24,
+                "energy_required": 6,
+                "space_required": True,
+                "budget": 7000,
+                "support_required": False,
+                "steps": [
+                    "Продвинутые методы анализа",
+                    "Практика на реальных задачах",
+                    "Инструменты",
+                    "Применение",
+                    "Закрепление"
+                ]
+            }
+        },
+        
+        "strategic_thinking": {
+            "coach": {
+                "time_total": 120,
+                "time_per_week": 5,
+                "duration_weeks": 24,
+                "energy_required": 6,
+                "space_required": True,
+                "budget": 0,
+                "support_required": False,
+                "steps": [
+                    "Основы стратегического мышления",
+                    "Анализ текущей стратегии",
+                    "Разработка",
+                    "Практика",
+                    "Рефлексия"
+                ]
+            },
+            "psychologist": {
+                "time_total": 150,
+                "time_per_week": 6,
+                "duration_weeks": 25,
+                "energy_required": 6,
+                "space_required": False,
+                "budget": 0,
+                "support_required": False,
+                "steps": [
+                    "Исследование ограничений",
+                    "Работа со страхом стратегий",
+                    "Развитие видения",
+                    "Интеграция",
+                    "Закрепление"
+                ]
+            },
+            "trainer": {
+                "time_total": 110,
+                "time_per_week": 4.5,
+                "duration_weeks": 24,
+                "energy_required": 6,
+                "space_required": True,
+                "budget": 8000,
+                "support_required": False,
+                "steps": [
+                    "Стратегические инструменты",
+                    "Практика планирования",
+                    "Анализ кейсов",
+                    "Применение",
+                    "Закрепление"
+                ]
+            }
+        },
+        
+        "strategy": {
+            "coach": {
+                "time_total": 110,
+                "time_per_week": 4.5,
+                "duration_weeks": 24,
+                "energy_required": 6,
+                "space_required": True,
+                "budget": 0,
+                "support_required": False,
+                "steps": [
+                    "Анализ текущей стратегии",
+                    "Определение целей",
+                    "Разработка плана",
+                    "Реализация",
+                    "Корректировка"
+                ]
+            },
+            "psychologist": {
+                "time_total": 140,
+                "time_per_week": 5.5,
+                "duration_weeks": 25,
+                "energy_required": 6,
+                "space_required": False,
+                "budget": 0,
+                "support_required": False,
+                "steps": [
+                    "Исследование препятствий",
+                    "Работа с ограничениями",
+                    "Развитие стратегического мышления",
+                    "Интеграция",
+                    "Закрепление"
+                ]
+            },
+            "trainer": {
+                "time_total": 100,
+                "time_per_week": 4,
+                "duration_weeks": 25,
+                "energy_required": 5,
+                "space_required": True,
+                "budget": 6000,
+                "support_required": False,
+                "steps": [
+                    "Стратегическое планирование",
+                    "Инструменты",
+                    "Практика",
+                    "Анализ",
+                    "Корректировка"
+                ]
+            }
+        },
+        
+        "thinking_tools": {
+            "coach": {
+                "time_total": 100,
+                "time_per_week": 4,
+                "duration_weeks": 25,
+                "energy_required": 5,
+                "space_required": True,
+                "budget": 0,
+                "support_required": False,
+                "steps": [
+                    "Изучение инструментов мышления",
+                    "Практика",
+                    "Применение",
+                    "Анализ",
+                    "Закрепление"
+                ]
+            },
+            "psychologist": {
+                "time_total": 120,
+                "time_per_week": 5,
+                "duration_weeks": 24,
+                "energy_required": 5,
+                "space_required": False,
+                "budget": 0,
+                "support_required": False,
+                "steps": [
+                    "Исследование текущих паттернов",
+                    "Работа с ограничениями",
+                    "Развитие гибкости",
+                    "Интеграция",
+                    "Закрепление"
+                ]
+            },
+            "trainer": {
+                "time_total": 90,
+                "time_per_week": 3.5,
+                "duration_weeks": 26,
+                "energy_required": 5,
+                "space_required": True,
+                "budget": 3000,
+                "support_required": False,
+                "steps": [
+                    "Мастерство инструментов",
+                    "Практика на задачах",
+                    "Комбинирование методов",
+                    "Применение",
+                    "Закрепление"
+                ]
+            }
+        },
+        
+        "triz": {
+            "coach": {
+                "time_total": 140,
+                "time_per_week": 5.5,
+                "duration_weeks": 25,
+                "energy_required": 7,
+                "space_required": True,
+                "budget": 0,
+                "support_required": False,
+                "steps": [
+                    "Введение в ТРИЗ",
+                    "Изучение основных инструментов",
+                    "Практика",
+                    "Применение",
+                    "Рефлексия"
+                ]
+            },
+            "psychologist": {
+                "time_total": 160,
+                "time_per_week": 6,
+                "duration_weeks": 27,
+                "energy_required": 7,
+                "space_required": False,
+                "budget": 0,
+                "support_required": False,
+                "steps": [
+                    "Исследование творческих блоков",
+                    "Работа с ограничениями",
+                    "Развитие изобретательности",
+                    "Интеграция",
+                    "Закрепление"
+                ]
+            },
+            "trainer": {
+                "time_total": 130,
+                "time_per_week": 5,
+                "duration_weeks": 26,
+                "energy_required": 7,
+                "space_required": True,
+                "budget": 10000,
+                "support_required": True,
+                "steps": [
+                    "Продвинутый ТРИЗ",
+                    "Решение сложных задач",
+                    "Практика на проектах",
+                    "Инструменты",
+                    "Мастерство"
+                ]
+            }
+        },
+        
+        "decision_making": {
+            "coach": {
+                "time_total": 90,
+                "time_per_week": 3.5,
+                "duration_weeks": 26,
+                "energy_required": 5,
+                "space_required": False,
+                "budget": 0,
+                "support_required": False,
+                "steps": [
+                    "Анализ процесса принятия решений",
+                    "Изучение методов",
+                    "Практика",
+                    "Анализ",
+                    "Улучшение"
+                ]
+            },
+            "psychologist": {
+                "time_total": 120,
+                "time_per_week": 5,
+                "duration_weeks": 24,
+                "energy_required": 5,
+                "space_required": False,
+                "budget": 0,
+                "support_required": False,
+                "steps": [
+                    "Исследование страха решений",
+                    "Работа с неуверенностью",
+                    "Развитие доверия к себе",
+                    "Интеграция",
+                    "Закрепление"
+                ]
+            },
+            "trainer": {
+                "time_total": 80,
+                "time_per_week": 3,
+                "duration_weeks": 27,
+                "energy_required": 5,
+                "space_required": False,
+                "budget": 0,
+                "support_required": False,
+                "steps": [
+                    "Методы принятия решений",
+                    "Практика на кейсах",
+                    "Анализ последствий",
+                    "Быстрые решения",
+                    "Закрепление"
+                ]
+            }
+        },
+        
+        # ========== ПРОДУКТИВНОСТЬ ==========
+        "productivity": {
+            "coach": {
+                "time_total": 90,
+                "time_per_week": 3.5,
+                "duration_weeks": 26,
+                "energy_required": 5,
+                "space_required": True,
+                "budget": 0,
+                "support_required": False,
+                "steps": [
+                    "Анализ текущей продуктивности",
+                    "Выявление точек роста",
+                    "Внедрение методов",
+                    "Отслеживание",
+                    "Корректировка"
+                ]
+            },
+            "psychologist": {
+                "time_total": 110,
+                "time_per_week": 4.5,
+                "duration_weeks": 24,
+                "energy_required": 5,
+                "space_required": False,
+                "budget": 0,
+                "support_required": False,
+                "steps": [
+                    "Исследование прокрастинации",
+                    "Работа со страхом неудачи",
+                    "Мотивация",
+                    "Интеграция",
+                    "Закрепление"
+                ]
+            },
+            "trainer": {
+                "time_total": 80,
+                "time_per_week": 3,
+                "duration_weeks": 27,
+                "energy_required": 4,
+                "space_required": True,
+                "budget": 3000,
+                "support_required": False,
+                "steps": [
+                    "Техники продуктивности",
+                    "Тайм-менеджмент",
+                    "Фокусировка",
+                    "Привычки",
+                    "Закрепление"
+                ]
+            }
+        },
+        
+        "habit_building": {
+            "coach": {
+                "time_total": 80,
+                "time_per_week": 3,
+                "duration_weeks": 27,
+                "energy_required": 4,
+                "space_required": False,
+                "budget": 0,
+                "support_required": False,
+                "steps": [
+                    "Анализ текущих привычек",
+                    "Выбор целевых привычек",
+                    "Планирование внедрения",
+                    "Отслеживание",
+                    "Корректировка"
+                ]
+            },
+            "psychologist": {
+                "time_total": 100,
+                "time_per_week": 4,
+                "duration_weeks": 25,
+                "energy_required": 5,
+                "space_required": False,
+                "budget": 0,
+                "support_required": False,
+                "steps": [
+                    "Исследование старых паттернов",
+                    "Работа с сопротивлением",
+                    "Мотивация",
+                    "Интеграция",
+                    "Закрепление"
+                ]
+            },
+            "trainer": {
+                "time_total": 70,
+                "time_per_week": 3,
+                "duration_weeks": 23,
+                "energy_required": 4,
+                "space_required": False,
+                "budget": 0,
+                "support_required": False,
+                "steps": [
+                    "Методы формирования привычек",
+                    "Ежедневная практика",
+                    "Трекер привычек",
+                    "Награды",
+                    "Закрепление"
+                ]
+            }
+        },
+        
+        "skill_mastery": {
+            "coach": {
+                "time_total": 200,
+                "time_per_week": 8,
+                "duration_weeks": 25,
+                "energy_required": 7,
+                "space_required": True,
+                "budget": 0,
+                "support_required": True,
+                "steps": [
+                    "Выбор навыка",
+                    "Планирование обучения",
+                    "Практика",
+                    "Обратная связь",
+                    "Углубление"
+                ]
+            },
+            "psychologist": {
+                "time_total": 220,
+                "time_per_week": 9,
+                "duration_weeks": 24,
+                "energy_required": 7,
+                "space_required": False,
+                "budget": 0,
+                "support_required": True,
+                "steps": [
+                    "Исследование блоков",
+                    "Работа с синдромом самозванца",
+                    "Развитие уверенности",
+                    "Интеграция",
+                    "Закрепление"
+                ]
+            },
+            "trainer": {
+                "time_total": 180,
+                "time_per_week": 7,
+                "duration_weeks": 26,
+                "energy_required": 7,
+                "space_required": True,
+                "budget": 20000,
+                "support_required": True,
+                "steps": [
+                    "Интенсивная практика",
+                    "Наставничество",
+                    "Проекты",
+                    "Обратная связь",
+                    "Мастерство"
+                ]
+            }
+        },
+        
+        "growth": {
+            "coach": {
+                "time_total": 120,
+                "time_per_week": 5,
+                "duration_weeks": 24,
+                "energy_required": 6,
+                "space_required": True,
+                "budget": 0,
+                "support_required": False,
+                "steps": [
+                    "Анализ текущего уровня",
+                    "Определение зон роста",
+                    "Планирование",
+                    "Реализация",
+                    "Рефлексия"
+                ]
+            },
+            "psychologist": {
+                "time_total": 150,
+                "time_per_week": 6,
+                "duration_weeks": 25,
+                "energy_required": 6,
+                "space_required": False,
+                "budget": 0,
+                "support_required": False,
+                "steps": [
+                    "Исследование ограничений",
+                    "Работа с блоками",
+                    "Развитие потенциала",
+                    "Интеграция",
+                    "Закрепление"
+                ]
+            },
+            "trainer": {
+                "time_total": 100,
+                "time_per_week": 4,
+                "duration_weeks": 25,
+                "energy_required": 5,
+                "space_required": True,
+                "budget": 5000,
+                "support_required": False,
+                "steps": [
+                    "Стратегии роста",
+                    "Практика",
+                    "Обучение",
+                    "Применение",
+                    "Закрепление"
+                ]
+            }
+        },
+        
+        "balance": {
+            "coach": {
+                "time_total": 90,
+                "time_per_week": 3.5,
+                "duration_weeks": 26,
+                "energy_required": 5,
+                "space_required": False,
+                "budget": 0,
+                "support_required": False,
+                "steps": [
+                    "Анализ текущего баланса",
+                    "Выявление дисбаланса",
+                    "Планирование изменений",
+                    "Внедрение",
+                    "Рефлексия"
+                ]
+            },
+            "psychologist": {
+                "time_total": 120,
+                "time_per_week": 5,
+                "duration_weeks": 24,
+                "energy_required": 5,
+                "space_required": False,
+                "budget": 0,
+                "support_required": False,
+                "steps": [
+                    "Исследование причин дисбаланса",
+                    "Работа с чувством вины",
+                    "Установление приоритетов",
+                    "Интеграция",
+                    "Закрепление"
+                ]
+            },
+            "trainer": {
+                "time_total": 80,
+                "time_per_week": 3,
+                "duration_weeks": 27,
+                "energy_required": 4,
+                "space_required": False,
+                "budget": 0,
+                "support_required": False,
+                "steps": [
+                    "Практики баланса",
+                    "Тайм-менеджмент",
+                    "Границы",
+                    "Восстановление",
+                    "Закрепление"
+                ]
+            }
+        },
+        
+        "stress_resistance": {
+            "coach": {
+                "time_total": 90,
+                "time_per_week": 3.5,
+                "duration_weeks": 26,
+                "energy_required": 5,
+                "space_required": False,
+                "budget": 0,
+                "support_required": False,
+                "steps": [
+                    "Анализ стрессоров",
+                    "Оценка реакций",
+                    "Развитие навыков",
+                    "Практика",
+                    "Рефлексия"
+                ]
+            },
+            "psychologist": {
+                "time_total": 120,
+                "time_per_week": 5,
+                "duration_weeks": 24,
+                "energy_required": 6,
+                "space_required": False,
+                "budget": 0,
+                "support_required": False,
+                "steps": [
+                    "Исследование уязвимостей",
+                    "Проработка травм",
+                    "Укрепление устойчивости",
+                    "Интеграция",
+                    "Закрепление"
+                ]
+            },
+            "trainer": {
+                "time_total": 80,
+                "time_per_week": 3,
+                "duration_weeks": 27,
+                "energy_required": 4,
+                "space_required": False,
+                "budget": 0,
+                "support_required": False,
+                "steps": [
+                    "Стресс-менеджмент",
+                    "Техники релаксации",
+                    "Физическая выносливость",
+                    "Восстановление",
+                    "Закрепление"
+                ]
+            }
+        },
+        
+        # ========== ТРЕНИРОВКА СМЕЛОСТИ ==========
+        "courage": {
+            "coach": {
+                "time_total": 80,
+                "time_per_week": 3,
+                "duration_weeks": 26,
+                "energy_required": 6,
+                "space_required": False,
+                "budget": 0,
+                "support_required": False,
+                "steps": [
+                    "Определение зон, где не хватает смелости",
+                    "Постановка маленьких целей на каждый день",
+                    "Анализ страхов и их причин",
+                    "Практика маленьких шагов",
+                    "Рефлексия и закрепление результатов"
+                ]
+            },
+            "psychologist": {
+                "time_total": 120,
+                "time_per_week": 5,
+                "duration_weeks": 24,
+                "energy_required": 6,
+                "space_required": False,
+                "budget": 0,
+                "support_required": False,
+                "steps": [
+                    "Поиск корней страха и неуверенности",
+                    "Проработка детских травм и запретов",
+                    "Работа с внутренним критиком",
+                    "Формирование новой самооценки",
+                    "Интеграция смелости в повседневность"
+                ]
+            },
+            "trainer": {
+                "time_total": 60,
+                "time_per_week": 2.5,
+                "duration_weeks": 24,
+                "energy_required": 5,
+                "space_required": False,
+                "budget": 0,
+                "support_required": False,
+                "steps": [
+                    "Ежедневные упражнения на выход из зоны комфорта",
+                    "Техники управления страхом (дыхание, заземление)",
+                    "Практика публичных выступлений",
+                    "Ролевые игры с преодолением",
+                    "Ведение дневника смелости"
+                ]
+            }
+        },
+        
+        "trust": {
+            "coach": {
+                "time_total": 90,
+                "time_per_week": 3.5,
+                "duration_weeks": 26,
+                "energy_required": 5,
+                "space_required": False,
+                "budget": 0,
+                "support_required": False,
+                "steps": [
+                    "Анализ уровня доверия",
+                    "Исследование причин недоверия",
+                    "Постепенное развитие доверия",
+                    "Практика",
+                    "Рефлексия"
+                ]
+            },
+            "psychologist": {
+                "time_total": 130,
+                "time_per_week": 5,
+                "duration_weeks": 26,
+                "energy_required": 6,
+                "space_required": False,
+                "budget": 0,
+                "support_required": True,
+                "steps": [
+                    "Поиск корней недоверия",
+                    "Проработка предательств",
+                    "Исцеление травм",
+                    "Формирование доверия",
+                    "Интеграция"
+                ]
+            },
+            "trainer": {
+                "time_total": 80,
+                "time_per_week": 3,
+                "duration_weeks": 27,
+                "energy_required": 4,
+                "space_required": False,
+                "budget": 0,
+                "support_required": False,
+                "steps": [
+                    "Упражнения на доверие",
+                    "Практика уязвимости",
+                    "Постепенное открытие",
+                    "Анализ",
+                    "Закрепление"
+                ]
+            }
+        },
+        
+        "business": {
+            "coach": {
+                "time_total": 200,
+                "time_per_week": 8,
+                "duration_weeks": 25,
+                "energy_required": 7,
+                "space_required": True,
+                "budget": 0,
+                "support_required": True,
+                "steps": [
+                    "Анализ бизнес-идеи",
+                    "Разработка стратегии",
+                    "Планирование",
+                    "Запуск",
+                    "Анализ"
+                ]
+            },
+            "psychologist": {
+                "time_total": 220,
+                "time_per_week": 9,
+                "duration_weeks": 24,
+                "energy_required": 7,
+                "space_required": False,
+                "budget": 0,
+                "support_required": True,
+                "steps": [
+                    "Исследование страха успеха",
+                    "Работа с синдромом самозванца",
+                    "Развитие предпринимательского мышления",
+                    "Интеграция",
+                    "Закрепление"
+                ]
+            },
+            "trainer": {
+                "time_total": 180,
+                "time_per_week": 7,
+                "duration_weeks": 26,
+                "energy_required": 7,
+                "space_required": True,
+                "budget": 30000,
+                "support_required": True,
+                "steps": [
+                    "Бизнес-планирование",
+                    "Маркетинг",
+                    "Продажи",
+                    "Управление",
+                    "Масштабирование"
+                ]
+            }
+        },
+        
+        "investments": {
+            "coach": {
+                "time_total": 150,
+                "time_per_week": 6,
+                "duration_weeks": 25,
+                "energy_required": 6,
+                "space_required": True,
+                "budget": 0,
+                "support_required": False,
+                "steps": [
+                    "Изучение основ инвестирования",
+                    "Анализ инструментов",
+                    "Создание стратегии",
+                    "Первые шаги",
+                    "Анализ"
+                ]
+            },
+            "psychologist": {
+                "time_total": 170,
+                "time_per_week": 7,
+                "duration_weeks": 24,
+                "energy_required": 6,
+                "space_required": False,
+                "budget": 0,
+                "support_required": False,
+                "steps": [
+                    "Исследование страха риска",
+                    "Работа с отношением к деньгам",
+                    "Развитие инвестиционного мышления",
+                    "Интеграция",
+                    "Закрепление"
+                ]
+            },
+            "trainer": {
+                "time_total": 140,
+                "time_per_week": 5.5,
+                "duration_weeks": 25,
+                "energy_required": 6,
+                "space_required": True,
+                "budget": 20000,
+                "support_required": True,
+                "steps": [
+                    "Инвестиционные стратегии",
+                    "Анализ рынка",
+                    "Управление портфелем",
+                    "Риск-менеджмент",
+                    "Практика"
                 ]
             }
         }
@@ -1053,7 +4270,15 @@ def get_goal_difficulty(goal_id: str, mode: str) -> str:
         "energy_boost": {"coach": "easy", "psychologist": "medium", "trainer": "easy"},
         "purpose": {"coach": "hard", "psychologist": "hard", "trainer": "medium"},
         "boundaries": {"coach": "medium", "psychologist": "hard", "trainer": "easy"},
-        "self_esteem": {"coach": "medium", "psychologist": "hard", "trainer": "easy"}
+        "self_esteem": {"coach": "medium", "psychologist": "hard", "trainer": "easy"},
+        "courage": {"coach": "medium", "psychologist": "hard", "trainer": "medium"},
+        "fear_work": {"coach": "medium", "psychologist": "hard", "trainer": "medium"},
+        "calm": {"coach": "medium", "psychologist": "hard", "trainer": "easy"},
+        "trust": {"coach": "medium", "psychologist": "hard", "trainer": "medium"},
+        "leadership": {"coach": "hard", "psychologist": "hard", "trainer": "hard"},
+        "stress_resistance": {"coach": "medium", "psychologist": "medium", "trainer": "medium"},
+        "productivity": {"coach": "medium", "psychologist": "medium", "trainer": "easy"},
+        "habit_building": {"coach": "easy", "psychologist": "medium", "trainer": "easy"}
     }
     
     if goal_id in difficulties and mode in difficulties[goal_id]:
@@ -1080,7 +4305,15 @@ def get_goal_time_estimate(goal_id: str, mode: str) -> str:
         "energy_boost": {"coach": "4-6 месяцев", "psychologist": "6 месяцев", "trainer": "4-6 месяцев"},
         "purpose": {"coach": "6-8 месяцев", "psychologist": "6-8 месяцев", "trainer": "4-6 месяцев"},
         "boundaries": {"coach": "4-6 месяцев", "psychologist": "6 месяцев", "trainer": "4-6 месяцев"},
-        "self_esteem": {"coach": "4-6 месяцев", "psychologist": "6 месяцев", "trainer": "4-6 месяцев"}
+        "self_esteem": {"coach": "4-6 месяцев", "psychologist": "6 месяцев", "trainer": "4-6 месяцев"},
+        "courage": {"coach": "4-6 месяцев", "psychologist": "6 месяцев", "trainer": "4-6 месяцев"},
+        "fear_work": {"coach": "4-6 месяцев", "psychologist": "6-8 месяцев", "trainer": "4-6 месяцев"},
+        "calm": {"coach": "4-6 месяцев", "psychologist": "6 месяцев", "trainer": "3-4 месяца"},
+        "trust": {"coach": "4-6 месяцев", "psychologist": "6-8 месяцев", "trainer": "4-6 месяцев"},
+        "leadership": {"coach": "6-8 месяцев", "psychologist": "6-8 месяцев", "trainer": "6 месяцев"},
+        "stress_resistance": {"coach": "4-6 месяцев", "psychologist": "6 месяцев", "trainer": "4-6 месяцев"},
+        "productivity": {"coach": "4-6 месяцев", "psychologist": "4-6 месяцев", "trainer": "3-4 месяца"},
+        "habit_building": {"coach": "3-4 месяца", "psychologist": "4-6 месяцев", "trainer": "3 месяца"}
     }
     
     if goal_id in estimates and mode in estimates[goal_id]:
