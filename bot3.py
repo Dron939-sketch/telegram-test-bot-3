@@ -1511,7 +1511,7 @@ async def start_life_context_collection(callback: CallbackQuery, state: FSMConte
 
 {questions}
 
-👇 Напиши ответы одним сообщением:
+👇 {bold('Напиши ответы одним сообщением или отправь голосовое сообщение 🎤')}
 """
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
@@ -1521,7 +1521,6 @@ async def start_life_context_collection(callback: CallbackQuery, state: FSMConte
     await safe_send_message(callback.message, text, reply_markup=keyboard, delete_previous=True)
     await state.set_state(TestStates.collecting_life_context)
     await state.update_data(pending_goal=goal)
-
 
 async def ask_goal_specific_questions(callback: CallbackQuery, state: FSMContext, goal: Dict):
     """
@@ -1549,7 +1548,7 @@ async def ask_goal_specific_questions(callback: CallbackQuery, state: FSMContext
 
 {questions}
 
-👇 Напиши ответы (можно по порядку):
+👇 {bold('Напиши ответы (можно по порядку) или отправь голосовое сообщение 🎤')}
 """
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
