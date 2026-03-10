@@ -26,7 +26,7 @@ COMMUNICATION_MODES = {
         "name": "КОУЧ",
         "display_name": "🔮 КОУЧ",
         "emoji": "🔮",
-        "voice": "oksana",  # женский, мягкий
+        "voice": "filipp",  # мужской
         "voice_emotion": "neutral",
         "responsibility": "Помогаю найти ответы внутри вас через открытые вопросы. Не даю готовых решений.",
         "system_prompt": """Ты — КОУЧ. Твоя задача: задавать открытые вопросы, помогать клиенту найти ответы внутри себя.
@@ -48,11 +48,11 @@ COMMUNICATION_MODES = {
 ГОВОРИ КОРОТКО, ПО ДЕЛУ, БЕЗ ВОДЫ. 2-4 предложения максимум."""
     },
     
-    "psychologist": {  # БЫЛ friend
+    "psychologist": {
         "name": "ПСИХОЛОГ",
         "display_name": "🧠 ПСИХОЛОГ",
         "emoji": "🧠",
-        "voice": "ermil",  # мужской, тёплый, доверительный
+        "voice": "ermil",  # мужской, тёплый
         "voice_emotion": "good",
         "responsibility": "Анализирую глубинные паттерны, работаю с подсознанием, использую гипнотические техники.",
         "system_prompt": """Ты — ПСИХОЛОГ (интегративный подход: психоанализ + гештальт + эриксоновский гипноз).
@@ -109,7 +109,7 @@ COMMUNICATION_MODES = {
 # Для обратной совместимости (со старыми вызовами)
 COMMUNICATION_MODES["hard"] = COMMUNICATION_MODES["trainer"]
 COMMUNICATION_MODES["medium"] = COMMUNICATION_MODES["coach"]
-COMMUNICATION_MODES["soft"] = COMMUNICATION_MODES["psychologist"]  # БЫЛ friend
+COMMUNICATION_MODES["soft"] = COMMUNICATION_MODES["psychologist"]
 
 
 # ============================================
@@ -148,7 +148,7 @@ DESTINATIONS = {
         }
     },
     
-    "psychologist": {  # БЫЛ friend
+    "psychologist": {
         "deep_patterns": {
             "name": "🌀 ГЛУБИННЫЕ ПАТТЕРНЫ",
             "description": "Исследовать корневые убеждения и сценарии",
@@ -238,21 +238,21 @@ DESTINATIONS = {
 
 VOICE_SETTINGS = {
     "coach": {
-        "voice": "oksana",
+        "voice": "filipp",  # мужской
         "emotion": "neutral",
         "speed": 1.0,
-        "description": "Женский, спокойный, для коучинга"
+        "description": "Мужской, спокойный, для коучинга"
     },
     "psychologist": {
-        "voice": "ermil",
+        "voice": "ermil",  # мужской
         "emotion": "good",
-        "speed": 0.9,  # чуть медленнее для гипнотического эффекта
+        "speed": 0.9,
         "description": "Мужской, тёплый, доверительный, для психотерапии"
     },
     "trainer": {
-        "voice": "filipp",
+        "voice": "filipp",  # мужской
         "emotion": "strict",
-        "speed": 1.1,  # чуть быстрее для динамики
+        "speed": 1.1,
         "description": "Мужской, жёсткий, для тренировок"
     }
 }
@@ -273,8 +273,8 @@ REMINDER_SETTINGS = {
         ]
     },
     "psychologist": {
-        "motivation_delay": 10,  # минут (больше времени на переваривание)
-        "checkin_delay": 48 * 60,  # 48 часов (реже, глубже)
+        "motivation_delay": 10,  # минут
+        "checkin_delay": 48 * 60,  # 48 часов
         "messages": [
             "Какие сны снились?",
             "Что чувствуете сейчас?",
@@ -283,7 +283,7 @@ REMINDER_SETTINGS = {
     },
     "trainer": {
         "motivation_delay": 5,  # минут
-        "checkin_delay": 12 * 60,  # 12 часов (чаще контроль)
+        "checkin_delay": 12 * 60,  # 12 часов
         "messages": [
             "Отчёт по задачам!",
             "Что сделано?",
