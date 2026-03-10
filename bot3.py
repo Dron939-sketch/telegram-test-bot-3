@@ -116,7 +116,7 @@ user_routes: Dict[int, Dict[str, Any]] = {}
 reminder_manager = ReminderManager()
 destination_manager = DestinationManager()
 stats = Statistics()
-
+delayed_task_manager = DelayedTaskManager()
 morning_manager = MorningMessageManager()
 
 # Инициализируем гипнотический оркестратор
