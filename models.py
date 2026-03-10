@@ -1,6 +1,6 @@
 """
 Классы-менеджеры и модели данных
-Версия 9.6: Добавлены методы для работы с жизненным контекстом
+Версия 9.6: Добавлены методы для работы с жизненным контекстом и определения часового пояса
 """
 import os
 import json
@@ -169,6 +169,8 @@ class UserContext:
             self.city = text.strip()
             self.awaiting_context = None
             await self.update_weather()
+            # 🔥 ОПРЕДЕЛЯЕМ ЧАСОВОЙ ПОЯС ПО ГОРОДУ
+            await self.detect_timezone_from_city()
             question, keyboard = await self.ask_for_context()
             return True, question, keyboard
                 
@@ -345,6 +347,112 @@ class UserContext:
             return "золотой возраст"
         else:
             return "возраст мудрости"
+    
+    # ========== НОВЫЙ МЕТОД: ОПРЕДЕЛЕНИЕ ЧАСОВОГО ПОЯСА ==========
+    
+    async def detect_timezone_from_city(self):
+        """Определяет часовой пояс по названию города"""
+        if not self.city:
+            return
+        
+        # Простая карта городов (можно расширить)
+        timezone_map = {
+            'москва': 'Europe/Moscow',
+            'питер': 'Europe/Moscow',
+            'санкт-петербург': 'Europe/Moscow',
+            'новосибирск': 'Asia/Novosibirsk',
+            'екатеринбург': 'Asia/Yekaterinburg',
+            'казань': 'Europe/Moscow',
+            'краснодар': 'Europe/Moscow',
+            'сочи': 'Europe/Moscow',
+            'владивосток': 'Asia/Vladivostok',
+            'хабаровск': 'Asia/Vladivostok',
+            'калининград': 'Europe/Kaliningrad',
+            'самара': 'Europe/Samara',
+            'омск': 'Asia/Omsk',
+            'пермь': 'Asia/Yekaterinburg',
+            'уфа': 'Asia/Yekaterinburg',
+            'ростов': 'Europe/Moscow',
+            'волгоград': 'Europe/Volgograd',
+            'минск': 'Europe/Minsk',
+            'киев': 'Europe/Kiev',
+            'алматы': 'Asia/Almaty',
+            'нур-султан': 'Asia/Almaty',
+            'астана': 'Asia/Almaty',
+            'ташкент': 'Asia/Tashkent',
+            'баку': 'Asia/Baku',
+            'ереван': 'Asia/Yerevan',
+            'тбилиси': 'Asia/Tbilisi',
+            'рига': 'Europe/Riga',
+            'вильнюс': 'Europe/Vilnius',
+            'таллин': 'Europe/Tallinn',
+            'варшава': 'Europe/Warsaw',
+            'прага': 'Europe/Prague',
+            'берлин': 'Europe/Berlin',
+            'париж': 'Europe/Paris',
+            'лондон': 'Europe/London',
+            'нью-йорк': 'America/New_York',
+            'чикаго': 'America/Chicago',
+            'лос-анджелес': 'America/Los_Angeles',
+            'сан-франциско': 'America/Los_Angeles',
+            'токио': 'Asia/Tokyo',
+            'пекин': 'Asia/Shanghai',
+            'шанхай': 'Asia/Shanghai',
+            'гонконг': 'Asia/Hong_Kong',
+            'сингапур': 'Asia/Singapore',
+            'дубай': 'Asia/Dubai',
+            'тель-авив': 'Asia/Jerusalem',
+            'иерусалим': 'Asia/Jerusalem',
+            'стамбул': 'Europe/Istanbul',
+            'анкара': 'Europe/Istanbul',
+        }
+        
+        city_lower = self.city.lower().strip()
+        
+        # Ищем точное совпадение или частичное
+        for key, tz in timezone_map.items():
+            if key in city_lower or city_lower in key:
+                self.timezone = tz
+                # Примерное смещение (можно будет вычислять динамически позже)
+                offset_map = {
+                    'Europe/Moscow': 3,
+                    'Europe/Minsk': 3,
+                    'Europe/Kiev': 2,
+                    'Europe/Kaliningrad': 2,
+                    'Europe/Samara': 4,
+                    'Europe/London': 0,
+                    'Europe/Paris': 1,
+                    'Europe/Berlin': 1,
+                    'Europe/Warsaw': 1,
+                    'Europe/Riga': 2,
+                    'Europe/Vilnius': 2,
+                    'Europe/Tallinn': 2,
+                    'Asia/Yekaterinburg': 5,
+                    'Asia/Novosibirsk': 7,
+                    'Asia/Almaty': 6,
+                    'Asia/Tashkent': 5,
+                    'Asia/Baku': 4,
+                    'Asia/Yerevan': 4,
+                    'Asia/Tbilisi': 4,
+                    'Asia/Dubai': 4,
+                    'Asia/Jerusalem': 2,
+                    'Europe/Istanbul': 3,
+                    'Asia/Tokyo': 9,
+                    'Asia/Shanghai': 8,
+                    'Asia/Hong_Kong': 8,
+                    'Asia/Singapore': 8,
+                    'America/New_York': -5,
+                    'America/Chicago': -6,
+                    'America/Los_Angeles': -8,
+                }
+                self.timezone_offset = offset_map.get(tz, 3)
+                logger.info(f"🌍 Для города {self.city} определен часовой пояс {tz} (offset {self.timezone_offset})")
+                return
+        
+        # По умолчанию Москва
+        self.timezone = 'Europe/Moscow'
+        self.timezone_offset = 3
+        logger.info(f"🌍 Для города {self.city} не найден часовой пояс, установлен Europe/Moscow по умолчанию")
     
     # ========== НОВЫЕ МЕТОДЫ ДЛЯ РАБОТЫ С ЖИЗНЕННЫМ КОНТЕКСТОМ ==========
     
