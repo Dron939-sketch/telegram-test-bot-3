@@ -2411,7 +2411,10 @@ async def show_ai_generated_profile(callback: CallbackQuery, state: FSMContext, 
     # 🔥 ВАЖНО: всегда создаем новые кнопки
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="🧠 МЫСЛИ ПСИХОЛОГА", callback_data="psychologist_thought")],
-        [InlineKeyboardButton(text="🎯 ВЫБРАТЬ ЦЕЛЬ", callback_data="show_dynamic_destinations")],
+        [
+            InlineKeyboardButton(text="🎤 ХОЧУ ВЫСКАЗАТЬСЯ", callback_data="ask_question"),
+            InlineKeyboardButton(text="🎯 ВЫБРАТЬ ЦЕЛЬ", callback_data="show_dynamic_destinations")
+        ],
         [InlineKeyboardButton(text="⚙️ ВЫБРАТЬ РЕЖИМ", callback_data="show_mode_selection")]
     ])
     
@@ -4540,10 +4543,13 @@ async def handle_question_message(message: Message, state: FSMContext):
     clean_response = clean_text_for_safe_display(response)
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="❓ Ещё вопрос", callback_data="smart_questions")],
-        [InlineKeyboardButton(text="🧠 К ПОРТРЕТУ", callback_data="show_results")],
-        [InlineKeyboardButton(text="⚙️ СМЕНИТЬ РЕЖИМ", callback_data="show_mode_selection")]
-    ])
+    [
+        InlineKeyboardButton(text="🎤 ЗАДАТЬ ЕЩЁ", callback_data="ask_question"),
+        InlineKeyboardButton(text="🎯 К ЦЕЛИ", callback_data="show_dynamic_destinations")
+    ],
+    [InlineKeyboardButton(text="🧠 МЫСЛИ ПСИХОЛОГА", callback_data="psychologist_thought")],
+    [InlineKeyboardButton(text="⚙️ ВЫБРАТЬ РЕЖИМ", callback_data="show_mode_selection")]
+])
     
     # Добавляем предложения, если есть
     if result.get("suggestions"):
@@ -4620,10 +4626,13 @@ async def handle_voice_message(message: Message, state: FSMContext):
         clean_response = clean_text_for_safe_display(response)
         
         keyboard = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="❓ Ещё вопрос", callback_data="smart_questions")],
-            [InlineKeyboardButton(text="🧠 К ПОРТРЕТУ", callback_data="show_results")],
-            [InlineKeyboardButton(text="⚙️ СМЕНИТЬ РЕЖИМ", callback_data="show_mode_selection")]
-        ])
+    [
+        InlineKeyboardButton(text="🎤 ЗАДАТЬ ЕЩЁ", callback_data="ask_question"),
+        InlineKeyboardButton(text="🎯 К ЦЕЛИ", callback_data="show_dynamic_destinations")
+    ],
+    [InlineKeyboardButton(text="🧠 МЫСЛИ ПСИХОЛОГА", callback_data="psychologist_thought")],
+    [InlineKeyboardButton(text="⚙️ ВЫБРАТЬ РЕЖИМ", callback_data="show_mode_selection")]
+])
         
         # Добавляем предложения, если есть
         if result["suggestions"]:
