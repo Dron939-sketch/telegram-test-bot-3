@@ -2151,7 +2151,8 @@ async def show_ai_analysis(callback: CallbackQuery, state: FSMContext):
         await show_saved_psychologist_thought(callback, data["psychologist_thought"])
         return
     
-    await callback.message.edit_text(
+    # Отправляем новое сообщение о начале анализа
+    status_msg = await callback.message.answer(
         "🧠 *Анализирую через конфайнмент-модель...*\n\n"
         "_Это займёт около 15-20 секунд_",
         parse_mode='Markdown'
@@ -2159,11 +2160,15 @@ async def show_ai_analysis(callback: CallbackQuery, state: FSMContext):
     
     thought = await generate_psychologist_thought(user_id, data)
     
+    # Удаляем статусное сообщение
+    await status_msg.delete()
+    
     if thought:
         await state.update_data(psychologist_thought=thought)
         await show_saved_psychologist_thought(callback, thought)
     else:
-        await callback.message.edit_text(
+        # Отправляем сообщение об ошибке
+        await callback.message.answer(
             "❌ Не удалось сгенерировать анализ",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="◀️ НАЗАД", callback_data="show_results")]
