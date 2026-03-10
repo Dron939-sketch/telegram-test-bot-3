@@ -47,6 +47,28 @@ def emoji_text(emoji: str, text: str) -> str:
 
 
 # ============================================
+# ВСПОМОГАТЕЛЬНАЯ ФУНКЦИЯ ДЛЯ JSON-СЕРИАЛИЗАЦИИ
+# ============================================
+
+def make_json_serializable(obj):
+    """Рекурсивно преобразует объект в JSON-сериализуемый формат"""
+    if obj is None:
+        return None
+    if isinstance(obj, (str, int, float, bool)):
+        return obj
+    if isinstance(obj, (list, tuple)):
+        return [make_json_serializable(item) for item in obj]
+    if isinstance(obj, dict):
+        return {key: make_json_serializable(value) for key, value in obj.items()}
+    if hasattr(obj, 'to_dict'):
+        return make_json_serializable(obj.to_dict())
+    if hasattr(obj, '__dict__'):
+        return make_json_serializable(obj.__dict__)
+    # Если ничего не подходит, преобразуем в строку
+    return str(obj)
+
+
+# ============================================
 # DEEPSEEK API
 # ============================================
 
@@ -97,7 +119,7 @@ async def call_deepseek(prompt: str, system_prompt: str = None, max_tokens: int 
 
 
 # ============================================
-# ГЕНЕРАЦИЯ ПСИХОЛОГИЧЕСКОГО ПОРТРЕТА (ПОЛНЫЙ ПРОМТ) С ОТЛАДКОЙ
+# ГЕНЕРАЦИЯ ПСИХОЛОГИЧЕСКОГО ПОРТРЕТА (ПОЛНЫЙ ПРОМТ)
 # ============================================
 
 async def generate_ai_profile(user_id: int, data: dict) -> Optional[str]:
@@ -128,8 +150,8 @@ async def generate_ai_profile(user_id: int, data: dict) -> Optional[str]:
             logger.error(f"❌ confinement_model НЕ словарь: {type(confinement)}")
             # Пробуем преобразовать, если есть метод to_dict
             if hasattr(confinement, 'to_dict'):
-                data["confinement_model"] = confinement.to_dict()
-                logger.info("✅ Преобразовали в словарь через to_dict()")
+                data["confinement_model"] = make_json_serializable(confinement)
+                logger.info("✅ Преобразовали в словарь через make_json_serializable()")
     else:
         logger.info("ℹ️ confinement_model отсутствует")
     
@@ -164,15 +186,15 @@ async def generate_ai_profile(user_id: int, data: dict) -> Optional[str]:
         "deep_patterns": data.get("deep_patterns", {})
     }
     
-    # Добавляем конфайнмент-модель, если есть (уже должна быть словарём)
+    # Добавляем конфайнмент-модель, если есть (преобразуем в JSON-сериализуемый формат)
     if data.get("confinement_model"):
-        profile_data["confinement_model"] = data["confinement_model"]
+        profile_data["confinement_model"] = make_json_serializable(data["confinement_model"])
     
     # Полный промт для генерации профиля
     prompt = f"""На основе данных теста создай глубокий, точный психологический портрет человека.
 
 ДАННЫЕ ТЕСТА:
-{json.dumps(profile_data, ensure_ascii=False, indent=2)}
+{json.dumps(profile_data, ensure_ascii=False, indent=2, default=str)}
 
 ИНСТРУКЦИИ ПО ФОРМАТУ:
 1. Пиши от первого лица, как будто ты напрямую обращаешься к человеку.
@@ -228,7 +250,7 @@ async def generate_ai_profile(user_id: int, data: dict) -> Optional[str]:
 
 
 # ============================================
-# ГЕНЕРАЦИЯ МЫСЛЕЙ ПСИХОЛОГА (ПОЛНЫЙ ПРОМТ) С ОТЛАДКОЙ
+# ГЕНЕРАЦИЯ МЫСЛЕЙ ПСИХОЛОГА (ПОЛНЫЙ ПРОМТ)
 # ============================================
 
 async def generate_psychologist_thought(user_id: int, data: dict) -> Optional[str]:
@@ -247,10 +269,8 @@ async def generate_psychologist_thought(user_id: int, data: dict) -> Optional[st
     else:
         logger.error(f"❌ confinement_data НЕ словарь: {type(confinement_data)}")
         # Пробуем преобразовать
-        if hasattr(confinement_data, 'to_dict'):
-            confinement_data = confinement_data.to_dict()
-            data["confinement_model"] = confinement_data
-            logger.info("✅ Преобразовали в словарь через to_dict()")
+        confinement_data = make_json_serializable(confinement_data)
+        logger.info("✅ Преобразовали через make_json_serializable()")
     
     system_prompt = """Ты — Фреди, виртуальный психолог. Твоя задача — давать глубинный анализ через конфайнмент-модель.
 
@@ -272,10 +292,10 @@ async def generate_psychologist_thought(user_id: int, data: dict) -> Optional[st
     prompt = f"""Проанализируй пользователя через конфайнмент-модель и дай 3 глубинные мысли.
 
 ПРОФИЛЬ ПОЛЬЗОВАТЕЛЯ:
-{json.dumps(profile_data, ensure_ascii=False, indent=2)}
+{json.dumps(profile_data, ensure_ascii=False, indent=2, default=str)}
 
 КОНФАЙНМЕНТ-МОДЕЛЬ:
-{json.dumps(confinement_data, ensure_ascii=False, indent=2)}
+{json.dumps(confinement_data, ensure_ascii=False, indent=2, default=str)}
 
 Дай 3 мысли, строго соблюдая формат:
 
@@ -557,7 +577,7 @@ async def generate_response_with_full_context(
 
 ПРОФИЛЬ ПОЛЬЗОВАТЕЛЯ: {profile_code}
 ДЕТАЛИ ПРОФИЛЯ:
-{json.dumps(profile_data, ensure_ascii=False, indent=2)[:500]}
+{json.dumps(profile_data, ensure_ascii=False, indent=2, default=str)[:500]}
 
 КОНТЕКСТ (время, погода, личные данные):
 {context_text if context_text else "Контекст не указан"}
