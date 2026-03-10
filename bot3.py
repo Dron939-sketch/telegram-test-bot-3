@@ -4772,15 +4772,16 @@ async def callback_handler(callback: CallbackQuery, state: FSMContext):
             await show_destination_route(callback, state)
         
         elif data == "custom_destination":
-            await safe_send_message(
-                callback.message,
-                "✏️ СФОРМУЛИРУЙТЕ ЦЕЛЬ\n\n"
-                "Напишите своим текстом, чего хотите достичь.\n"
-                "Я помогу построить маршрут.",
-                delete_previous=True
-            )
-            await state.set_state(TestStates.awaiting_question)
-            await state.update_data(awaiting_custom_destination=True)
+    await safe_send_message(
+        callback.message,
+        "✏️ СФОРМУЛИРУЙТЕ ЦЕЛЬ\n\n"
+        "Расскажите своими словами, чего хотите достичь.\n"
+        "Можно написать, а можно просто нажать на микрофон и сказать 🎤\n\n"
+        "Я помогу построить маршрут.",
+        delete_previous=True
+    )
+    await state.set_state(TestStates.awaiting_question)
+    await state.update_data(awaiting_custom_destination=True)
         
         elif data == "route_step_done":
             await route_step_done(callback, state)
