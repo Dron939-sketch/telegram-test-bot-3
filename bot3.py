@@ -3245,12 +3245,60 @@ async def profile_doubt(callback: CallbackQuery, state: FSMContext):
 
 
 async def profile_reject(callback: CallbackQuery, state: FSMContext):
-    """Пользователь полностью не согласен"""
+    """Пользователь полностью не согласен - показываем анекдот"""
     
     await callback.answer("🔄 Хорошо, попробуем иначе...")
     
+    # Очищаем данные теста
     await state.clear()
-    await back_to_intro(callback)
+    
+    # Текст с анекдотом
+    anecdote = """
+🧠 <b>ЧЕСТНОСТЬ - ЛУЧШАЯ ПОЛИТИКА</b>
+
+Две подруги решили сходить на ипподром. Приходят, а там скачки, все ставки делают. Решили и они ставку сделать — вдруг повезёт? Одна другой и говорит: «Слушай, у тебя какой размер груди?». Вторая: «Второй… а у тебя?». Первая: «Третий… ну давай на пятую поставим — чтоб сумма была…».
+
+Поставили на пятую, лошадь приходит первая, они счастливые прибегают домой с деньгами и мужьям рассказывают, как было дело.
+
+На следующий день мужики тоже решили сходить на скачки — а вдруг им повезёт? Когда решали, на какую ставить, один говорит: «Ты сколько раз за ночь свою жену можешь удовлетворить?». Другой говорит: «Ну, три…». Первый: «А я четыре… ну давай на седьмую поставим».
+
+Поставили на седьмую, первой пришла вторая.
+
+Мужики переглянулись: «Не напиздили бы — выиграли…».
+
+<b>Мораль:</b> Если врать в тесте — результат будет как у мужиков на скачках. Хотите попробовать еще раз?
+"""
+    
+    # Кнопки: "🔄 Пройти тест еще раз" и "👋 Досвидули"
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🔄 ПРОЙТИ ТЕСТ ЕЩЕ РАЗ", callback_data="restart_test")],
+        [InlineKeyboardButton(text="👋 ДОСВИДУЛИ", callback_data="goodbye")]
+    ])
+    
+    await safe_send_message(
+        callback.message,
+        anecdote,
+        reply_markup=keyboard,
+        parse_mode='HTML',
+        delete_previous=True
+    )
+
+
+async def handle_goodbye(callback: CallbackQuery, state: FSMContext):
+    """Обработчик кнопки Досвидули"""
+    
+    await callback.answer("👋 Пока-пока! Возвращайтесь, если передумаете...")
+    
+    # Отправляем прощальное сообщение
+    await safe_send_message(
+        callback.message,
+        f"👋 {bold('До свидания!')}\n\nБуду рад помочь, если решите вернуться. Просто напишите /start",
+        parse_mode='HTML',
+        delete_previous=True
+    )
+    
+    # Очищаем состояние
+    await state.clear()
 
 
 async def ask_whats_wrong(callback: CallbackQuery, state: FSMContext, current_levels: dict):
