@@ -192,7 +192,7 @@ def format_profile_text(text: str) -> str:
 
 
 def format_psychologist_text(text: str, user_name: str = "") -> str:
-    """Форматирует мысли психолога с жирными заголовками и эмодзи, убирает Markdown"""
+    """Форматирует мысли психолога с жирными заголовками и эмодзи, убирает дубли"""
     if not text:
         return text
     
@@ -205,38 +205,37 @@ def format_psychologist_text(text: str, user_name: str = "") -> str:
     
     # Добавляем обращение по имени, если есть и его нет
     if user_name and not text.lower().startswith(user_name.lower()):
-        # Проверяем, начинается ли текст с обращения
         first_word = text.split()[0] if text else ""
         if first_word and first_word.lower() not in ['здравствуйте', 'привет', 'добрый']:
             text = f"{user_name}, " + text[0].lower() + text[1:] if text else text
     
-    # Карта замены заголовков
+    # Карта замены заголовков (эмодзи + текст)
     header_map = [
-        (r'КЛЮЧЕВОЙ\s*ЭЛЕМЕНТ', '🔐 КЛЮЧЕВОЙ ЭЛЕМЕНТ'),
-        (r'ПЕТЛЯ', '🔄 ПЕТЛЯ'),
-        (r'ТОЧКА\s*ВХОДА', '🚪 ТОЧКА ВХОДА'),
-        (r'ПРОГНОЗ', '📊 ПРОГНОЗ'),
+        (r'🔐\s*КЛЮЧЕВОЙ\s*ЭЛЕМЕНТ', '🔐 КЛЮЧЕВОЙ ЭЛЕМЕНТ'),
+        (r'🔄\s*ПЕТЛЯ', '🔄 ПЕТЛЯ'),
+        (r'🚪\s*ТОЧКА\s*ВХОДА', '🚪 ТОЧКА ВХОДА'),
+        (r'📊\s*ПРОГНОЗ', '📊 ПРОГНОЗ'),
     ]
     
-    # Заменяем заголовки на форматированные с эмодзи
-    for pattern, replacement in header_map:
-        # Ищем заголовок в тексте и заменяем на жирный с эмодзи
-        text = re.sub(
-            rf'({pattern})', 
-            rf'{bold(replacement)}', 
-            text, 
-            flags=re.IGNORECASE
-        )
+    # Сначала убираем возможные дубли эмодзи
+    text = re.sub(r'🔐\s*🔐', '🔐', text)
+    text = re.sub(r'🔄\s*🔄', '🔄', text)
+    text = re.sub(r'🚪\s*🚪', '🚪', text)
+    text = re.sub(r'📊\s*📊', '📊', text)
     
-    # Убираем возможные дубли заголовков
-    for _, header in header_map:
+    # Затем форматируем заголовки жирным
+    for pattern, replacement in header_map:
         # Разбиваем на эмодзи и текст
-        parts = header.split(' ', 1)
+        parts = replacement.split(' ', 1)
         if len(parts) == 2:
             emoji, header_text = parts
-            # Ищем дубли: "🔐 КЛЮЧЕВОЙ ЭЛЕМЕНТ\nКЛЮЧЕВОЙ ЭЛЕМЕНТ"
-            pattern = rf'{re.escape(emoji)}\s+{re.escape(header_text)}\s*\n\s*{re.escape(header_text)}'
-            text = re.sub(pattern, f'{emoji} {header_text}', text, flags=re.IGNORECASE)
+            # Ищем паттерн с эмодзи или без
+            text = re.sub(
+                rf'({emoji}\s*)?{re.escape(header_text)}', 
+                rf'{bold(replacement)}', 
+                text, 
+                flags=re.IGNORECASE
+            )
     
     # Убираем лишние символы в конце
     text = re.sub(r'И вот:$', '', text)
