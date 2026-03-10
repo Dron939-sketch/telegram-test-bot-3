@@ -2390,20 +2390,12 @@ async def show_ai_generated_profile(callback: CallbackQuery, state: FSMContext, 
 👇 {bold('Что дальше?')}
 """
     
+    # 🔥 ВАЖНО: всегда создаем новые кнопки, не используем старые
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="🧠 МЫСЛИ ПСИХОЛОГА", callback_data="psychologist_thought")],
         [InlineKeyboardButton(text="🎯 ВЫБРАТЬ ЦЕЛЬ", callback_data="show_dynamic_destinations")],
         [InlineKeyboardButton(text="⚙️ ВЫБРАТЬ РЕЖИМ", callback_data="show_mode_selection")]
     ])
-    
-    # 🔥 ИСПРАВЛЕНО: используем safe_send_message вместо send_with_status_cleanup
-    await safe_send_message(
-        callback.message,
-        text,
-        reply_markup=keyboard,
-        parse_mode='HTML',
-        delete_previous=True
-    )
     
     # Удаляем статусное сообщение, если оно есть
     if status_msg:
@@ -2412,8 +2404,19 @@ async def show_ai_generated_profile(callback: CallbackQuery, state: FSMContext, 
         except:
             pass
     
+    # 🔥 ИСПРАВЛЕНО: используем callback.message, а не callback.message напрямую
+    # и гарантированно удаляем предыдущее сообщение
+    try:
+        # Пытаемся удалить предыдущее сообщение
+        await callback.message.delete()
+    except:
+        pass
+    
+    # Отправляем новое сообщение с новыми кнопками
+    await callback.message.answer(text, reply_markup=keyboard, parse_mode='HTML')
+    
     await state.set_state(TestStates.profile_generated)
-
+    
 async def show_old_final_profile(callback: CallbackQuery, state: FSMContext, status_msg: Message = None):
     """Старая версия финального профиля (резерв)"""
     data = await state.get_data()
@@ -2437,30 +2440,30 @@ async def show_old_final_profile(callback: CallbackQuery, state: FSMContext, sta
     
     text = f"{profile_text}\n\n👇 {bold('Что дальше?')}"
     
+    # 🔥 ВАЖНО: создаем новые кнопки
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="🧠 МЫСЛИ ПСИХОЛОГА", callback_data="psychologist_thought")],
         [InlineKeyboardButton(text="🎯 ВЫБРАТЬ ЦЕЛЬ", callback_data="show_dynamic_destinations")],
         [InlineKeyboardButton(text="⚙️ ВЫБРАТЬ РЕЖИМ", callback_data="show_mode_selection")]
     ])
     
-    # 🔥 Удаляем статусное сообщение, если оно есть
+    # Удаляем статусное сообщение, если оно есть
     if status_msg:
         try:
             await status_msg.delete()
         except:
             pass
     
-    # 🔥 ИСПОЛЬЗУЕМ safe_send_message вместо send_with_status_cleanup
-    await safe_send_message(
-        callback.message,
-        text,
-        reply_markup=keyboard,
-        parse_mode='HTML',
-        delete_previous=True
-    )
+    # Удаляем предыдущее сообщение
+    try:
+        await callback.message.delete()
+    except:
+        pass
+    
+    # Отправляем новое сообщение с новыми кнопками
+    await callback.message.answer(text, reply_markup=keyboard, parse_mode='HTML')
     
     await state.set_state(TestStates.profile_generated)
-
 
 # ============================================
 # ОБРАБОТЧИКИ ЭТАПА 1
@@ -3709,12 +3712,20 @@ async def show_saved_psychologist_thought(callback: CallbackQuery, thought: str)
     if not formatted_thought.startswith("🧠"):
         formatted_thought = f"🧠 {bold('МЫСЛИ ПСИХОЛОГА')}\n\n{formatted_thought}"
     
+    # 🔥 ВАЖНО: создаем новые кнопки для возврата к профилю
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="🎯 ВЫБРАТЬ ЦЕЛЬ", callback_data="show_dynamic_destinations")],
         [InlineKeyboardButton(text="◀️ К ПОРТРЕТУ", callback_data="show_results")]
     ])
     
-    await safe_send_message(callback.message, formatted_thought, reply_markup=keyboard, delete_previous=True)
+    # Удаляем предыдущее сообщение
+    try:
+        await callback.message.delete()
+    except:
+        pass
+    
+    # Отправляем новое сообщение с новыми кнопками
+    await callback.message.answer(formatted_thought, reply_markup=keyboard, parse_mode='HTML')
 
 
 # ============================================
