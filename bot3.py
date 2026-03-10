@@ -633,12 +633,28 @@ def get_priority_order(scores: dict) -> list:
 
 
 def is_test_completed(user_data: dict) -> bool:
-    """Проверяет, завершен ли тест"""
-    required_fields = ["perception_type", "thinking_level", "behavioral_levels", "dilts_counts", "deep_patterns"]
-    for field in required_fields:
-        if field not in user_data:
-            return False
-    return True
+    """Проверяет, завершен ли тест (более гибкая версия)"""
+    
+    # Вариант 1: Есть profile_data (финальный рассчитанный профиль)
+    if user_data.get("profile_data"):
+        return True
+    
+    # Вариант 2: Есть ai_generated_profile (сгенерированный ИИ)
+    if user_data.get("ai_generated_profile"):
+        return True
+    
+    # Вариант 3: Есть ключевые поля (минимум для ответов на вопросы)
+    # deep_patterns не обязателен - это 5-й этап
+    required_minimal = ["perception_type", "thinking_level", "behavioral_levels"]
+    if all(field in user_data for field in required_minimal):
+        return True
+    
+    # Вариант 4: Старая проверка (для обратной совместимости)
+    required_fields = ["perception_type", "thinking_level", "behavioral_levels", "dilts_counts"]
+    if all(field in user_data for field in required_fields):
+        return True
+    
+    return False
 
 
 def should_be_ironic(text: str) -> bool:
@@ -4482,9 +4498,31 @@ async def handle_question_message(message: Message, state: FSMContext):
     user_id = message.from_user.id
     data = await state.get_data()
     
-    if not is_test_completed(data):
+    # 🔥 ИСПРАВЛЕНО: более тщательная проверка завершенности теста
+    # Проверяем разными способами
+    test_completed = False
+    
+    # Способ 1: через is_test_completed (проверяет наличие всех полей)
+    if is_test_completed(data):
+        test_completed = True
+    
+    # Способ 2: проверяем наличие ai_generated_profile
+    elif data.get("ai_generated_profile"):
+        test_completed = True
+    
+    # Способ 3: проверяем наличие profile_data
+    elif data.get("profile_data"):
+        test_completed = True
+    
+    # Способ 4: проверяем наличие всех ключевых полей по отдельности
+    elif (data.get("perception_type") and 
+          data.get("thinking_level") and 
+          data.get("behavioral_levels")):
+        test_completed = True
+    
+    if not test_completed:
         await message.answer(
-            "Сначала нужно пройти тест. Используйте /start"
+            "❓ Сначала нужно пройти тест. Используйте /start"
         )
         return
     
@@ -4516,7 +4554,7 @@ async def handle_question_message(message: Message, state: FSMContext):
     ])
     
     # Добавляем предложения, если есть
-    if result["suggestions"]:
+    if result.get("suggestions"):
         suggestions_text = "\n\n" + "\n".join(result["suggestions"])
     else:
         suggestions_text = ""
