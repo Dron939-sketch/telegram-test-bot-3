@@ -1,12 +1,13 @@
 """
 Модуль для утренних вдохновляющих сообщений
-Отправляются на следующее утро после теста в 9:00
+Отправляются на следующее утро после теста в 9:00 по местному времени пользователя
 """
 
 import asyncio
 import logging
 from datetime import datetime, timedelta
 from typing import Dict, Optional
+import pytz  # нужно добавить в requirements.txt
 
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, BufferedInputFile
 
@@ -16,7 +17,7 @@ from profiles import VECTORS, LEVEL_PROFILES
 logger = logging.getLogger(__name__)
 
 class MorningMessageManager:
-    """Менеджер утренних сообщений"""
+    """Менеджер утренних сообщений с учетом местного времени"""
     
     def __init__(self):
         self.scheduled_tasks = {}  # {user_id: task}
@@ -35,32 +36,74 @@ class MorningMessageManager:
     async def schedule_morning_message(self, user_id: int, user_name: str, scores: dict, profile_data: dict):
         """
         Планирует отправку утреннего сообщения на следующий день в 9:00
+        по местному времени пользователя
         """
         # Отменяем предыдущую задачу для этого пользователя
         if user_id in self.scheduled_tasks:
             self.scheduled_tasks[user_id].cancel()
         
-        # Рассчитываем время до следующего утра 9:00
-        now = datetime.now()
-        tomorrow_9am = now.replace(hour=9, minute=0, second=0, microsecond=0) + timedelta(days=1)
+        # Получаем часовой пояс пользователя
+        context = self.user_contexts.get(user_id) if self.user_contexts else None
+        timezone = self._get_user_timezone(context)
         
-        # Если сейчас уже после 9:00, то добавляем еще один день
-        if now.hour >= 9:
-            tomorrow_9am = tomorrow_9am + timedelta(days=1)
+        # Рассчитываем время до следующего утра 9:00 по местному времени
+        now_utc = datetime.now(pytz.UTC)
+        now_local = now_utc.astimezone(timezone)
         
-        seconds_until_9am = (tomorrow_9am - now).total_seconds()
+        # Целевое время - завтра в 9:00 по местному времени
+        target_local = now_local.replace(hour=9, minute=0, second=0, microsecond=0) + timedelta(days=1)
         
-        logger.info(f"📅 Запланировано утреннее сообщение для пользователя {user_id} на {tomorrow_9am.strftime('%Y-%m-%d %H:%M')} (через {seconds_until_9am/3600:.1f} часов)")
+        # Если сейчас уже после 9:00, то завтра будет правильно (мы уже добавили день)
+        # Но если сейчас, например, 8:00, то завтра в 9:00 - это через 25 часов, а нам нужно сегодня?
+        # Проверяем, не прошло ли уже 9:00 сегодня
+        if now_local.hour < 9:
+            # Если сейчас до 9:00, то отправляем сегодня в 9:00
+            target_local = now_local.replace(hour=9, minute=0, second=0, microsecond=0)
+        
+        # Конвертируем обратно в UTC для asyncio.sleep
+        target_utc = target_local.astimezone(pytz.UTC)
+        now_utc = datetime.now(pytz.UTC)
+        
+        seconds_until_target = (target_utc - now_utc).total_seconds()
+        
+        # Если время уже прошло (маленький запас на случай погрешности)
+        if seconds_until_target < 60:
+            # Отправляем через 1 минуту (для тестирования)
+            seconds_until_target = 60
+            logger.warning(f"⚠️ Целевое время уже прошло для пользователя {user_id}, отправлю через минуту")
+        
+        logger.info(
+            f"📅 Запланировано утреннее сообщение для пользователя {user_id}\n"
+            f"   Местное время: {now_local.strftime('%Y-%m-%d %H:%M')} ({timezone})\n"
+            f"   Отправка в: {target_local.strftime('%Y-%m-%d %H:%M')}\n"
+            f"   Через: {seconds_until_target/3600:.1f} часов"
+        )
         
         # Создаем задачу
         task = asyncio.create_task(
-            self._send_morning_message(user_id, user_name, scores, profile_data, seconds_until_9am)
+            self._send_morning_message(
+                user_id, user_name, scores, profile_data, 
+                seconds_until_target, timezone
+            )
         )
         
         self.scheduled_tasks[user_id] = task
         return task
     
-    async def _send_morning_message(self, user_id: int, user_name: str, scores: dict, profile_data: dict, delay_seconds: float):
+    def _get_user_timezone(self, context) -> pytz.timezone:
+        """Определяет часовой пояс пользователя"""
+        if context and context.timezone:
+            try:
+                return pytz.timezone(context.timezone)
+            except:
+                pass
+        
+        # По умолчанию Москва
+        return pytz.timezone("Europe/Moscow")
+    
+    async def _send_morning_message(self, user_id: int, user_name: str, scores: dict, 
+                                    profile_data: dict, delay_seconds: float, 
+                                    timezone: pytz.timezone):
         """Отправляет утреннее сообщение после задержки"""
         try:
             await asyncio.sleep(delay_seconds)
@@ -73,12 +116,14 @@ class MorningMessageManager:
             context = self.user_contexts.get(user_id) if self.user_contexts else None
             mode = context.communication_mode if context else "coach"
             
-            # Обновляем погоду
+            # Обновляем погоду (API использует город, время там не важно)
             if context:
                 await context.update_weather()
             
-            # Генерируем текст сообщения
-            text = await self._generate_morning_text(user_id, user_name, scores, profile_data, context)
+            # Генерируем текст сообщения с учетом местного времени
+            text = await self._generate_morning_text(
+                user_id, user_name, scores, profile_data, context, timezone
+            )
             
             # Создаем клавиатуру
             keyboard = InlineKeyboardMarkup(inline_keyboard=[
@@ -106,18 +151,32 @@ class MorningMessageManager:
                     caption="🎙 Доброе утро!"
                 )
             
-            logger.info(f"✅ Утреннее сообщение отправлено пользователю {user_id}")
+            logger.info(f"✅ Утреннее сообщение отправлено пользователю {user_id} в {datetime.now(timezone).strftime('%H:%M')}")
             
         except asyncio.CancelledError:
             logger.info(f"⏰ Утреннее сообщение для пользователя {user_id} отменено")
         except Exception as e:
             logger.error(f"❌ Ошибка при отправке утреннего сообщения пользователю {user_id}: {e}")
     
-    async def _generate_morning_text(self, user_id: int, user_name: str, scores: dict, profile_data: dict, context) -> str:
-        """Генерирует текст утреннего сообщения"""
+    async def _generate_morning_text(self, user_id: int, user_name: str, scores: dict, 
+                                     profile_data: dict, context, timezone: pytz.timezone) -> str:
+        """Генерирует текст утреннего сообщения с учетом местного времени"""
+        
+        # Текущее время по местному времени пользователя
+        now_local = datetime.now(timezone)
+        hour = now_local.hour
+        
+        # Выбираем приветствие в зависимости от времени
+        if 5 <= hour < 12:
+            greeting = "Доброе утро"
+        elif 12 <= hour < 18:
+            greeting = "Добрый день"
+        elif 18 <= hour < 23:
+            greeting = "Добрый вечер"
+        else:
+            greeting = "Доброй ночи"
         
         # Обращение
-        greeting = self._get_morning_greeting()
         address = context.get_address() if context and context.communication_mode == "friend" else ""
         
         if address:
@@ -129,7 +188,7 @@ class MorningMessageManager:
         weather_text = ""
         if context and context.weather_cache:
             weather = context.weather_cache
-            weather_text = self._get_weather_inspiration(weather)
+            weather_text = self._get_weather_inspiration(weather, hour)
         
         # Вдохновение на основе профиля
         inspiration = self._get_profile_inspiration(scores, profile_data)
@@ -153,39 +212,37 @@ class MorningMessageManager:
         
         return text.strip()
     
-    def _get_morning_greeting(self) -> str:
-        """Возвращает утреннее приветствие"""
-        greetings = [
-            "Доброе утро",
-            "С добрым утром",
-            "Утро доброе",
-            "Прекрасного утра",
-            "Солнечного утра"
-        ]
-        import random
-        return random.choice(greetings)
-    
-    def _get_weather_inspiration(self, weather: dict) -> str:
-        """Вдохновение на основе погоды"""
+    def _get_weather_inspiration(self, weather: dict, hour: int) -> str:
+        """Вдохновение на основе погоды и времени суток"""
         temp = weather.get('temp', 0)
         desc = weather.get('description', '')
         icon = weather.get('icon', '☁️')
         
-        if temp < -10:
-            return f"{icon} Морозно, {temp}°C. Отличный день, чтобы завернуться в плед и помечтать о тепле."
-        elif temp < 0:
-            return f"{icon} За окном {desc}, {temp}°C. Холодно, но внутри тебя уже теплеет."
-        elif temp < 10:
-            return f"{icon} Прохладно, {temp}°C. Самое время для чашечки горячего чая и планов."
-        elif temp < 20:
-            return f"{icon} Свежо, {temp}°C. Природа просыпается — как и твои новые возможности."
-        elif temp < 30:
-            return f"{icon} Тепло, {temp}°C. Энергия так и плещет — лови момент!"
+        # Время суток
+        if 5 <= hour < 12:
+            time_word = "утро"
+        elif 12 <= hour < 18:
+            time_word = "день"
+        elif 18 <= hour < 23:
+            time_word = "вечер"
         else:
-            return f"{icon} Жарко, {temp}°C. Даже солнце сегодня хочет тебя вдохновить."
+            time_word = "ночь"
+        
+        if temp < -10:
+            return f"{icon} Морозное {time_word}, {temp}°C. Даже в холод можно найти тепло внутри себя."
+        elif temp < 0:
+            return f"{icon} {desc}, {temp}°C. Холодно, но твоя внутренняя искра уже согревает."
+        elif temp < 10:
+            return f"{icon} Прохладное {time_word}, {temp}°C. Самое время для уютных мыслей и планов."
+        elif temp < 20:
+            return f"{icon} Свежее {time_word}, {temp}°C. Природа просыпается — как и твои новые возможности."
+        elif temp < 30:
+            return f"{icon} Теплое {time_word}, {temp}°C. Энергия так и плещет — лови момент!"
+        else:
+            return f"{icon} Жаркое {time_word}, {temp}°C. Даже солнце сегодня хочет тебя вдохновить."
     
     def _get_profile_inspiration(self, scores: dict, profile_data: dict) -> str:
-        """Вдохновение на основе профиля"""
+        """Вдохновение на основе профиля (без изменений)"""
         if not scores:
             return "Каждый день — это новая страница твоей истории."
         
@@ -240,7 +297,7 @@ class MorningMessageManager:
         return f"{weak_text}\n\n{strong_text}"
     
     def _get_daily_tip(self, scores: dict) -> str:
-        """Совет на день на основе профиля"""
+        """Совет на день на основе профиля (без изменений)"""
         if not scores:
             return "Найди 5 минут для себя и просто подыши."
         
@@ -290,7 +347,7 @@ class MorningMessageManager:
         return tip
 
 
-# Вспомогательная функция (дублируется из models.py для независимости)
+# Вспомогательная функция
 def level(score: float) -> int:
     """Дробный балл 1..4 → целый уровень 1..6"""
     if score <= 1.49:
