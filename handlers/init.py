@@ -10,3 +10,5 @@ from .profile import *
 from .routes import *
 from .help import *
 from .admin import *
+from .context import *
+from .stages import *
