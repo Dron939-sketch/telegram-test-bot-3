@@ -42,7 +42,7 @@ def level(score: float) -> int:
 
 
 # ============================================
-# КЛАСС UserContext (ОБНОВЛЁННЫЙ)
+# КЛАСС UserContext (ИСПРАВЛЕННЫЙ)
 # ============================================
 
 class UserContext:
@@ -134,26 +134,26 @@ class UserContext:
         return ""
     
     async def ask_for_context(self) -> Tuple[Optional[str], Optional[InlineKeyboardMarkup]]:
-        """Возвращает первый вопрос для сбора контекста"""
+        """Возвращает первый вопрос для сбора контекста (ОБЯЗАТЕЛЬНЫЙ, БЕЗ ПРОПУСКА)"""
         if not self.city:
             self.awaiting_context = "city"
-            return "🌆 В каком городе вы находитесь? (Это нужно для погоды)", InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="⏭ Пропустить", callback_data="skip_context")]
-            ])
+            # ❌ УБРАНА КНОПКА ПРОПУСКА
+            return self.bold("🌆 В каком городе вы находитесь? (Это нужно для погоды)"), None
         
         if not self.gender:
             self.awaiting_context = "gender"
-            return "👤 Укажите ваш пол", InlineKeyboardMarkup(inline_keyboard=[
+            # 👇 ТОЛЬКО КНОПКИ ВЫБОРА ПОЛА, ПРОПУСКА НЕТ
+            keyboard = InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="👨 Мужской", callback_data="set_gender_male")],
-                [InlineKeyboardButton(text="👩 Женский", callback_data="set_gender_female")],
-                [InlineKeyboardButton(text="⏭ Пропустить", callback_data="skip_context")]
+                [InlineKeyboardButton(text="👩 Женский", callback_data="set_gender_female")]
+                # ❌ КНОПКА ПРОПУСКА УДАЛЕНА
             ])
+            return self.bold("👤 Укажите ваш пол:"), keyboard
         
         if not self.age:
             self.awaiting_context = "age"
-            return "📅 Сколько вам лет?", InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="⏭ Пропустить", callback_data="skip_context")]
-            ])
+            # ❌ УБРАНА КНОПКА ПРОПУСКА
+            return self.bold("📅 Сколько вам лет? (напишите число)"), None
         
         self.awaiting_context = None
         return None, None
@@ -187,12 +187,16 @@ class UserContext:
                 
         elif field == "age":
             try:
-                self.age = int(text.strip())
-                self.awaiting_context = None
-                question, keyboard = await self.ask_for_context()
-                return True, question, keyboard
+                age = int(text.strip())
+                if 1 <= age <= 120:
+                    self.age = age
+                    self.awaiting_context = None
+                    question, keyboard = await self.ask_for_context()
+                    return True, question, keyboard
+                else:
+                    return False, self.bold("❌ Возраст должен быть от 1 до 120 лет.\n\n📅 Сколько вам лет? (напишите число)"), None
             except ValueError:
-                return False, "Пожалуйста, введите число", None
+                return False, self.bold("❌ Пожалуйста, введите число.\n\n📅 Сколько вам лет? (напишите число)"), None
         
         return False, None, None
     
