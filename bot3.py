@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 ВИРТУАЛЬНЫЙ ПСИХОЛОГ - МАТРИЦА ПОВЕДЕНИЙ 4×6
-ВЕРСИЯ 9.0: ПОЛНАЯ ИНТЕГРАЦИЯ С ДИНАМИЧЕСКОЙ ГЕНЕРАЦИЕЙ ПРОФИЛЯ И НАВИГАЦИЕЙ
+ВЕРСИЯ 9.1: ИСПРАВЛЕННАЯ (контекст, форматирование, мысли психолога)
 """
 
 import os
@@ -120,6 +120,7 @@ def escape_markdown(text: str) -> str:
     if not text:
         return text
     
+    # Список опасных символов в Markdown
     dangerous_chars = ['_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!']
     
     result = []
@@ -130,16 +131,19 @@ def escape_markdown(text: str) -> str:
     while i < len(text):
         char = text[i]
         
+        # Проверяем на двойные звездочки (жирный текст)
         if char == '*' and i + 1 < len(text) and text[i + 1] == '*':
             result.append('**')
             in_bold = not in_bold
             i += 2
             continue
+        # Проверяем на подчеркивание (курсив)
         elif char == '_':
             result.append('_')
             in_italic = not in_italic
             i += 1
             continue
+        # Экранируем опасные символы вне форматирования
         elif char in dangerous_chars and not in_bold and not in_italic:
             result.append('\\' + char)
         else:
@@ -155,13 +159,36 @@ def clean_markdown(text: str) -> str:
     if not text:
         return text
     
-    text = re.sub(r'\*\*(.*?)\*\*', r'\1', text)
-    text = re.sub(r'__(.*?)__', r'\1', text)
-    text = re.sub(r'\*(.*?)\*', r'\1', text)
-    text = re.sub(r'_(.*?)_', r'\1', text)
-    text = re.sub(r'`(.*?)`', r'\1', text)
-    text = re.sub(r'\[(.*?)\]\(.*?\)', r'\1', text)
-    text = re.sub(r'!\[(.*?)\]\(.*?\)', r'\1', text)
+    # Удаляем Markdown-форматирование
+    text = re.sub(r'\*\*(.*?)\*\*', r'\1', text)  # жирный
+    text = re.sub(r'__(.*?)__', r'\1', text)      # жирный через __
+    text = re.sub(r'\*(.*?)\*', r'\1', text)      # курсив
+    text = re.sub(r'_(.*?)_', r'\1', text)        # курсив через _
+    text = re.sub(r'`(.*?)`', r'\1', text)        # код
+    text = re.sub(r'\[(.*?)\]\(.*?\)', r'\1', text)  # ссылки
+    text = re.sub(r'!\[(.*?)\]\(.*?\)', r'\1', text) # картинки
+    text = re.sub(r'#{1,6}\s+', '', text)          # заголовки
+    text = re.sub(r'^\s*[-*+]\s+', '', text, flags=re.MULTILINE)  # списки
+    text = re.sub(r'^\s*\d+\.\s+', '', text, flags=re.MULTILINE)  # нумерованные списки
+    
+    return text
+
+
+def format_text_safe(text: str, parse_mode: str = 'HTML') -> str:
+    """Безопасно форматирует текст для отправки"""
+    if parse_mode == 'HTML':
+        # Экранируем HTML-символы
+        text = text.replace('&', '&amp;')
+        text = text.replace('<', '&lt;')
+        text = text.replace('>', '&gt;')
+        # Добавляем базовое HTML-форматирование
+        text = re.sub(r'\*\*(.*?)\*\*', r'<b>\1</b>', text)
+        text = re.sub(r'__(.*?)__', r'<b>\1</b>', text)
+        text = re.sub(r'\*(.*?)\*', r'<i>\1</i>', text)
+        text = re.sub(r'_(.*?)_', r'<i>\1</i>', text)
+        text = re.sub(r'`(.*?)`', r'<code>\1</code>', text)
+    elif parse_mode == 'Markdown':
+        text = escape_markdown(text)
     
     return text
 
@@ -371,6 +398,35 @@ def check_consistency(scores_list: list) -> bool:
     return std_dev <= 1.3
 
 
+def safe_get_profile_info(vector: str, level_num: int, key: str, default: str = "Информация уточняется") -> str:
+    """Безопасно получает информацию из профиля"""
+    try:
+        profile = LEVEL_PROFILES.get(vector, {}).get(level_num, {})
+        if isinstance(profile, dict):
+            # Пробуем разные возможные ключи
+            if key == 'quote':
+                return profile.get('quote') or profile.get('description') or profile.get('block1') or default
+            elif key == 'pain_origin':
+                return profile.get('pain_origin') or profile.get('origin') or profile.get('block2') or default
+            elif key == 'pain_costs':
+                costs = profile.get('pain_costs') or profile.get('costs') or []
+                if costs:
+                    return costs
+                return ["Энергией", "Временем", "Возможностями"]
+        else:
+            # Если профиль - строка, используем её как quote
+            if key == 'quote':
+                return str(profile)
+            elif key == 'pain_origin':
+                return "Из вашего опыта"
+            elif key == 'pain_costs':
+                return ["Энергией", "Временем", "Возможностями"]
+    except Exception as e:
+        logger.error(f"Ошибка при получении информации из профиля: {e}")
+    
+    return default
+
+
 # ============================================
 # ФУНКЦИИ ДЛЯ ПРОСТОГО ОПИСАНИЯ ПРОФИЛЯ
 # ============================================
@@ -475,23 +531,29 @@ def get_human_readable_profile(scores: dict, model=None, perception_type="не �
     lines = []
     
     if scores:
+        # Находим вектор с минимальным значением (самая проблемная зона)
         min_vector = min(scores.items(), key=lambda x: level(x[1]))
         vector, score = min_vector
         lvl = level(score)
-        profile = LEVEL_PROFILES.get(vector, {}).get(lvl, {})
+        
+        # Безопасно получаем информацию из профиля
+        quote = safe_get_profile_info(vector, lvl, 'quote', 'Пока не определено')
+        pain_origin = safe_get_profile_info(vector, lvl, 'pain_origin', 'Из вашего опыта')
+        costs = safe_get_profile_info(vector, lvl, 'pain_costs', ["Энергией", "Временем", "Возможностями"])
     else:
         vector = "СБ"
-        profile = {}
+        quote = "Пока не определено"
+        pain_origin = "Из вашего опыта"
+        costs = ["Энергией", "Временем", "Возможностями"]
     
-    lines.append("🧠 *ВАШ ПСИХОЛОГИЧЕСКИЙ ПОРТРЕТ*\n")
-    lines.append(f"🔍 *Тип восприятия:* {perception_type}\n")
-    lines.append(f"🧠 *Уровень мышления:* {thinking_level}/9\n")
-    lines.append(f"🎯 *Главный тормоз*")
-    lines.append(f"{profile.get('quote', 'Пока не определено')}\n")
-    lines.append(f"📜 *Откуда это взялось*")
-    lines.append(f"{profile.get('pain_origin', 'Из вашего опыта')}\n")
-    lines.append(f"💸 *Чем вы платите*")
-    costs = profile.get('pain_costs', ['Энергией', 'Временем', 'Возможностями'])
+    lines.append("<b>🧠 ВАШ ПСИХОЛОГИЧЕСКИЙ ПОРТРЕТ</b>\n")
+    lines.append(f"<b>🔍 Тип восприятия:</b> {perception_type}\n")
+    lines.append(f"<b>🧠 Уровень мышления:</b> {thinking_level}/9\n")
+    lines.append("<b>🎯 Главный тормоз</b>")
+    lines.append(f"{quote}\n")
+    lines.append("<b>📜 Откуда это взялось</b>")
+    lines.append(f"{pain_origin}\n")
+    lines.append("<b>💸 Чем вы платите</b>")
     for cost in costs[:3]:
         lines.append(f"• {cost}")
     lines.append("")
@@ -499,17 +561,17 @@ def get_human_readable_profile(scores: dict, model=None, perception_type="не �
     if model and hasattr(model, 'key_confinement') and model.key_confinement:
         elem = model.key_confinement.get('element')
         if elem and hasattr(elem, 'description'):
-            lines.append(f"⛓ *Что держит систему*")
+            lines.append("<b>⛓ Что держит систему</b>")
             lines.append(f"{elem.description[:100]}\n")
     
     if model and hasattr(model, 'loops') and model.loops:
         strongest = max(model.loops, key=lambda x: x.get('strength', 0))
-        lines.append(f"🔄 *Главная ловушка*")
+        lines.append("<b>🔄 Главная ловушка</b>")
         lines.append(f"{strongest.get('description', 'Не определено')}")
         lines.append(f"Сила: {strongest.get('strength', 0):.1%}\n")
     
     dilts_desc = DILTS_LEVELS.get(dominant_dilts, "⚡ Поведение")
-    lines.append(f"🎯 *Ваша точка роста:* {dilts_desc}")
+    lines.append(f"<b>🎯 Ваша точка роста:</b> {dilts_desc}")
     
     return "\n".join(lines)
 
@@ -557,16 +619,16 @@ async def cmd_start(message: Message, state: FSMContext):
         profile_code = data.get("profile_data", {}).get('display_name', 'SA-5_INT')
         
         text = f"""
-🧠 <b>ФРЕДИ: ВИРТУАЛЬНЫЙ ПСИХОЛОГ</b>
+<b>🧠 ФРЕДИ: ВИРТУАЛЬНЫЙ ПСИХОЛОГ</b>
 
 👋 <b>О, {user_name}, я вас помню!</b>
 (У меня, в отличие от людей, с памятью всё отлично — спасибо базе данных)
 
-📊 <b>ВАШ ПРОФИЛЬ:</b> <code>{profile_code}</code>
+<b>📊 ВАШ ПРОФИЛЬ:</b> <code>{profile_code}</code>
 (Лежит у меня в архивах, пылится...)
 
 ━━━━━━━━━━━━━━━━━━━━
-❓ <b>ЧТО ДЕЛАЕМ?</b>
+<b>❓ ЧТО ДЕЛАЕМ?</b>
 
 Вы можете:
 🔄 <b>Пройти тест заново</b> — вдруг вы изменились?
@@ -584,8 +646,8 @@ async def cmd_start(message: Message, state: FSMContext):
         await message.answer(text, reply_markup=keyboard, parse_mode='HTML')
         return
     
-    # Экран для новых пользователей
-    if not context.city or not context.gender or not context.age:
+    # ИСПРАВЛЕНО: проверяем, заполнен ли контекст
+    if not (context.city and context.gender and context.age):
         welcome_text = (
             f"<b>{user_name}, привет!</b> Ну, здравствуйте, дорогой человек! 👋\n\n"
             f"<b>🧠 Я — Фреди, виртуальный психолог.</b>\n"
@@ -618,12 +680,16 @@ async def cmd_start(message: Message, state: FSMContext):
         ])
         
         await message.answer(welcome_text, reply_markup=keyboard, parse_mode='HTML')
+        return
+    
+    # Если контекст уже заполнен, показываем меню
+    await show_main_menu(message, context)
 
 
 async def show_why_details(callback: CallbackQuery, state: FSMContext):
     """Показывает детальную информацию о боте"""
     
-    text = """🎭 Ну, вопрос хороший. Давайте по существу.
+    text = """<b>🎭 Ну, вопрос хороший. Давайте по существу.</b>
 
 Видите ли, дорогой человек, я — экспериментальная модель.
 Андрей Мейстер однажды подумал: "А что, если я создам свою цифровую копию?
@@ -631,7 +697,7 @@ async def show_why_details(callback: CallbackQuery, state: FSMContext):
 
 Так я и появился. 🧠
 
-🧐 Что я умею (помимо того, что шучу как он и временами бешу):
+<b>🧐 Что я умею (помимо того, что шучу как он и временами бешу):</b>
 
 • Вижу паттерны там, где вы видите просто день сурка
 • Нахожу систему в ваших "случайных" решениях
@@ -639,7 +705,7 @@ async def show_why_details(callback: CallbackQuery, state: FSMContext):
 • И да — я реально беспристрастен. У меня нет плохого настроения,
   я не обижаюсь и не осуждаю. (Ну, почти. Иногда хочется, но алгоритмы не позволяют)
 
-🎯 Конкретно по тесту:
+<b>🎯 Конкретно по тесту:</b>
 
 1️⃣ <b>Восприятие</b> — поймём, какую линзу вы носите
 2️⃣ <b>Мышление</b> — узнаем, как вы пережёвываете реальность
@@ -652,7 +718,7 @@ async def show_why_details(callback: CallbackQuery, state: FSMContext):
 🔮 И да, я реально могу быть полезен.
    Просто доверьтесь цифровому психопа... психологу! 😉
 
-👌 Погнали?"""
+<b>👌 Погнали?</b>"""
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="👌 Погнали!", callback_data="start_context")],
@@ -683,14 +749,14 @@ async def show_destinations(callback: CallbackQuery, state: FSMContext):
     recommended = destination_manager.recommend_by_profile(profile_code, mode)
     
     text = f"""
-{mode_config['emoji']} *РЕЖИМ {mode_config['name']} АКТИВИРОВАН*
+{mode_config['emoji']} <b>РЕЖИМ {mode_config['name']} АКТИВИРОВАН</b>
 
-🎯 *ВЫБЕРИТЕ ТОЧКУ НАЗНАЧЕНИЯ*
+<b>🎯 ВЫБЕРИТЕ ТОЧКУ НАЗНАЧЕНИЯ</b>
 
 Я вижу, что в вашем профиле сейчас наиболее актуально:
 
 ━━━━━━━━━━━━━━━━━━━━
-👇 *Куда двинемся?*
+👇 <b>Куда двинемся?</b>
 """
     
     # Строим клавиатуру с категориями
@@ -728,7 +794,7 @@ async def show_destinations(callback: CallbackQuery, state: FSMContext):
     await callback.message.edit_text(
         text, 
         reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard),
-        parse_mode='Markdown'
+        parse_mode='HTML'
     )
     await state.set_state(TestStates.destination_selection)
 
@@ -770,12 +836,12 @@ async def show_destination_route(callback: CallbackQuery, state: FSMContext):
     )
     
     await callback.message.edit_text(
-        "🧠 *Строю оптимальный маршрут...*\n\n"
+        "<b>🧠 Строю оптимальный маршрут...</b>\n\n"
         "Это займёт несколько секунд.",
-        parse_mode='Markdown'
+        parse_mode='HTML'
     )
     
-    # Генерируем маршрут через ИИ (функция в services.py)
+    # Генерируем маршрут через ИИ
     from services import generate_route_ai
     route = await generate_route_ai(user_id, state_data, dest_info)
     
@@ -795,16 +861,16 @@ async def show_route_step(callback: CallbackQuery, state: FSMContext, step: int,
     mode_config = COMMUNICATION_MODES.get(mode, COMMUNICATION_MODES["coach"])
     
     text = f"""
-{mode_config['emoji']} *МАРШРУТ К ЦЕЛИ*
+{mode_config['emoji']} <b>МАРШРУТ К ЦЕЛИ</b>
 
-🎯 *Точка назначения:* {destination['name']}
-⏱ *Ориентировочное время:* {destination['time']}
+<b>🎯 Точка назначения:</b> {destination['name']}
+<b>⏱ Ориентировочное время:</b> {destination['time']}
 
 ━━━━━━━━━━━━━━━━━━━━
 {route.get('full_text', 'Маршрут строится...')}
 
 ━━━━━━━━━━━━━━━━━━━━
-👇 *Отмечайте выполнение, когда готовы*
+👇 <b>Отмечайте выполнение, когда готовы</b>
 """
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
@@ -813,7 +879,7 @@ async def show_route_step(callback: CallbackQuery, state: FSMContext, step: int,
         [InlineKeyboardButton(text="◀️ К ЦЕЛЯМ", callback_data="show_destinations")]
     ])
     
-    await callback.message.edit_text(text, reply_markup=keyboard, parse_mode='Markdown')
+    await callback.message.edit_text(text, reply_markup=keyboard, parse_mode='HTML')
     await state.set_state(TestStates.route_active)
     
     await reminder_manager.schedule_motivation_sequence(callback.from_user.id, destination)
@@ -838,8 +904,8 @@ async def route_step_done(callback: CallbackQuery, state: FSMContext):
         await show_route_complete(callback, state)
     else:
         await callback.message.edit_text(
-            f"✅ *Этап {step} выполнен!*\n\nПереходим к этапу {next_step}...",
-            parse_mode='Markdown'
+            f"<b>✅ Этап {step} выполнен!</b>\n\nПереходим к этапу {next_step}...",
+            parse_mode='HTML'
         )
         await asyncio.sleep(1)
         
@@ -854,12 +920,12 @@ async def show_route_complete(callback: CallbackQuery, state: FSMContext):
     destination = data.get("current_destination", {})
     
     text = f"""
-🎉 *МАРШРУТ ЗАВЕРШЕН!*
+<b>🎉 МАРШРУТ ЗАВЕРШЕН!</b>
 
-Поздравляю! Вы достигли цели: *{destination['name']}*
+Поздравляю! Вы достигли цели: <b>{destination['name']}</b>
 
 ━━━━━━━━━━━━━━━━━━━━
-💪 *ГОРДИТЕСЬ СОБОЙ*
+<b>💪 ГОРДИТЕСЬ СОБОЙ</b>
 
 Хотите выбрать новую цель или закрепить результат?
 """
@@ -870,7 +936,7 @@ async def show_route_complete(callback: CallbackQuery, state: FSMContext):
         [InlineKeyboardButton(text="❓ ЗАДАТЬ ВОПРОС", callback_data="smart_questions")]
     ])
     
-    await callback.message.edit_text(text, reply_markup=keyboard, parse_mode='Markdown')
+    await callback.message.edit_text(text, reply_markup=keyboard, parse_mode='HTML')
     await state.update_data(route_step=None, current_destination=None)
     
     reminder_manager.cancel_user_reminders(callback.from_user.id)
@@ -883,29 +949,29 @@ async def show_fallback_route(callback: CallbackQuery, state: FSMContext, destin
     mode_config = COMMUNICATION_MODES.get(mode, COMMUNICATION_MODES["coach"])
     
     text = f"""
-{mode_config['emoji']} *МАРШРУТ К ЦЕЛИ*
+{mode_config['emoji']} <b>МАРШРУТ К ЦЕЛИ</b>
 
-🎯 *Точка назначения:* {destination['name']}
-⏱ *Ориентировочное время:* {destination['time']}
+<b>🎯 Точка назначения:</b> {destination['name']}
+<b>⏱ Ориентировочное время:</b> {destination['time']}
 
 ━━━━━━━━━━━━━━━━━━━━
-📍 *ЭТАП 1: ДИАГНОСТИКА*
+📍 <b>ЭТАП 1: ДИАГНОСТИКА</b>
    • Что делаем: анализируем текущую ситуацию
    • Домашнее задание: записываем всё, что связано с целью
    • Критерий: есть список наблюдений
 
-📍 *ЭТАП 2: ПЛАНИРОВАНИЕ*
+📍 <b>ЭТАП 2: ПЛАНИРОВАНИЕ</b>
    • Что делаем: составляем пошаговый план
    • Домашнее задание: разбиваем цель на микро-шаги
    • Критерий: есть конкретный план
 
-📍 *ЭТАП 3: ДЕЙСТВИЕ*
+📍 <b>ЭТАП 3: ДЕЙСТВИЕ</b>
    • Что делаем: начинаем с первого микро-шага
    • Домашнее задание: каждый день делать хотя бы одно действие
    • Критерий: первый шаг сделан
 
 ━━━━━━━━━━━━━━━━━━━━
-👇 *Начинаем?*
+👇 <b>Начинаем?</b>
 """
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
@@ -913,7 +979,7 @@ async def show_fallback_route(callback: CallbackQuery, state: FSMContext, destin
         [InlineKeyboardButton(text="◀️ К ЦЕЛЯМ", callback_data="show_destinations")]
     ])
     
-    await callback.message.edit_text(text, reply_markup=keyboard, parse_mode='Markdown')
+    await callback.message.edit_text(text, reply_markup=keyboard, parse_mode='HTML')
     await state.set_state(TestStates.route_active)
 
 
@@ -931,15 +997,17 @@ async def show_final_profile(callback: CallbackQuery, state: FSMContext):
         await show_ai_generated_profile(callback, state, data["ai_generated_profile"])
         return
     
-    await callback.message.edit_text(
-        "🧠 *Анализирую данные...*\n\n"
+    status_msg = await callback.message.answer(
+        "<b>🧠 Анализирую данные...</b>\n\n"
         "Собираю воедино результаты 5 этапов тестирования.\n"
         "Это займёт около 20-30 секунд.\n\n"
-        "_Формирую ваш точный психологический портрет..._",
-        parse_mode='Markdown'
+        "<i>Формирую ваш точный психологический портрет...</i>",
+        parse_mode='HTML'
     )
     
     ai_profile = await generate_ai_profile(user_id, data)
+    
+    await status_msg.delete()
     
     if ai_profile:
         await state.update_data(ai_generated_profile=ai_profile)
@@ -951,15 +1019,16 @@ async def show_final_profile(callback: CallbackQuery, state: FSMContext):
 async def show_ai_generated_profile(callback: CallbackQuery, state: FSMContext, ai_profile: str):
     """Показывает профиль, сгенерированный ИИ"""
     
+    # Очищаем от Markdown и форматируем для HTML
     clean_text = clean_markdown(ai_profile)
     
     text = f"""
-🧠 *ВАШ ПСИХОЛОГИЧЕСКИЙ ПОРТРЕТ*
+<b>🧠 ВАШ ПСИХОЛОГИЧЕСКИЙ ПОРТРЕТ</b>
 
 {clean_text}
 
 ━━━━━━━━━━━━━━━━━━━━
-👇 *Что дальше?*
+👇 <b>Что дальше?</b>
 """
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
@@ -968,15 +1037,7 @@ async def show_ai_generated_profile(callback: CallbackQuery, state: FSMContext, 
         [InlineKeyboardButton(text="⚙️ ВЫБРАТЬ РЕЖИМ", callback_data="show_mode_selection")]
     ])
     
-    try:
-        await callback.message.edit_text(text, reply_markup=keyboard, parse_mode='Markdown')
-    except TelegramBadRequest as e:
-        if "can't parse entities" in str(e).lower():
-            text_plain = re.sub(r'[*_`]', '', text)
-            await callback.message.edit_text(text_plain, reply_markup=keyboard)
-        else:
-            raise
-    
+    await callback.message.edit_text(text, reply_markup=keyboard, parse_mode='HTML')
     await state.set_state(TestStates.profile_generated)
 
 
@@ -1001,7 +1062,7 @@ async def show_old_final_profile(callback: CallbackQuery, state: FSMContext):
         dominant_dilts=dominant_dilts
     )
     
-    text = f"{profile_text}\n\n━━━━━━━━━━━━━━━━━━━━\n👇 *Что дальше?*"
+    text = f"{profile_text}\n\n━━━━━━━━━━━━━━━━━━━━\n👇 <b>Что дальше?</b>"
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="🧠 МЫСЛИ ПСИХОЛОГА", callback_data="psychologist_thought")],
@@ -1009,7 +1070,7 @@ async def show_old_final_profile(callback: CallbackQuery, state: FSMContext):
         [InlineKeyboardButton(text="⚙️ ВЫБРАТЬ РЕЖИМ", callback_data="show_mode_selection")]
     ])
     
-    await callback.message.edit_text(text, reply_markup=keyboard, parse_mode='Markdown')
+    await callback.message.edit_text(text, reply_markup=keyboard, parse_mode='HTML')
     await state.set_state(TestStates.profile_generated)
 
 
@@ -1024,14 +1085,14 @@ async def show_stage_1_intro(callback: CallbackQuery, state: FSMContext):
     await state.set_state(TestStates.stage_1)
     
     intro_text = (
-        f"🧠 *ЭТАП 1: КОНФИГУРАЦИЯ ВОСПРИЯТИЯ*\n\n"
+        f"<b>🧠 ЭТАП 1: КОНФИГУРАЦИЯ ВОСПРИЯТИЯ</b>\n\n"
         f"Восприятие — это линза, через которую вы смотрите на мир.\n\n"
         f"Она сформирована культурой, нормами, ценностями и опытом, который вас строил. Это определило, что вы замечаете автоматически, а что остаётся за кадром.\n\n"
-        f"🔍 *Что мы исследуем:*\n"
+        f"<b>🔍 Что мы исследуем:</b>\n"
         f"• Куда направлено ваше внимание — вовне или внутрь\n"
         f"• Какая тревога доминирует — страх отвержения или страх потери контроля\n\n"
-        f"📊 *Вопросов:* 8\n"
-        f"⏱ *Время:* ~3 минуты\n\n"
+        f"<b>📊 Вопросов:</b> 8\n"
+        f"<b>⏱ Время:</b> ~3 минуты\n\n"
         f"<i>Отвечайте честно — это поможет мне лучше понять вас.</i>"
     )
     
@@ -1039,7 +1100,7 @@ async def show_stage_1_intro(callback: CallbackQuery, state: FSMContext):
         [InlineKeyboardButton(text="▶️ Начать исследование", callback_data="start_stage_1")]
     ])
     
-    await callback.message.edit_text(intro_text, reply_markup=keyboard, parse_mode='Markdown')
+    await callback.message.edit_text(intro_text, reply_markup=keyboard, parse_mode='HTML')
 
 
 async def start_stage_1(callback: CallbackQuery, state: FSMContext):
@@ -1072,7 +1133,7 @@ async def ask_stage_1_question(callback: CallbackQuery, state: FSMContext):
     progress = calculate_progress(current + 1, total)
     
     question_text = (
-        f"🧠 *ЭТАП 1: КОНФИГУРАЦИЯ ВОСПРИЯТИЯ*\n\n"
+        f"<b>🧠 ЭТАП 1: КОНФИГУРАЦИЯ ВОСПРИЯТИЯ</b>\n\n"
         f"<b>{question['text']}</b>\n\n"
         f"{progress}"
     )
@@ -1168,11 +1229,14 @@ async def finish_stage_1(callback: CallbackQuery, state: FSMContext):
     
     result_text = STAGE_1_FEEDBACK.get(perception_type, STAGE_1_FEEDBACK["СОЦИАЛЬНО-ОРИЕНТИРОВАННЫЙ"])
     
+    # Очищаем от Markdown и форматируем для HTML
+    result_text = clean_markdown(result_text)
+    
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="▶️ Перейти к этапу 2", callback_data="show_stage_2_intro")]
     ])
     
-    await callback.message.edit_text(result_text.strip(), reply_markup=keyboard, parse_mode='Markdown')
+    await callback.message.edit_text(result_text, reply_markup=keyboard, parse_mode='HTML')
     await state.set_state(TestStates.stage_2)
 
 
@@ -1189,13 +1253,13 @@ async def show_stage_2_intro(callback: CallbackQuery, state: FSMContext):
     total_questions = get_stage2_total(perception_type)
     
     intro_text = (
-        f"🧠 *ЭТАП 2: КОНФИГУРАЦИЯ МЫШЛЕНИЯ*\n\n"
+        f"<b>🧠 ЭТАП 2: КОНФИГУРАЦИЯ МЫШЛЕНИЯ</b>\n\n"
         f"Восприятие определяет, что вы видите. Мышление — как вы это понимаете.\n\n"
         f"Конфигурация мышления определяется задачами: как вы обрабатываете информацию, какие связи видите, какой объём можете удержать.\n\n"
-        f"🎯 *Самое важное:*\n"
+        f"<b>🎯 Самое важное:</b>\n"
         f"Конфигурация мышления — это траектория с чётким пунктом назначения: результат, к которому вы придёте. Если ничего не менять — вы попадёте именно туда.\n\n"
-        f"📊 *Вопросов:* {total_questions}\n"
-        f"⏱ *Время:* ~3-4 минуты\n\n"
+        f"<b>📊 Вопросов:</b> {total_questions}\n"
+        f"<b>⏱ Время:</b> ~3-4 минуты\n\n"
         f"<i>Продолжим исследование?</i>"
     )
     
@@ -1203,7 +1267,7 @@ async def show_stage_2_intro(callback: CallbackQuery, state: FSMContext):
         [InlineKeyboardButton(text="▶️ Начать исследование", callback_data="start_stage_2")]
     ])
     
-    await callback.message.edit_text(intro_text, reply_markup=keyboard, parse_mode='Markdown')
+    await callback.message.edit_text(intro_text, reply_markup=keyboard, parse_mode='HTML')
 
 
 async def start_stage_2(callback: CallbackQuery, state: FSMContext):
@@ -1243,7 +1307,7 @@ async def ask_stage_2_question(callback: CallbackQuery, state: FSMContext):
     progress = calculate_progress(current + 1, total_questions)
     
     question_text = (
-        f"🧠 *ЭТАП 2: КОНФИГУРАЦИЯ МЫШЛЕНИЯ*\n\n"
+        f"<b>🧠 ЭТАП 2: КОНФИГУРАЦИЯ МЫШЛЕНИЯ</b>\n\n"
         f"<b>{question['text']}</b>\n\n"
         f"{progress}"
     )
@@ -1357,11 +1421,14 @@ async def finish_stage_2(callback: CallbackQuery, state: FSMContext):
     if not result_text:
         result_text = STAGE_2_FEEDBACK[("СОЦИАЛЬНО-ОРИЕНТИРОВАННЫЙ", "1-3")]
     
+    # Очищаем от Markdown
+    result_text = clean_markdown(result_text)
+    
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="▶️ Перейти к этапу 3", callback_data="show_stage_3_intro")]
     ])
     
-    await callback.message.edit_text(result_text.strip(), reply_markup=keyboard, parse_mode='Markdown')
+    await callback.message.edit_text(result_text, reply_markup=keyboard, parse_mode='HTML')
     await state.set_state(TestStates.stage_3)
 
 
@@ -1374,17 +1441,17 @@ async def show_stage_3_intro(callback: CallbackQuery, state: FSMContext):
     user_id = callback.from_user.id
     
     intro_text = (
-        f"🧠 *ЭТАП 3: КОНФИГУРАЦИЯ ПОВЕДЕНИЯ*\n\n"
+        f"<b>🧠 ЭТАП 3: КОНФИГУРАЦИЯ ПОВЕДЕНИЯ</b>\n\n"
         f"Восприятие определяет, что вы видите.\n"
         f"Мышление — как вы это понимаете.\n\n"
         f"Конфигурация поведения — это то, как вы на это реагируете.\n\n"
         f"В ней уже встроены стереотипы, роли и паттерны, которые вы когда-то переняли у других.\n\n"
-        f"🔍 *Здесь мы исследуем:*\n"
+        f"<b>🔍 Здесь мы исследуем:</b>\n"
         f"• Ваши автоматические реакции\n"
         f"• Как вы действуете в разных ситуациях\n"
         f"• Какие стратегии поведения закреплены\n\n"
-        f"📊 *Вопросов:* 8\n"
-        f"⏱ *Время:* ~3 минуты\n\n"
+        f"<b>📊 Вопросов:</b> 8\n"
+        f"<b>⏱ Время:</b> ~3 минуты\n\n"
         f"<i>Продолжим?</i>"
     )
     
@@ -1392,7 +1459,7 @@ async def show_stage_3_intro(callback: CallbackQuery, state: FSMContext):
         [InlineKeyboardButton(text="▶️ Начать исследование", callback_data="start_stage_3")]
     ])
     
-    await callback.message.edit_text(intro_text, reply_markup=keyboard, parse_mode='Markdown')
+    await callback.message.edit_text(intro_text, reply_markup=keyboard, parse_mode='HTML')
 
 
 async def start_stage_3(callback: CallbackQuery, state: FSMContext):
@@ -1427,7 +1494,7 @@ async def ask_stage_3_question(callback: CallbackQuery, state: FSMContext):
     progress = calculate_progress(current + 1, total)
     
     question_text = (
-        f"🧠 *ЭТАП 3: КОНФИГУРАЦИЯ ПОВЕДЕНИЯ*\n\n"
+        f"<b>🧠 ЭТАП 3: КОНФИГУРАЦИЯ ПОВЕДЕНИЯ</b>\n\n"
         f"<b>{question['text']}</b>\n\n"
         f"{progress}"
     )
@@ -1537,11 +1604,14 @@ async def finish_stage_3(callback: CallbackQuery, state: FSMContext):
     
     result_text = STAGE_3_FEEDBACK.get(behavior_level, STAGE_3_FEEDBACK[1])
     
+    # Очищаем от Markdown
+    result_text = clean_markdown(result_text)
+    
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="▶️ Перейти к этапу 4", callback_data="show_stage_4_intro")]
     ])
     
-    await callback.message.edit_text(result_text.strip(), reply_markup=keyboard, parse_mode='Markdown')
+    await callback.message.edit_text(result_text, reply_markup=keyboard, parse_mode='HTML')
     await state.set_state(TestStates.stage_4)
 
 
@@ -1554,16 +1624,16 @@ async def show_stage_4_intro(callback: CallbackQuery, state: FSMContext):
     user_id = callback.from_user.id
     
     intro_text = (
-        f"🧠 *ЭТАП 4: ТОЧКА РОСТА*\n\n"
+        f"<b>🧠 ЭТАП 4: ТОЧКА РОСТА</b>\n\n"
         f"Восприятие — что вы видите.\n"
         f"Мышление — как понимаете.\n"
         f"Поведение — как реагируете.\n"
         f"Всё это — ваша внутренняя система.\n\n"
         f"🌍 Но она живёт внутри внешней системы — общества, которое постоянно меняется.\n\n"
         f"⚡ Когда одна система меняется, а другая — нет, возникает напряжение.\n\n"
-        f"🔍 Здесь мы найдём, где именно находится рычаг — место, где минимальное усилие даёт максимальные изменения.\n\n"
-        f"📊 *Вопросов:* 8\n"
-        f"⏱ *Время:* ~3 минуты\n\n"
+        f"<b>🔍 Здесь мы найдём, где именно находится рычаг — место, где минимальное усилие даёт максимальные изменения.</b>\n\n"
+        f"<b>📊 Вопросов:</b> 8\n"
+        f"<b>⏱ Время:</b> ~3 минуты\n\n"
         f"<i>Готовы найти свою точку роста?</i>"
     )
     
@@ -1571,7 +1641,7 @@ async def show_stage_4_intro(callback: CallbackQuery, state: FSMContext):
         [InlineKeyboardButton(text="▶️ Начать исследование", callback_data="start_stage_4")]
     ])
     
-    await callback.message.edit_text(intro_text, reply_markup=keyboard, parse_mode='Markdown')
+    await callback.message.edit_text(intro_text, reply_markup=keyboard, parse_mode='HTML')
 
 
 async def start_stage_4(callback: CallbackQuery, state: FSMContext):
@@ -1604,7 +1674,7 @@ async def ask_stage_4_question(callback: CallbackQuery, state: FSMContext):
     progress = calculate_progress(current + 1, total)
     
     question_text = (
-        f"🧠 *ЭТАП 4: ТОЧКА РОСТА*\n\n"
+        f"<b>🧠 ЭТАП 4: ТОЧКА РОСТА</b>\n\n"
         f"<b>{question['text']}</b>\n\n"
         f"{progress}"
     )
@@ -1740,23 +1810,23 @@ async def show_preliminary_profile(callback: CallbackQuery, state: FSMContext):
     confidence_bar = "█" * int(confidence * 10) + "░" * (10 - int(confidence * 10))
     
     text = f"""
-🧠 *ПРЕДВАРИТЕЛЬНЫЙ ПОРТРЕТ*
+<b>🧠 ПРЕДВАРИТЕЛЬНЫЙ ПОРТРЕТ</b>
 
 {simple_profile['attention_desc']}
 
 {simple_profile['thinking_desc']}
 
-📊 *ТВОИ ВЕКТОРЫ:*
+<b>📊 ТВОИ ВЕКТОРЫ:</b>
 • Реакция на давление: {simple_profile['sb_desc']}
 • Отношение к деньгам: {simple_profile['tf_desc']}
 • Понимание мира: {simple_profile['ub_desc']}
 • Отношения с людьми: {simple_profile['chv_desc']}
 
-🎯 *Точка роста:* {simple_profile['growth_point']}
+<b>🎯 Точка роста:</b> {simple_profile['growth_point']}
 
-📊 *Уверенность:* {confidence_bar} {int(confidence*100)}%
+<b>📊 Уверенность:</b> {confidence_bar} {int(confidence*100)}%
 
-👇 *ЭТО ПОХОЖЕ НА ВАС?*
+👇 <b>ЭТО ПОХОЖЕ НА ВАС?</b>
 """
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
@@ -1765,7 +1835,7 @@ async def show_preliminary_profile(callback: CallbackQuery, state: FSMContext):
         [InlineKeyboardButton(text="🔄 НЕТ", callback_data="profile_reject")]
     ])
     
-    await callback.message.edit_text(text, reply_markup=keyboard, parse_mode='Markdown')
+    await callback.message.edit_text(text, reply_markup=keyboard, parse_mode='HTML')
     await state.set_state(TestStates.profile_confirmation)
 
 
@@ -1832,7 +1902,7 @@ async def ask_whats_wrong(callback: CallbackQuery, state: FSMContext, current_le
     """Спрашивает, что именно не так"""
     
     text = """
-🔍 *ДАВАЙ УТОЧНИМ*
+<b>🔍 ДАВАЙ УТОЧНИМ</b>
 
 Что именно вам не подходит?
 (можно выбрать несколько)
@@ -1843,7 +1913,7 @@ async def ask_whats_wrong(callback: CallbackQuery, state: FSMContext, current_le
 🤝 Про отношения — я знаю, чего хочу
 🛡 Про давление — я реагирую иначе
 
-👇 *Выберите и нажмите ДАЛЬШЕ*
+👇 <b>Выберите и нажмите ДАЛЬШЕ</b>
 """
     
     await state.update_data(clarifying_levels=current_levels)
@@ -1857,7 +1927,7 @@ async def ask_whats_wrong(callback: CallbackQuery, state: FSMContext, current_le
         [InlineKeyboardButton(text="➡️ ДАЛЬШЕ", callback_data="clarify_next")]
     ])
     
-    await callback.message.edit_text(text, reply_markup=keyboard, parse_mode='Markdown')
+    await callback.message.edit_text(text, reply_markup=keyboard, parse_mode='HTML')
     await state.set_state(TestStates.clarifying_selection)
     
     await state.update_data(discrepancies=[])
@@ -1919,7 +1989,7 @@ async def ask_clarifying_question(callback: CallbackQuery, state: FSMContext):
     question = questions[current]
     
     question_text = f"""
-🔍 *УТОЧНЯЮЩИЙ ВОПРОС {current + 1}/{len(questions)}*
+<b>🔍 УТОЧНЯЮЩИЙ ВОПРОС {current + 1}/{len(questions)}</b>
 
 {question['text']}
 """
@@ -1932,7 +2002,7 @@ async def ask_clarifying_question(callback: CallbackQuery, state: FSMContext):
     
     reply_markup = InlineKeyboardMarkup(inline_keyboard=keyboard)
     
-    await callback.message.edit_text(question_text, reply_markup=reply_markup, parse_mode='Markdown')
+    await callback.message.edit_text(question_text, reply_markup=reply_markup, parse_mode='HTML')
 
 
 async def handle_clarifying_answer(callback: CallbackQuery, state: FSMContext):
@@ -1991,28 +2061,28 @@ async def show_stage_5_intro(callback: CallbackQuery, state: FSMContext):
     """Экран перед 5-м этапом"""
     
     intro_text = """
-🧠 *ЭТАП 5: ГЛУБИННЫЕ ПАТТЕРНЫ*
+<b>🧠 ЭТАП 5: ГЛУБИННЫЕ ПАТТЕРНЫ</b>
 
 Мы узнали, как вы воспринимаете мир, мыслите и действуете.
 Теперь пришло время заглянуть глубже — в то, что сформировало вас.
 
-🔍 *Здесь мы исследуем:*
+<b>🔍 Здесь мы исследуем:</b>
 • Какой у вас тип привязанности (из детства)
 • Какие защитные механизмы вы используете
 • Какие глубинные убеждения управляют вами
 • Чего вы боитесь на самом деле
 
-📊 *Вопросов:* 10
-⏱ *Время:* ~5 минут
+<b>📊 Вопросов:</b> 10
+<b>⏱ Время:</b> ~5 минут
 
-👇 *Готовы заглянуть вглубь себя?*
+👇 <b>Готовы заглянуть вглубь себя?</b>
 """
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="▶️ Начать исследование", callback_data="start_stage_5")]
     ])
     
-    await callback.message.edit_text(intro_text, reply_markup=keyboard, parse_mode='Markdown')
+    await callback.message.edit_text(intro_text, reply_markup=keyboard, parse_mode='HTML')
     await state.set_state(TestStates.stage_5)
 
 
@@ -2045,7 +2115,7 @@ async def ask_stage_5_question(callback: CallbackQuery, state: FSMContext):
     progress = calculate_progress(current + 1, total)
     
     question_text = f"""
-🧠 *ЭТАП 5: ГЛУБИННЫЕ ПАТТЕРНЫ*
+<b>🧠 ЭТАП 5: ГЛУБИННЫЕ ПАТТЕРНЫ</b>
 
 <b>{question['text']}</b>
 
@@ -2139,7 +2209,7 @@ async def finish_stage_5(callback: CallbackQuery, state: FSMContext):
 
 
 # ============================================
-# AI АНАЛИЗ
+# AI АНАЛИЗ (ИСПРАВЛЕНО!)
 # ============================================
 
 async def show_ai_analysis(callback: CallbackQuery, state: FSMContext):
@@ -2153,9 +2223,9 @@ async def show_ai_analysis(callback: CallbackQuery, state: FSMContext):
     
     # Отправляем новое сообщение о начале анализа
     status_msg = await callback.message.answer(
-        "🧠 *Анализирую через конфайнмент-модель...*\n\n"
-        "_Это займёт около 15-20 секунд_",
-        parse_mode='Markdown'
+        "<b>🧠 Анализирую через конфайнмент-модель...</b>\n\n"
+        "<i>Это займёт около 15-20 секунд</i>",
+        parse_mode='HTML'
     )
     
     thought = await generate_psychologist_thought(user_id, data)
@@ -2179,7 +2249,7 @@ async def show_ai_analysis(callback: CallbackQuery, state: FSMContext):
 async def show_saved_psychologist_thought(callback: CallbackQuery, thought: str):
     """Показывает сохраненные мысли психолога"""
     
-    # Очищаем текст от Markdown, чтобы избежать ошибок
+    # Очищаем текст от Markdown
     clean_thought = clean_markdown(thought)
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
@@ -2187,12 +2257,13 @@ async def show_saved_psychologist_thought(callback: CallbackQuery, thought: str)
         [InlineKeyboardButton(text="◀️ К ПОРТРЕТУ", callback_data="show_results")]
     ])
     
-    # Отправляем новым сообщением, а не редактируем старое
+    # Отправляем новым сообщением
     await callback.message.answer(
-        f"🧠 *МЫСЛИ ПСИХОЛОГА*\n\n{clean_thought}",
+        f"<b>🧠 МЫСЛИ ПСИХОЛОГА</b>\n\n{clean_thought}",
         reply_markup=keyboard,
-        parse_mode='Markdown'
+        parse_mode='HTML'
     )
+
 
 # ============================================
 # SMART QUESTIONS
@@ -2263,13 +2334,13 @@ async def show_smart_questions(callback: CallbackQuery, state: FSMContext):
     mode_config = COMMUNICATION_MODES.get(mode, COMMUNICATION_MODES["coach"])
     
     if mode == "coach":
-        header = f"{mode_config['emoji']} *ЗАДАЙТЕ ВОПРОС (КОУЧ)*\n\nЯ буду задавать открытые вопросы, помогая вам найти ответы внутри себя.\n\n"
+        header = f"{mode_config['emoji']} <b>ЗАДАЙТЕ ВОПРОС (КОУЧ)</b>\n\nЯ буду задавать открытые вопросы, помогая вам найти ответы внутри себя.\n\n"
     elif mode == "friend":
-        header = f"{mode_config['emoji']} *РАССКАЖИТЕ МНЕ (ДРУГ)*\n\nЯ здесь, чтобы выслушать и поддержать. Что у вас на душе?\n\n"
+        header = f"{mode_config['emoji']} <b>РАССКАЖИТЕ МНЕ (ДРУГ)</b>\n\nЯ здесь, чтобы выслушать и поддержать. Что у вас на душе?\n\n"
     elif mode == "trainer":
-        header = f"{mode_config['emoji']} *ПОСТАВЬТЕ ЗАДАЧУ (ТРЕНЕР)*\n\nЧётко сформулируйте, что хотите решить. Я дам конкретные шаги.\n\n"
+        header = f"{mode_config['emoji']} <b>ПОСТАВЬТЕ ЗАДАЧУ (ТРЕНЕР)</b>\n\nЧётко сформулируйте, что хотите решить. Я дам конкретные шаги.\n\n"
     else:
-        header = "❓ *ЗАДАЙТЕ ВОПРОС*\n\n"
+        header = "<b>❓ ЗАДАЙТЕ ВОПРОС</b>\n\n"
     
     keyboard = []
     for i, q in enumerate(questions, 1):
@@ -2298,7 +2369,7 @@ async def show_smart_questions(callback: CallbackQuery, state: FSMContext):
     await callback.message.edit_text(
         header,
         reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard),
-        parse_mode='Markdown'
+        parse_mode='HTML'
     )
 
 
@@ -2308,9 +2379,9 @@ async def handle_smart_question(callback: CallbackQuery, state: FSMContext, ques
     data = await state.get_data()
     
     await callback.message.edit_text(
-        "🤔 *Думаю над ответом...*\n\n"
-        "_Это займёт около 10-15 секунд_",
-        parse_mode='Markdown'
+        "<b>🤔 Думаю над ответом...</b>\n\n"
+        "<i>Это займёт около 10-15 секунд</i>",
+        parse_mode='HTML'
     )
     
     response = await generate_response_with_full_context(user_id, question, data, user_contexts)
@@ -2331,6 +2402,9 @@ async def handle_smart_question(callback: CallbackQuery, state: FSMContext, ques
     context_obj = user_contexts.get(user_id)
     mode = context_obj.communication_mode if context_obj else "coach"
     
+    # Очищаем ответ от Markdown
+    clean_response = clean_markdown(response)
+    
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="❓ Ещё вопрос", callback_data="smart_questions")],
         [InlineKeyboardButton(text="🧠 К ПОРТРЕТУ", callback_data="show_results")],
@@ -2338,8 +2412,8 @@ async def handle_smart_question(callback: CallbackQuery, state: FSMContext, ques
     ])
     
     await callback.message.edit_text(
-        f"❓ *{question}*\n\n{response}",
-        parse_mode='Markdown',
+        f"<b>❓ {question}</b>\n\n{clean_response}",
+        parse_mode='HTML',
         reply_markup=keyboard
     )
     
@@ -2348,8 +2422,8 @@ async def handle_smart_question(callback: CallbackQuery, state: FSMContext, ques
         audio_file = BufferedInputFile(audio_data, filename="response.ogg")
         await callback.message.answer_voice(
             audio_file,
-            caption="🎙 *Голосовой ответ*",
-            parse_mode='Markdown'
+            caption="<b>🎙 Голосовой ответ</b>",
+            parse_mode='HTML'
         )
 
 
@@ -2361,10 +2435,10 @@ async def show_help(callback: CallbackQuery, state: FSMContext):
     """Показывает меню помощи"""
     keyboard = get_help_keyboard()
     await callback.message.edit_text(
-        "🎯 *ЧЕМ Я МОГУ БЫТЬ ПОЛЕЗЕН*\n\n"
+        "<b>🎯 ЧЕМ Я МОГУ БЫТЬ ПОЛЕЗЕН</b>\n\n"
         "Выберите категорию или напишите сами:",
         reply_markup=keyboard,
-        parse_mode='Markdown'
+        parse_mode='HTML'
     )
 
 
@@ -2374,13 +2448,13 @@ async def handle_help_category(callback: CallbackQuery, state: FSMContext, categ
     context = user_contexts.get(user_id)
     
     category_texts = {
-        "relations": "🗣 *Отношения*\n\nРасскажите, что происходит в отношениях. Я помогу разобраться.",
-        "money": "💰 *Деньги и ресурсы*\n\nЧто беспокоит в финансовой сфере?",
-        "self": "🧠 *Самоощущение*\n\nРасскажите о том, что чувствуете.",
-        "knowledge": "📚 *Знания и развитие*\n\nЧто хотите понять или освоить?",
-        "support": "💪 *Поддержка*\n\nНужно просто выговориться? Я здесь.",
-        "muse": "🎨 *Муза и творчество*\n\nТворческий блок? Расскажите.",
-        "care": "🍏 *Забота о себе*\n\nКак вы заботитесь о себе?"
+        "relations": "🗣 <b>Отношения</b>\n\nРасскажите, что происходит в отношениях. Я помогу разобраться.",
+        "money": "💰 <b>Деньги и ресурсы</b>\n\nЧто беспокоит в финансовой сфере?",
+        "self": "🧠 <b>Самоощущение</b>\n\nРасскажите о том, что чувствуете.",
+        "knowledge": "📚 <b>Знания и развитие</b>\n\nЧто хотите понять или освоить?",
+        "support": "💪 <b>Поддержка</b>\n\nНужно просто выговориться? Я здесь.",
+        "muse": "🎨 <b>Муза и творчество</b>\n\nТворческий блок? Расскажите.",
+        "care": "🍏 <b>Забота о себе</b>\n\nКак вы заботитесь о себе?"
     }
     
     base_text = category_texts.get(category, "Чем я могу помочь?")
@@ -2396,7 +2470,7 @@ async def handle_help_category(callback: CallbackQuery, state: FSMContext, categ
         [InlineKeyboardButton(text="◀️ Назад", callback_data="show_help")]
     ])
     
-    await callback.message.edit_text(base_text, parse_mode='Markdown', reply_markup=keyboard)
+    await callback.message.edit_text(base_text, parse_mode='HTML', reply_markup=keyboard)
     await state.set_state(TestStates.awaiting_question)
     await state.update_data(question_context=category)
 
@@ -2417,11 +2491,14 @@ async def show_tale(callback: CallbackQuery, state: FSMContext):
         [InlineKeyboardButton(text="◀️ НАЗАД", callback_data="show_results")]
     ])
     
-    intro = f"📖 *{tale['title']}*\n\n"
+    intro = f"<b>📖 {tale['title']}</b>\n\n"
+    
+    # Очищаем текст сказки от Markdown
+    clean_tale_text = clean_markdown(tale['text'])
     
     await callback.message.edit_text(
-        intro + tale['text'][:4000],
-        parse_mode='Markdown',
+        intro + clean_tale_text[:4000],
+        parse_mode='HTML',
         reply_markup=keyboard
     )
 
@@ -2447,10 +2524,10 @@ async def start_context(callback: CallbackQuery, state: FSMContext):
     question, keyboard = await context.ask_for_context()
     
     if question:
-        await callback.message.answer(  # ← ДОЛЖНО БЫТЬ answer, НЕ edit_text
-            f"📝 *Давайте познакомимся*\n\n{question}",
+        await callback.message.answer(
+            f"<b>📝 Давайте познакомимся</b>\n\n{question}",
             reply_markup=keyboard,
-            parse_mode='Markdown'
+            parse_mode='HTML'
         )
         await state.set_state(TestStates.awaiting_context)
     else:
@@ -2469,7 +2546,7 @@ async def skip_context(callback: CallbackQuery, state: FSMContext):
         f"⏭ Хорошо, будем общаться без привязки к месту и времени.\n\n"
         "Но помните: с контекстом советы точнее 😉\n"
         "Можете в любой момент рассказать о себе — просто напишите /context",
-        parse_mode='Markdown'
+        parse_mode='HTML'
     )
     await asyncio.sleep(1)
     
@@ -2485,9 +2562,9 @@ async def set_gender_male(callback: CallbackQuery, state: FSMContext):
         question, keyboard = await context.handle_gender_callback("male")
         if question:
             await callback.message.edit_text(
-                f"📝 *Давайте познакомимся*\n\n{question}",
+                f"<b>📝 Давайте познакомимся</b>\n\n{question}",
                 reply_markup=keyboard,
-                parse_mode='Markdown'
+                parse_mode='HTML'
             )
         else:
             await show_context_complete(callback, state, context)
@@ -2505,9 +2582,9 @@ async def set_gender_female(callback: CallbackQuery, state: FSMContext):
         question, keyboard = await context.handle_gender_callback("female")
         if question:
             await callback.message.edit_text(
-                f"📝 *Давайте познакомимся*\n\n{question}",
+                f"<b>📝 Давайте познакомимся</b>\n\n{question}",
                 reply_markup=keyboard,
-                parse_mode='Markdown'
+                parse_mode='HTML'
             )
         else:
             await show_context_complete(callback, state, context)
@@ -2529,9 +2606,9 @@ async def handle_context_message(message: Message, state: FSMContext):
     if success:
         if next_question:
             await message.answer(
-                f"📝 *Давайте познакомимся*\n\n{next_question}",
+                f"<b>📝 Давайте познакомимся</b>\n\n{next_question}",
                 reply_markup=keyboard,
-                parse_mode='Markdown'
+                parse_mode='HTML'
             )
         else:
             await show_context_complete(message, state, context)
@@ -2546,7 +2623,7 @@ async def show_context_complete(message_or_callback, state: FSMContext, context:
     
     await context.update_weather()
     
-    summary = f"✅ *Отлично! Теперь я знаю о вас:*\n\n"
+    summary = f"<b>✅ Отлично! Теперь я знаю о вас:</b>\n\n"
     
     if context.city:
         summary += f"📍 Город: {context.city}\n"
@@ -2560,23 +2637,23 @@ async def show_context_complete(message_or_callback, state: FSMContext, context:
     
     summary += f"\n🎯 Теперь я буду учитывать это в наших разговорах!\n\n"
     summary += "━━━━━━━━━━━━━━━━━━━━\n"
-    summary += "🧠 *ЧТО ДАЛЬШЕ?*\n\n"
+    summary += "<b>🧠 ЧТО ДАЛЬШЕ?</b>\n\n"
     summary += "Чтобы я мог помочь по-настоящему, нужно пройти тест (15 минут).\n"
     summary += "Он определит ваш психологический профиль по 4 векторам и глубинным паттернам.\n\n"
     summary += "━━━━━━━━━━━━━━━━━━━━\n"
-    summary += "👇 *Начинаем?*"
+    summary += "👇 <b>Начинаем?</b>"
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🚀 НАЧАТЬ ТЕСТ", callback_data="start_stage_1_intro")],  # ← ИЗМЕНЕНО!
+        [InlineKeyboardButton(text="🚀 НАЧАТЬ ТЕСТ", callback_data="show_stage_1_intro")],
         [InlineKeyboardButton(text="📖 ЧТО ДАЕТ ТЕСТ", callback_data="show_benefits")],
         [InlineKeyboardButton(text="❓ ЗАДАТЬ ВОПРОС", callback_data="ask_pretest")]
     ])
     
     if isinstance(message_or_callback, Message):
-        await message_or_callback.answer(summary, reply_markup=keyboard, parse_mode='Markdown')
+        await message_or_callback.answer(summary, reply_markup=keyboard, parse_mode='HTML')
     else:
-        # ИСПРАВЛЕНО: отправляем новое сообщение, а не редактируем старое
-        await message_or_callback.message.answer(summary, reply_markup=keyboard, parse_mode='Markdown')
+        # Отправляем новое сообщение
+        await message_or_callback.message.answer(summary, reply_markup=keyboard, parse_mode='HTML')
     
     await state.clear()
 
@@ -2605,7 +2682,7 @@ async def show_main_menu(message: Message, context: UserContext):
     else:
         welcome_text += f"🏡 Личное время. Есть что обсудить?\n\n"
     
-    welcome_text += f"👇 *Выберите действие:*"
+    welcome_text += f"👇 <b>Выберите действие:</b>"
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [
@@ -2617,7 +2694,7 @@ async def show_main_menu(message: Message, context: UserContext):
         [InlineKeyboardButton(text="❓ ЗАДАТЬ ВОПРОС", callback_data="ask_pretest")]
     ])
     
-    await message.answer(welcome_text, reply_markup=keyboard, parse_mode='Markdown')
+    await message.answer(welcome_text, reply_markup=keyboard, parse_mode='HTML')
 
 
 async def show_main_menu_after_mode(message: Message, context: UserContext):
@@ -2627,7 +2704,7 @@ async def show_main_menu_after_mode(message: Message, context: UserContext):
     await context.update_weather()
     day_context = context.get_day_context()
     
-    text = f"{mode_config['emoji']} *РЕЖИМ {mode_config['display_name']}*\n\n"
+    text = f"{mode_config['emoji']} <b>РЕЖИМ {mode_config['display_name']}</b>\n\n"
     text += context.get_greeting(context.name) + "\n"
     text += f"📅 Сегодня {day_context['weekday']}, {day_context['day']} {day_context['month']}, {day_context['time_str']}\n"
     
@@ -2636,7 +2713,7 @@ async def show_main_menu_after_mode(message: Message, context: UserContext):
         text += f"{weather['icon']} {weather['description']}, {weather['temp']}°C\n\n"
     
     text += "━━━━━━━━━━━━━━━━━━━━\n"
-    text += "🧠 *ЧЕМ ЗАЙМЁМСЯ?*\n\n"
+    text += "<b>🧠 ЧЕМ ЗАЙМЁМСЯ?</b>\n\n"
     
     if context.communication_mode == "coach":
         text += "• Задать вопрос — я помогу найти ответ внутри себя\n"
@@ -2659,39 +2736,39 @@ async def show_main_menu_after_mode(message: Message, context: UserContext):
         ]
     ])
     
-    await message.answer(text, reply_markup=keyboard, parse_mode='Markdown')
+    await message.answer(text, reply_markup=keyboard, parse_mode='HTML')
 
 
 async def show_benefits(callback: CallbackQuery):
     """Показывает преимущества теста"""
     text = (
-        "🔍 *ЧТО ВЫ УЗНАЕТЕ О СЕБЕ:*\n\n"
-        "🧠 *ЭТАП 1: КОНФИГУРАЦИЯ ВОСПРИЯТИЯ*\n"
+        "<b>🔍 ЧТО ВЫ УЗНАЕТЕ О СЕБЕ:</b>\n\n"
+        "<b>🧠 ЭТАП 1: КОНФИГУРАЦИЯ ВОСПРИЯТИЯ</b>\n"
         "Линза, через которую вы смотрите на мир.\n\n"
-        "🧠 *ЭТАП 2: КОНФИГУРАЦИЯ МЫШЛЕНИЯ*\n"
+        "<b>🧠 ЭТАП 2: КОНФИГУРАЦИЯ МЫШЛЕНИЯ</b>\n"
         "Как вы обрабатываете информацию.\n\n"
-        "🧠 *ЭТАП 3: КОНФИГУРАЦИЯ ПОВЕДЕНИЯ*\n"
+        "<b>🧠 ЭТАП 3: КОНФИГУРАЦИЯ ПОВЕДЕНИЯ</b>\n"
         "Ваши автоматические реакции.\n\n"
-        "🧠 *ЭТАП 4: ТОЧКА РОСТА*\n"
+        "<b>🧠 ЭТАП 4: ТОЧКА РОСТА</b>\n"
         "Где находится рычаг изменений.\n\n"
-        "🧠 *ЭТАП 5: ГЛУБИННЫЕ ПАТТЕРНЫ*\n"
+        "<b>🧠 ЭТАП 5: ГЛУБИННЫЕ ПАТТЕРНЫ</b>\n"
         "Тип привязанности, защитные механизмы, базовые убеждения.\n\n"
         "━━━━━━━━━━━━━━━━━━━━\n"
-        "⚡ *ПОСЛЕ ТЕСТА ВЫ ПОЛУЧИТЕ:*\n\n"
+        "<b>⚡ ПОСЛЕ ТЕСТА ВЫ ПОЛУЧИТЕ:</b>\n\n"
         "✅ Полный психологический портрет\n"
         "✅ Глубинный анализ подсознательных паттернов\n"
         "✅ Выбор стиля общения: 🔮 КОУЧ | 💚 ДРУГ | ⚡ ТРЕНЕР\n"
         "✅ Индивидуальный навигатор по целям\n"
         "✅ Напоминания и поддержка на пути\n\n"
-        "⏱ *Всего 15 минут*"
+        "<b>⏱ Всего 15 минут</b>"
     )
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🚀 НАЧАТЬ ТЕСТ", callback_data="start_test")],
+        [InlineKeyboardButton(text="🚀 НАЧАТЬ ТЕСТ", callback_data="show_stage_1_intro")],
         [InlineKeyboardButton(text="◀️ НАЗАД", callback_data="back_to_intro")]
     ])
     
-    await callback.message.edit_text(text, reply_markup=keyboard, parse_mode='Markdown')
+    await callback.message.edit_text(text, reply_markup=keyboard, parse_mode='HTML')
 
 
 async def back_to_intro(callback: CallbackQuery):
@@ -2700,8 +2777,8 @@ async def back_to_intro(callback: CallbackQuery):
     user_name = user_names.get(user_id, callback.from_user.first_name or "друг")
     
     welcome_text = (
-        f"👋 *Привет, {user_name}!*\n\n"
-        f"👇 *Выберите, с какой интонацией будем общаться:*"
+        f"👋 <b>Привет, {user_name}!</b>\n\n"
+        f"👇 <b>Выберите, с какой интонацией будем общаться:</b>"
     )
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
@@ -2714,7 +2791,7 @@ async def back_to_intro(callback: CallbackQuery):
         [InlineKeyboardButton(text="❓ ЗАДАТЬ ВОПРОС", callback_data="ask_pretest")]
     ])
     
-    await callback.message.edit_text(welcome_text, reply_markup=keyboard, parse_mode='Markdown')
+    await callback.message.edit_text(welcome_text, reply_markup=keyboard, parse_mode='HTML')
 
 
 async def choose_mode(callback: CallbackQuery, state: FSMContext, mode: str):
@@ -2735,35 +2812,35 @@ async def choose_mode(callback: CallbackQuery, state: FSMContext, mode: str):
     mode_info = COMMUNICATION_MODES[new_mode]
     
     await callback.message.edit_text(
-        f"{mode_info['emoji']} *Режим выбран:* {mode_info['display_name']}\n\n"
+        f"{mode_info['emoji']} <b>Режим выбран:</b> {mode_info['display_name']}\n\n"
         f"{mode_info['responsibility']}\n\n"
         f"Теперь давайте познакомимся поближе.",
-        parse_mode='Markdown'
+        parse_mode='HTML'
     )
     
     await asyncio.sleep(1)
     
     context = user_contexts[user_id]
-    if not context.city or not context.gender or not context.age:
+    if not (context.city and context.gender and context.age):
         await start_context(callback, state)
     else:
         intro_text = (
-            f"🧠 *ВИРТУАЛЬНЫЙ ПСИХОЛОГ*\n\n"
-            f"🔍 *5 ЭТАПОВ ТЕСТИРОВАНИЯ:*\n\n"
-            f"**ЭТАП 1:** Конфигурация восприятия\n"
-            f"**ЭТАП 2:** Конфигурация мышления\n"
-            f"**ЭТАП 3:** Конфигурация поведения\n"
-            f"**ЭТАП 4:** Точка роста\n"
-            f"**ЭТАП 5:** Глубинные паттерны\n\n"
-            f"⏱ *Всего 15 минут*\n\n"
-            f"👇 *Начинаем?*"
+            f"<b>🧠 ВИРТУАЛЬНЫЙ ПСИХОЛОГ</b>\n\n"
+            f"<b>🔍 5 ЭТАПОВ ТЕСТИРОВАНИЯ:</b>\n\n"
+            f"<b>ЭТАП 1:</b> Конфигурация восприятия\n"
+            f"<b>ЭТАП 2:</b> Конфигурация мышления\n"
+            f"<b>ЭТАП 3:</b> Конфигурация поведения\n"
+            f"<b>ЭТАП 4:</b> Точка роста\n"
+            f"<b>ЭТАП 5:</b> Глубинные паттерны\n\n"
+            f"<b>⏱ Всего 15 минут</b>\n\n"
+            f"👇 <b>Начинаем?</b>"
         )
         
         keyboard = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="🚀 НАЧАТЬ ТЕСТ", callback_data="start_test")]
+            [InlineKeyboardButton(text="🚀 НАЧАТЬ ТЕСТ", callback_data="show_stage_1_intro")]
         ])
         
-        await callback.message.answer(intro_text, reply_markup=keyboard, parse_mode='Markdown')
+        await callback.message.answer(intro_text, reply_markup=keyboard, parse_mode='HTML')
 
 
 async def show_mode_selection(callback: CallbackQuery, state: FSMContext):
@@ -2778,20 +2855,20 @@ async def show_mode_selection(callback: CallbackQuery, state: FSMContext):
     current_mode = context.communication_mode if context else "coach"
     mode_display = COMMUNICATION_MODES[current_mode]['display_name']
     
-    text = f"🧠 *ВЫБЕРИТЕ СТИЛЬ ОБЩЕНИЯ*\n\n"
-    text += f"📊 Ваш профиль: `{profile_code}`\n\n"
+    text = f"<b>🧠 ВЫБЕРИТЕ СТИЛЬ ОБЩЕНИЯ</b>\n\n"
+    text += f"<b>📊 Ваш профиль:</b> <code>{profile_code}</code>\n\n"
     text += f"Сейчас активен режим: {mode_display}\n\n"
     text += "Теперь, когда я знаю, кто вы,\n"
-    text += "вы можете выбрать, **КАК** мы будем общаться:\n\n"
+    text += "вы можете выбрать, <b>КАК</b> мы будем общаться:\n\n"
     text += "━━━━━━━━━━━━━━━━━━━━\n"
-    text += "🔮 *КОУЧ*\n"
+    text += "<b>🔮 КОУЧ</b>\n"
     text += "Партнёрский стиль: задаю вопросы, помогаю найти ответы внутри себя.\n\n"
-    text += "💚 *ДРУГ*\n"
+    text += "<b>💚 ДРУГ</b>\n"
     text += "Тёплый, поддерживающий стиль. Как близкий человек.\n\n"
-    text += "⚡ *ТРЕНЕР*\n"
+    text += "<b>⚡ ТРЕНЕР</b>\n"
     text += "Структурированный, требовательный стиль. Чёткие инструкции.\n\n"
     text += "━━━━━━━━━━━━━━━━━━━━\n"
-    text += "👇 *Как вам комфортнее?*"
+    text += "👇 <b>Как вам комфортнее?</b>"
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [
@@ -2802,7 +2879,7 @@ async def show_mode_selection(callback: CallbackQuery, state: FSMContext):
         [InlineKeyboardButton(text="◀️ Вернуться к результатам", callback_data="back_to_results")]
     ])
     
-    await callback.message.edit_text(text, reply_markup=keyboard, parse_mode='Markdown')
+    await callback.message.edit_text(text, reply_markup=keyboard, parse_mode='HTML')
     await state.set_state(TestStates.mode_selection)
 
 
@@ -2818,7 +2895,7 @@ async def set_mode_coach(callback: CallbackQuery, state: FSMContext):
     
     await callback.answer("✅ Режим КОУЧ активирован")
     
-    text = f"🔮 *РЕЖИМ КОУЧ АКТИВИРОВАН*\n\n"
+    text = f"<b>🔮 РЕЖИМ КОУЧ АКТИВИРОВАН</b>\n\n"
     text += f"Отлично!\n\n"
     text += "Теперь я буду:\n"
     text += "• Задавать открытые вопросы\n"
@@ -2831,7 +2908,7 @@ async def set_mode_coach(callback: CallbackQuery, state: FSMContext):
         [InlineKeyboardButton(text="🎯 ЧЕМ ПОМОЧЬ", callback_data="show_help")]
     ])
     
-    await callback.message.edit_text(text, reply_markup=keyboard, parse_mode='Markdown')
+    await callback.message.edit_text(text, reply_markup=keyboard, parse_mode='HTML')
     await state.set_state(TestStates.results)
 
 
@@ -2847,7 +2924,7 @@ async def set_mode_friend(callback: CallbackQuery, state: FSMContext):
     
     await callback.answer("✅ Режим ДРУГ активирован")
     
-    text = f"💚 *РЕЖИМ ДРУГ АКТИВИРОВАН*\n\n"
+    text = f"<b>💚 РЕЖИМ ДРУГ АКТИВИРОВАН</b>\n\n"
     text += f"Приятно познакомиться!\n\n"
     text += "Теперь я буду:\n"
     text += "• Слушать и принимать без осуждения\n"
@@ -2860,7 +2937,7 @@ async def set_mode_friend(callback: CallbackQuery, state: FSMContext):
         [InlineKeyboardButton(text="🎯 ЧЕМ ПОМОЧЬ", callback_data="show_help")]
     ])
     
-    await callback.message.edit_text(text, reply_markup=keyboard, parse_mode='Markdown')
+    await callback.message.edit_text(text, reply_markup=keyboard, parse_mode='HTML')
     await state.set_state(TestStates.results)
 
 
@@ -2876,7 +2953,7 @@ async def set_mode_trainer(callback: CallbackQuery, state: FSMContext):
     
     await callback.answer("✅ Режим ТРЕНЕР активирован")
     
-    text = f"⚡ *РЕЖИМ ТРЕНЕР АКТИВИРОВАН*\n\n"
+    text = f"<b>⚡ РЕЖИМ ТРЕНЕР АКТИВИРОВАН</b>\n\n"
     text += f"Привет!\n\n"
     text += "Теперь я буду:\n"
     text += "• Давать чёткие инструкции\n"
@@ -2889,17 +2966,17 @@ async def set_mode_trainer(callback: CallbackQuery, state: FSMContext):
         [InlineKeyboardButton(text="🎯 ЧЕМ ПОМОЧЬ", callback_data="show_help")]
     ])
     
-    await callback.message.edit_text(text, reply_markup=keyboard, parse_mode='Markdown')
+    await callback.message.edit_text(text, reply_markup=keyboard, parse_mode='HTML')
     await state.set_state(TestStates.results)
 
 
 async def ask_pretest(callback: CallbackQuery, state: FSMContext):
     """Вопрос до теста"""
     await callback.message.edit_text(
-        "❓ *Задайте свой вопрос*\n\n"
+        "<b>❓ Задайте свой вопрос</b>\n\n"
         "Я отвечу, но без вашего профиля ответ будет общим.\n\n"
-        "_Напишите вопрос текстом или голосом._",
-        parse_mode='Markdown'
+        "<i>Напишите вопрос текстом или голосом.</i>",
+        parse_mode='HTML'
     )
     await state.set_state(TestStates.pretest_question)
 
@@ -2921,9 +2998,9 @@ async def handle_ask_question(callback: CallbackQuery, state: FSMContext):
         [InlineKeyboardButton(text="◀️ Назад", callback_data="show_results")]
     ])
     await callback.message.edit_text(
-        "✏️ *ЗАДАЙТЕ ВОПРОС*\n\n"
+        "<b>✏️ ЗАДАЙТЕ ВОПРОС</b>\n\n"
         "Напишите, что вас беспокоит. Я помню ваш профиль.",
-        parse_mode='Markdown',
+        parse_mode='HTML',
         reply_markup=keyboard
     )
     await state.set_state(TestStates.awaiting_question)
@@ -2937,11 +3014,11 @@ async def handle_question_message(message: Message, state: FSMContext):
     if not is_test_completed(data):
         await message.answer(
             "Сначала нужно пройти тест. Используйте /start",
-            parse_mode='Markdown'
+            parse_mode='HTML'
         )
         return
     
-    thinking = await message.answer("🤔 *Думаю над ответом...*", parse_mode='Markdown')
+    thinking = await message.answer("<b>🤔 Думаю над ответом...</b>", parse_mode='HTML')
     
     response = await generate_response_with_full_context(user_id, message.text, data, user_contexts)
     
@@ -2963,6 +3040,9 @@ async def handle_question_message(message: Message, state: FSMContext):
     
     await thinking.delete()
     
+    # Очищаем ответ от Markdown
+    clean_response = clean_markdown(response)
+    
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="❓ Ещё вопрос", callback_data="smart_questions")],
         [InlineKeyboardButton(text="🧠 К ПОРТРЕТУ", callback_data="show_results")],
@@ -2970,8 +3050,8 @@ async def handle_question_message(message: Message, state: FSMContext):
     ])
     
     await message.answer(
-        f"🧠 *Ответ*\n\n{response}",
-        parse_mode='Markdown',
+        f"<b>🧠 Ответ</b>\n\n{clean_response}",
+        parse_mode='HTML',
         reply_markup=keyboard
     )
     
@@ -2980,8 +3060,8 @@ async def handle_question_message(message: Message, state: FSMContext):
         audio_file = BufferedInputFile(audio_data, filename="response.ogg")
         await message.answer_voice(
             audio_file,
-            caption="🎙 *Голосовой ответ*",
-            parse_mode='Markdown'
+            caption="<b>🎙 Голосовой ответ</b>",
+            parse_mode='HTML'
         )
     
     await state.set_state(TestStates.results)
@@ -2994,12 +3074,12 @@ async def handle_voice_message(message: Message, state: FSMContext):
     
     if not is_test_completed(data):
         await message.answer(
-            "🎙 *Голосовые сообщения доступны только после завершения теста*",
-            parse_mode='Markdown'
+            "<b>🎙 Голосовые сообщения доступны только после завершения теста</b>",
+            parse_mode='HTML'
         )
         return
     
-    status_msg = await message.answer("🎤 *Распознаю речь...*", parse_mode='Markdown')
+    status_msg = await message.answer("<b>🎤 Распознаю речь...</b>", parse_mode='HTML')
     
     temp_file = None
     try:
@@ -3018,9 +3098,9 @@ async def handle_voice_message(message: Message, state: FSMContext):
         
         if not recognized_text:
             await status_msg.edit_text(
-                "❌ *Не удалось распознать речь*\n\n"
+                "❌ <b>Не удалось распознать речь</b>\n\n"
                 "Попробуйте еще раз или напишите текстом.",
-                parse_mode='Markdown'
+                parse_mode='HTML'
             )
             return
         
@@ -3042,6 +3122,9 @@ async def handle_voice_message(message: Message, state: FSMContext):
         })
         await state.update_data(history=history)
         
+        # Очищаем ответ от Markdown
+        clean_response = clean_markdown(response)
+        
         keyboard = InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text="❓ Ещё вопрос", callback_data="smart_questions")],
             [InlineKeyboardButton(text="🧠 К ПОРТРЕТУ", callback_data="show_results")],
@@ -3049,9 +3132,9 @@ async def handle_voice_message(message: Message, state: FSMContext):
         ])
         
         await status_msg.edit_text(
-            f"📝 *Вы сказали:*\n_{recognized_text}_\n\n"
-            f"*Ответ:*\n{response}",
-            parse_mode='Markdown',
+            f"<b>📝 Вы сказали:</b>\n<i>{recognized_text}</i>\n\n"
+            f"<b>Ответ:</b>\n{clean_response}",
+            parse_mode='HTML',
             reply_markup=keyboard
         )
         
@@ -3060,16 +3143,16 @@ async def handle_voice_message(message: Message, state: FSMContext):
             audio_file = BufferedInputFile(audio_data, filename="response.ogg")
             await message.answer_voice(
                 audio_file,
-                caption="🎙 *Голосовой ответ*",
-                parse_mode='Markdown'
+                caption="<b>🎙 Голосовой ответ</b>",
+                parse_mode='HTML'
             )
     
     except Exception as e:
         logger.error(f"Ошибка при обработке голосового сообщения: {e}")
         await status_msg.edit_text(
-            "❌ *Произошла ошибка*\n\n"
+            "❌ <b>Произошла ошибка</b>\n\n"
             "Попробуйте еще раз или напишите текстом.",
-            parse_mode='Markdown'
+            parse_mode='HTML'
         )
 
 
@@ -3146,10 +3229,10 @@ async def callback_handler(callback: CallbackQuery, state: FSMContext):
         
         elif data == "custom_destination":
             await callback.message.edit_text(
-                "✏️ *СФОРМУЛИРУЙТЕ ЦЕЛЬ*\n\n"
+                "<b>✏️ СФОРМУЛИРУЙТЕ ЦЕЛЬ</b>\n\n"
                 "Напишите своим текстом, чего хотите достичь.\n"
                 "Я помогу построить маршрут.",
-                parse_mode='Markdown'
+                parse_mode='HTML'
             )
             await state.set_state(TestStates.awaiting_question)
             await state.update_data(awaiting_custom_destination=True)
@@ -3159,8 +3242,8 @@ async def callback_handler(callback: CallbackQuery, state: FSMContext):
         
         elif data == "reminder_snooze":
             await callback.message.edit_text(
-                "⏭️ *Напоминание отложено на 24 часа*",
-                parse_mode='Markdown'
+                "<b>⏭️ Напоминание отложено на 24 часа</b>",
+                parse_mode='HTML'
             )
             await reminder_manager.schedule_reminder(
                 callback.from_user.id,
@@ -3168,6 +3251,7 @@ async def callback_handler(callback: CallbackQuery, state: FSMContext):
                 24*60
             )
         
+        # ИСПРАВЛЕНО: обработка мысли психолога
         elif data == "psychologist_thought":
             await show_ai_analysis(callback, state)
         
@@ -3215,7 +3299,7 @@ async def callback_handler(callback: CallbackQuery, state: FSMContext):
             await handle_help_category(callback, state, category)
         
         # Тест - начало
-        elif data == "start_test":
+        elif data == "show_stage_1_intro":
             await show_stage_1_intro(callback, state)
         
         # Этап 1
@@ -3302,15 +3386,16 @@ async def callback_handler(callback: CallbackQuery, state: FSMContext):
         if "message is not modified" in str(e).lower():
             logger.info("Ignored 'message not modified' error")
         elif "can't parse entities" in str(e).lower() or "parse entities" in str(e).lower():
-            logger.warning(f"Markdown parsing error, retrying without markdown: {e}")
+            logger.warning(f"HTML parsing error, retrying without HTML: {e}")
             try:
                 if callback.message and callback.message.text:
-                    clean_text = re.sub(r'[*_`#]', '', callback.message.text)
+                    # Удаляем все HTML-теги
+                    clean_text = re.sub(r'<[^>]+>', '', callback.message.text)
                     await callback.message.edit_text(clean_text, reply_markup=callback.message.reply_markup)
                 else:
                     await callback.answer("❌ Ошибка форматирования")
             except Exception as e2:
-                logger.error(f"Failed to recover from Markdown error: {e2}")
+                logger.error(f"Failed to recover from HTML error: {e2}")
                 await callback.answer("❌ Произошла ошибка")
         else:
             logger.error(f"TelegramBadRequest: {e}")
@@ -3328,7 +3413,7 @@ async def cmd_stats(message: Message):
         await message.answer("⛔ Доступ запрещен")
         return
     
-    await message.answer(stats.get_stats_text(), parse_mode='Markdown')
+    await message.answer(stats.get_stats_text(), parse_mode='HTML')
 
 
 async def cmd_apistatus(message: Message):
@@ -3344,7 +3429,7 @@ async def cmd_apistatus(message: Message):
     yandex_status = "✅ работает" if YANDEX_API_KEY else "❌ не настроен"
     weather_status = "✅ работает" if OPENWEATHER_API_KEY else "❌ не настроен"
     
-    text = f"📊 **Статус API:**\n\n"
+    text = f"<b>📊 Статус API:</b>\n\n"
     text += f"• DeepSeek: {deepseek_status}\n"
     text += f"• Deepgram: {deepgram_status}\n"
     text += f"• Yandex TTS: {yandex_status}\n"
@@ -3356,7 +3441,7 @@ async def cmd_apistatus(message: Message):
     if YANDEX_API_KEY:
         text += f"🎙 Голоса: Филипп (коуч/тренер), Эрмил (друг)\n"
     
-    await message.answer(text, parse_mode='Markdown')
+    await message.answer(text, parse_mode='HTML')
 
 
 async def cmd_test_yandex(message: Message):
@@ -3376,7 +3461,7 @@ async def cmd_test_yandex(message: Message):
             await message.answer_voice(
                 audio_file,
                 caption=f"🎙 Режим: {COMMUNICATION_MODES[mode]['display_name']}",
-                parse_mode='Markdown'
+                parse_mode='HTML'
             )
             results.append(f"✅ {COMMUNICATION_MODES[mode]['display_name']}")
         else:
@@ -3384,7 +3469,7 @@ async def cmd_test_yandex(message: Message):
         await asyncio.sleep(0.5)
     
     await status.delete()
-    await message.answer("📊 *Результаты:*\n" + "\n".join(results), parse_mode='Markdown')
+    await message.answer("<b>📊 Результаты:</b>\n" + "\n".join(results), parse_mode='HTML')
 
 
 async def cmd_test_weather(message: Message):
@@ -3403,6 +3488,7 @@ async def cmd_test_weather(message: Message):
     url = f"http://api.openweathermap.org/data/2.5/weather?q={test_city}&appid={OPENWEATHER_API_KEY}&units=metric&lang=ru"
     
     try:
+        import aiohttp
         async with aiohttp.ClientSession() as session:
             async with session.get(url) as response:
                 if response.status == 200:
@@ -3413,14 +3499,14 @@ async def cmd_test_weather(message: Message):
                     humidity = data['main']['humidity']
                     wind = data['wind']['speed']
                     
-                    text = f"✅ *Погода работает!*\n\n"
+                    text = f"<b>✅ Погода работает!</b>\n\n"
                     text += f"📍 Город: {test_city}\n"
                     text += f"🌡 Температура: {temp}°C (ощущается как {feels_like}°C)\n"
                     text += f"☁️ Описание: {desc}\n"
                     text += f"💧 Влажность: {humidity}%\n"
                     text += f"💨 Ветер: {wind} м/с"
                     
-                    await message.answer(text, parse_mode='Markdown')
+                    await message.answer(text, parse_mode='HTML')
                 else:
                     error_text = await response.text()
                     await message.answer(f"❌ Ошибка {response.status}: {error_text[:200]}")
@@ -3444,9 +3530,11 @@ async def cmd_tale(message: Message):
     tale = tales.get_tale_for_issue(text)
     
     if tale:
+        # Очищаем текст сказки от Markdown
+        clean_tale_text = clean_markdown(tale['text'])
         await message.answer(
-            f"📖 *{tale['title']}*\n\n{tale['text'][:4000]}",
-            parse_mode='Markdown'
+            f"<b>📖 {tale['title']}</b>\n\n{clean_tale_text[:4000]}",
+            parse_mode='HTML'
         )
     else:
         await message.answer("Сказка не найдена")
@@ -3466,7 +3554,7 @@ async def cmd_context(message: Message, state: FSMContext):
     context.age = None
     context.weather_cache = {}
     
-    await message.answer("🔄 *Давайте обновим ваш контекст*", parse_mode='Markdown')
+    await message.answer("<b>🔄 Давайте обновим ваш контекст</b>", parse_mode='HTML')
     await asyncio.sleep(0.5)
     
     await start_context(
@@ -3541,7 +3629,7 @@ async def main():
     
     logger.info("Бот запущен...")
     print("\n" + "="*80)
-    print("🚀 ВИРТУАЛЬНЫЙ ПСИХОЛОГ - МАТРИЦА ПОВЕДЕНИЙ 4×6 v9.0")
+    print("🚀 ВИРТУАЛЬНЫЙ ПСИХОЛОГ - МАТРИЦА ПОВЕДЕНИЙ 4×6 v9.1")
     print("="*80)
     print(f"👤 Ваш Telegram ID: {ADMIN_IDS[0] if ADMIN_IDS else 'не указан'}")
     print("📊 Команды: /stats, /apistatus, /test_yandex, /test_voices, /test_weather, /tale, /context")
