@@ -12,12 +12,221 @@ logger = logging.getLogger(__name__)
 
 
 # ============================================
-# ФУНКЦИИ ФОРМАТИРОВАНИЯ (дублируем для независимости)
+# ФУНКЦИИ ФОРМАТИРОВАНИЯ
 # ============================================
 
 def bold(text: str) -> str:
     """Жирный текст (HTML)"""
     return f"<b>{text}</b>"
+
+
+# ============================================
+# ПАРСИНГ ОТВЕТОВ ПОЛЬЗОВАТЕЛЯ
+# ============================================
+
+def parse_life_context_answers(text: str) -> Dict[str, Any]:
+    """
+    Парсит ответы на вопросы о жизненном контексте
+    
+    Args:
+        text: текст ответа пользователя (обычно 10 строк)
+    
+    Returns:
+        Dict с полями:
+        - family_status: семейное положение
+        - has_children: есть ли дети (bool)
+        - children_info: информация о детях (строка)
+        - work_schedule: график работы
+        - job_title: должность
+        - commute_time: время на дорогу
+        - housing_type: тип жилья
+        - has_private_space: есть ли отдельное пространство (bool)
+        - has_car: есть ли машина (bool)
+        - support_people: кто поддерживает
+        - resistance_people: кто мешает
+        - energy_level: уровень энергии (1-10)
+    """
+    lines = text.strip().split('\n')
+    answers = []
+    
+    # Очищаем каждую строку от нумерации
+    for line in lines:
+        # Убираем цифры, эмодзи-цифры и лишние пробелы в начале
+        clean = re.sub(r'^[\d️⃣🔟]*\s*', '', line.strip())
+        if clean:  # добавляем только непустые строки
+            answers.append(clean)
+    
+    result = {
+        'family_status': 'не указано',
+        'has_children': False,
+        'children_info': '',
+        'work_schedule': '',
+        'job_title': '',
+        'commute_time': '',
+        'housing_type': '',
+        'has_private_space': False,
+        'has_car': False,
+        'support_people': '',
+        'resistance_people': '',
+        'energy_level': 5  # значение по умолчанию
+    }
+    
+    # Заполняем результат, если есть достаточно ответов
+    if len(answers) >= 10:
+        result['family_status'] = answers[0]
+        result['children_info'] = answers[1]
+        result['has_children'] = any(word in answers[1].lower() 
+                                     for word in ['да', 'есть', 'двое', 'трое', 'ребенок', 'дочь', 'сын'])
+        
+        result['work_schedule'] = answers[2]
+        result['job_title'] = answers[2]  # может быть уточнено позже
+        
+        result['commute_time'] = answers[3]
+        
+        result['housing_type'] = answers[4]
+        
+        result['has_private_space'] = any(word in answers[5].lower() 
+                                          for word in ['да', 'есть', 'отдельная', 'своя'])
+        
+        result['has_car'] = any(word in answers[6].lower() 
+                                for word in ['да', 'есть', 'машина'])
+        
+        result['support_people'] = answers[7] if len(answers) > 7 else ''
+        result['resistance_people'] = answers[8] if len(answers) > 8 else ''
+        
+        # Парсим уровень энергии
+        try:
+            # Ищем число в строке
+            energy_match = re.search(r'(\d+)', answers[9])
+            if energy_match:
+                result['energy_level'] = int(energy_match.group(1))
+                # Ограничиваем диапазоном 1-10
+                result['energy_level'] = max(1, min(10, result['energy_level']))
+        except (ValueError, IndexError):
+            result['energy_level'] = 5
+    
+    elif len(answers) >= 5:
+        # Если ответов меньше, пытаемся извлечь хоть что-то
+        for i, answer in enumerate(answers):
+            if 'энерги' in answer.lower() or 'оцени' in answer.lower():
+                try:
+                    energy_match = re.search(r'(\d+)', answer)
+                    if energy_match:
+                        result['energy_level'] = int(energy_match.group(1))
+                        result['energy_level'] = max(1, min(10, result['energy_level']))
+                except:
+                    pass
+            
+            if 'комнат' in answer.lower() or 'пространств' in answer.lower():
+                result['has_private_space'] = any(word in answer.lower() 
+                                                  for word in ['да', 'есть', 'отдельная'])
+            
+            if 'машин' in answer.lower():
+                result['has_car'] = any(word in answer.lower() 
+                                        for word in ['да', 'есть'])
+    
+    return result
+
+
+def parse_goal_context_answers(text: str) -> Dict[str, Any]:
+    """
+    Парсит ответы на вопросы о целевом контексте
+    
+    Args:
+        text: текст ответа пользователя
+    
+    Returns:
+        Dict с полями:
+        - time_per_week: часов в неделю
+        - budget: бюджет в рублях
+        - raw_answers: сырые ответы
+        - has_equipment: есть ли оборудование
+        - equipment_needed: нужное оборудование
+        - timeline_preference: предпочтения по срокам
+    """
+    result = {
+        'time_per_week': 5,  # значение по умолчанию
+        'budget': 0,
+        'has_equipment': False,
+        'equipment_needed': '',
+        'timeline_preference': 'medium',  # fast/medium/slow
+        'raw_answers': text
+    }
+    
+    # Ищем время (часы в неделю)
+    time_patterns = [
+        r'(\d+)\s*часов',
+        r'(\d+)\s*ч',
+        r'(\d+)\s*час',
+        r'(\d+)\s*в неделю'
+    ]
+    
+    for pattern in time_patterns:
+        time_match = re.search(pattern, text, re.IGNORECASE)
+        if time_match:
+            try:
+                hours = int(time_match.group(1))
+                # Реалистичные границы: 1-168 часов в неделю
+                result['time_per_week'] = max(1, min(168, hours))
+                break
+            except:
+                pass
+    
+    # Если не нашли по паттернам, ищем любое число, похожее на часы
+    if result['time_per_week'] == 5:  # если не нашли
+        numbers = re.findall(r'(\d+)', text)
+        for num in numbers:
+            try:
+                val = int(num)
+                if 1 <= val <= 168:
+                    result['time_per_week'] = val
+                    break
+            except:
+                pass
+    
+    # Ищем бюджет
+    budget_patterns = [
+        r'(\d+)\s*тыс',
+        r'(\d+)\s*000',
+        r'(\d+)\s*руб',
+        r'(\d+)\s*₽'
+    ]
+    
+    for pattern in budget_patterns:
+        budget_match = re.search(pattern, text, re.IGNORECASE)
+        if budget_match:
+            try:
+                amount = int(budget_match.group(1))
+                if 'тыс' in pattern:
+                    result['budget'] = amount * 1000
+                else:
+                    result['budget'] = amount
+                break
+            except:
+                pass
+    
+    # Ищем упоминания оборудования
+    equipment_keywords = ['нужн', 'оборуд', 'инструм', 'компьютер', 'ноутбук', 'программ']
+    for keyword in equipment_keywords:
+        if keyword in text.lower():
+            result['has_equipment'] = True
+            # Пробуем извлечь что именно нужно
+            sentences = text.split('.')
+            for sent in sentences:
+                if keyword in sent.lower():
+                    result['equipment_needed'] = sent.strip()
+                    break
+            break
+    
+    # Определяем предпочтения по срокам
+    if any(word in text.lower() for word in ['быстр', 'срочн', 'скоре']):
+        result['timeline_preference'] = 'fast'
+    elif any(word in text.lower() for word in ['нетороп', 'постепен', 'долгосрочн']):
+        result['timeline_preference'] = 'slow'
+    else:
+        result['timeline_preference'] = 'medium'
+    
+    return result
 
 
 # ============================================
@@ -354,15 +563,135 @@ def get_theoretical_path(goal_id: str, mode: str) -> Dict[str, Any]:
                     "Создание проекта"
                 ]
             }
+        },
+        
+        # ДОПОЛНИТЕЛЬНЫЕ ЦЕЛИ
+        "boundaries": {
+            "coach": {
+                "time_total": 80,
+                "time_per_week": 3,
+                "duration_weeks": 26,
+                "energy_required": 5,
+                "space_required": False,
+                "budget": 0,
+                "support_required": False,
+                "steps": [
+                    "Осознание своих границ",
+                    "Определение личных прав",
+                    "Практика маленьких отказов",
+                    "Анализ реакций окружающих",
+                    "Закрепление новых паттернов"
+                ]
+            },
+            "psychologist": {
+                "time_total": 120,
+                "time_per_week": 5,
+                "duration_weeks": 24,
+                "energy_required": 6,
+                "space_required": False,
+                "budget": 0,
+                "support_required": False,
+                "steps": [
+                    "Поиск причин размытых границ",
+                    "Проработка страха отвержения",
+                    "Работа с чувством вины",
+                    "Восстановление целостности",
+                    "Интеграция"
+                ]
+            },
+            "trainer": {
+                "time_total": 60,
+                "time_per_week": 2.5,
+                "duration_weeks": 24,
+                "energy_required": 4,
+                "space_required": False,
+                "budget": 0,
+                "support_required": False,
+                "steps": [
+                    "Техники твердого 'нет'",
+                    "Я-высказывания",
+                    "Управление дистанцией",
+                    "Телесные практики границ",
+                    "Ролевые игры"
+                ]
+            }
+        },
+        
+        "self_esteem": {
+            "coach": {
+                "time_total": 100,
+                "time_per_week": 4,
+                "duration_weeks": 25,
+                "energy_required": 5,
+                "space_required": False,
+                "budget": 0,
+                "support_required": False,
+                "steps": [
+                    "Анализ сильных сторон",
+                    "Постановка достижимых целей",
+                    "Фиксация успехов",
+                    "Работа с внутренним критиком",
+                    "Развитие самопринятия"
+                ]
+            },
+            "psychologist": {
+                "time_total": 150,
+                "time_per_week": 6,
+                "duration_weeks": 25,
+                "energy_required": 6,
+                "space_required": False,
+                "budget": 0,
+                "support_required": False,
+                "steps": [
+                    "Поиск корней низкой самооценки",
+                    "Проработка детских посланий",
+                    "Интеграция теневых частей",
+                    "Формирование новой идентичности",
+                    "Закрепление"
+                ]
+            },
+            "trainer": {
+                "time_total": 80,
+                "time_per_week": 3,
+                "duration_weeks": 26,
+                "energy_required": 4,
+                "space_required": True,
+                "budget": 0,
+                "support_required": False,
+                "steps": [
+                    "Ежедневные аффирмации",
+                    "Практики самопрезентации",
+                    "Ведение дневника достижений",
+                    "Телесные практики уверенности",
+                    "Публичные выступления"
+                ]
+            }
         }
     }
     
-    # Возвращаем путь для конкретной цели и режима
-    if goal_id in paths and mode in paths[goal_id]:
-        path = paths[goal_id][mode].copy()
-        
-        # Форматируем текст для вывода
-        formatted_text = f"""
+    # Защита от отсутствия цели
+    if goal_id not in paths:
+        logger.warning(f"Цель {goal_id} не найдена, возвращаю заглушку")
+        return {
+            "time_total": 200,
+            "time_per_week": 8,
+            "duration_weeks": 25,
+            "energy_required": 6,
+            "space_required": False,
+            "budget": 0,
+            "support_required": False,
+            "steps": ["Информация уточняется"],
+            "formatted_text": "Маршрут в разработке"
+        }
+    
+    if mode not in paths[goal_id]:
+        logger.warning(f"Режим {mode} не найден для цели {goal_id}, использую coach")
+        mode = "coach"
+    
+    path = paths[goal_id][mode].copy()
+    
+    # Форматируем текст для вывода
+    formatted_text = f"""
 ⏱ {bold('ВРЕМЯ:')} {path['time_total']} часов всего = {path['time_per_week']} ч/нед, {path['duration_weeks']} недель
 ⚡ {bold('ЭНЕРГИЯ:')} уровень {path['energy_required']}/10
 🏠 {bold('ПРОСТРАНСТВО:')} {'✅ нужно отдельное' if path['space_required'] else 'не обязательно'}
@@ -371,24 +700,11 @@ def get_theoretical_path(goal_id: str, mode: str) -> Dict[str, Any]:
 
 {bold('ЭТАПЫ:')}
 """
-        for i, step in enumerate(path['steps'], 1):
-            formatted_text += f"{i}. {step}\n"
-        
-        path['formatted_text'] = formatted_text
-        return path
+    for i, step in enumerate(path['steps'], 1):
+        formatted_text += f"{i}. {step}\n"
     
-    # Возвращаем заглушку, если цель не найдена
-    return {
-        "time_total": 200,
-        "time_per_week": 8,
-        "duration_weeks": 25,
-        "energy_required": 6,
-        "space_required": False,
-        "budget": 0,
-        "support_required": False,
-        "steps": ["Информация уточняется"],
-        "formatted_text": "Маршрут в разработке"
-    }
+    path['formatted_text'] = formatted_text
+    return path
 
 
 # ============================================
@@ -425,11 +741,15 @@ def generate_goal_context_questions(goal_id: str, profile: Dict, mode: str, goal
         Строка с вопросами
     """
     
-    # Получаем значения векторов
-    sb = profile.get("behavioral_levels", {}).get("СБ", [3])[0] if profile.get("behavioral_levels") else 3
-    tf = profile.get("behavioral_levels", {}).get("ТФ", [3])[0] if profile.get("behavioral_levels") else 3
-    ub = profile.get("behavioral_levels", {}).get("УБ", [3])[0] if profile.get("behavioral_levels") else 3
-    chv = profile.get("behavioral_levels", {}).get("ЧВ", [3])[0] if profile.get("behavioral_levels") else 3
+    # Получаем значения векторов с защитой от отсутствия данных
+    try:
+        behavioral = profile.get("behavioral_levels", {})
+        sb = behavioral.get("СБ", [3])[0] if behavioral.get("СБ") else 3
+        tf = behavioral.get("ТФ", [3])[0] if behavioral.get("ТФ") else 3
+        ub = behavioral.get("УБ", [3])[0] if behavioral.get("УБ") else 3
+        chv = behavioral.get("ЧВ", [3])[0] if behavioral.get("ЧВ") else 3
+    except (IndexError, TypeError, KeyError):
+        sb = tf = ub = chv = 3
     
     questions = []
     
@@ -516,6 +836,12 @@ def calculate_feasibility(
     """
     Рассчитывает достижимость цели на основе всех данных
     
+    Args:
+        goal_path: теоретический путь к цели
+        life_context: жизненный контекст пользователя
+        goal_context: контекст под цель
+        profile: профиль пользователя
+    
     Returns:
         Dict с полями:
         - deficit: общий дефицит ресурсов в %
@@ -531,18 +857,44 @@ def calculate_feasibility(
         - status_text: текстовый статус
     """
     
-    # Извлекаем данные
+    # Защита от отсутствия данных
+    if not goal_path:
+        goal_path = {}
+    if not life_context:
+        life_context = {}
+    if not goal_context:
+        goal_context = {}
+    
+    # Извлекаем данные с защитой
     required_time = goal_path.get("time_per_week", 10)
+    if required_time <= 0:
+        required_time = 10  # избегаем деления на ноль
+    
     required_energy = goal_path.get("energy_required", 6)
+    if required_energy <= 0:
+        required_energy = 6
+    
     required_space = goal_path.get("space_required", False)
     required_budget = goal_path.get("budget", 0)
+    if required_budget < 0:
+        required_budget = 0
+    
     required_support = goal_path.get("support_required", False)
     
-    # Данные пользователя
+    # Данные пользователя с защитой
     available_time = float(goal_context.get("time_per_week", 0) or 0)
+    if available_time < 0:
+        available_time = 0
+    
     available_energy = life_context.get("energy_level", 5)
+    if available_energy <= 0:
+        available_energy = 5
+    
     available_space = life_context.get("has_private_space", False)
     available_budget = float(goal_context.get("budget", 0) or 0)
+    if available_budget < 0:
+        available_budget = 0
+    
     available_support = bool(life_context.get("support_people"))
     
     # Считаем дефициты
@@ -559,6 +911,9 @@ def calculate_feasibility(
     weighted_sum = sum(d * w for d, w in zip(deficits, weights))
     total_weight = sum(weights)
     total_deficit = weighted_sum / total_weight if total_weight > 0 else 0
+    
+    # Ограничиваем дефицит диапазоном 0-100
+    total_deficit = max(0, min(100, total_deficit))
     
     # Определяем статус
     if total_deficit <= 20:
@@ -602,7 +957,7 @@ def calculate_feasibility(
         if support_deficit > 0:
             recommendation += "• Нет поддержки — найди единомышленников или наставника\n"
         if budget_deficit > 0:
-            recommendation += f"• Не хватает {budget_deficit}₽ — пересмотри бюджет\n"
+            recommendation += f"• Не хватает {int(budget_deficit)}% бюджета — пересмотри расходы\n"
     else:
         recommendation = "Цель требует серьёзной подготовки:\n"
         recommendation += "• Увеличь срок в 2 раза\n"
@@ -622,3 +977,112 @@ def calculate_feasibility(
         "status": status,
         "status_text": status_text
     }
+
+
+# ============================================
+# ФУНКЦИИ ДЛЯ СОХРАНЕНИЯ РЕЗУЛЬТАТОВ
+# ============================================
+
+def save_feasibility_result(user_id: int, goal_id: str, result: Dict) -> None:
+    """
+    Сохраняет результат проверки реальности
+    
+    Args:
+        user_id: ID пользователя
+        goal_id: ID цели
+        result: результат проверки
+    """
+    # Здесь можно добавить сохранение в базу данных или файл
+    # Например, в JSON-файл
+    try:
+        import json
+        import os
+        from datetime import datetime
+        
+        # Создаем папку для результатов, если её нет
+        os.makedirs("feasibility_results", exist_ok=True)
+        
+        # Формируем имя файла
+        filename = f"feasibility_results/user_{user_id}_{datetime.now().strftime('%Y%m%d')}.json"
+        
+        # Загружаем существующие результаты
+        data = []
+        if os.path.exists(filename):
+            with open(filename, 'r', encoding='utf-8') as f:
+                try:
+                    data = json.load(f)
+                except:
+                    data = []
+        
+        # Добавляем новый результат
+        data.append({
+            "user_id": user_id,
+            "goal_id": goal_id,
+            "result": result,
+            "timestamp": datetime.now().isoformat()
+        })
+        
+        # Сохраняем
+        with open(filename, 'w', encoding='utf-8') as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+            
+    except Exception as e:
+        logger.error(f"Ошибка при сохранении результата: {e}")
+
+
+# ============================================
+# ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
+# ============================================
+
+def get_goal_difficulty(goal_id: str, mode: str) -> str:
+    """
+    Возвращает сложность цели
+    
+    Args:
+        goal_id: ID цели
+        mode: режим
+    
+    Returns:
+        "easy", "medium" или "hard"
+    """
+    difficulties = {
+        "income_growth": {"coach": "hard", "psychologist": "medium", "trainer": "hard"},
+        "money_blocks": {"coach": "medium", "psychologist": "medium", "trainer": "easy"},
+        "relations": {"coach": "medium", "psychologist": "hard", "trainer": "medium"},
+        "anxiety_reduce": {"coach": "medium", "psychologist": "hard", "trainer": "easy"},
+        "energy_boost": {"coach": "easy", "psychologist": "medium", "trainer": "easy"},
+        "purpose": {"coach": "hard", "psychologist": "hard", "trainer": "medium"},
+        "boundaries": {"coach": "medium", "psychologist": "hard", "trainer": "easy"},
+        "self_esteem": {"coach": "medium", "psychologist": "hard", "trainer": "easy"}
+    }
+    
+    if goal_id in difficulties and mode in difficulties[goal_id]:
+        return difficulties[goal_id][mode]
+    return "medium"
+
+
+def get_goal_time_estimate(goal_id: str, mode: str) -> str:
+    """
+    Возвращает оценку времени для цели
+    
+    Args:
+        goal_id: ID цели
+        mode: режим
+    
+    Returns:
+        Строка с оценкой времени
+    """
+    estimates = {
+        "income_growth": {"coach": "6 месяцев", "psychologist": "6 месяцев", "trainer": "6 месяцев"},
+        "money_blocks": {"coach": "4-6 недель", "psychologist": "6-8 недель", "trainer": "4-6 недель"},
+        "relations": {"coach": "4-6 месяцев", "psychologist": "6-8 месяцев", "trainer": "4-6 месяцев"},
+        "anxiety_reduce": {"coach": "6 месяцев", "psychologist": "6-8 месяцев", "trainer": "4-6 месяцев"},
+        "energy_boost": {"coach": "4-6 месяцев", "psychologist": "6 месяцев", "trainer": "4-6 месяцев"},
+        "purpose": {"coach": "6-8 месяцев", "psychologist": "6-8 месяцев", "trainer": "4-6 месяцев"},
+        "boundaries": {"coach": "4-6 месяцев", "psychologist": "6 месяцев", "trainer": "4-6 месяцев"},
+        "self_esteem": {"coach": "4-6 месяцев", "psychologist": "6 месяцев", "trainer": "4-6 месяцев"}
+    }
+    
+    if goal_id in estimates and mode in estimates[goal_id]:
+        return estimates[goal_id][mode]
+    return "3-6 месяцев"
