@@ -116,6 +116,8 @@ reminder_manager = ReminderManager()
 destination_manager = DestinationManager()
 stats = Statistics()
 
+morning_manager = MorningMessageManager()
+
 # Инициализируем гипнотический оркестратор
 hypno = HypnoOrchestrator()
 tales = TherapeuticTales()
@@ -2412,6 +2414,26 @@ async def show_ai_generated_profile(callback: CallbackQuery, state: FSMContext, 
         [InlineKeyboardButton(text="⚙️ ВЫБРАТЬ РЕЖИМ", callback_data="show_mode_selection")]
     ])
     
+    # 🔥 НОВЫЙ БЛОК: планирование утреннего сообщения
+    # Получаем данные для утреннего сообщения
+    data = await state.get_data()
+    scores = {}
+    for k in VECTORS:
+        levels = data.get("behavioral_levels", {}).get(k, [])
+        scores[k] = sum(levels) / len(levels) if levels else 3.0
+    
+    profile_data = data.get("profile_data", {})
+    user_name = user_names.get(callback.from_user.id, "друг")
+    
+    # Планируем утреннее сообщение на завтра в 9:00
+    await morning_manager.schedule_morning_message(
+        user_id=callback.from_user.id,
+        user_name=user_name,
+        scores=scores,
+        profile_data=profile_data
+    )
+    # 🔥 КОНЕЦ НОВОГО БЛОКА
+    
     # Удаляем статусное сообщение
     if status_msg:
         try:
@@ -2419,7 +2441,7 @@ async def show_ai_generated_profile(callback: CallbackQuery, state: FSMContext, 
         except:
             pass
     
-    # 🔥 ИСПРАВЛЕНО: используем safe_send_message для автоматического разбиения
+    # Отправляем сообщение
     await safe_send_message(
         callback.message,
         text,
@@ -5156,6 +5178,9 @@ async def main():
     dp = Dispatcher(storage=storage)
     
     reminder_manager.set_bot(bot)
+
+    morning_manager.set_bot(bot)
+    morning_manager.set_contexts(user_contexts, user_data)
     
     await bot.delete_webhook(drop_pending_updates=True)
     print("✅ Вебхук удален")
