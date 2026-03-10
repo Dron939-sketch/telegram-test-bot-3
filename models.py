@@ -1,6 +1,6 @@
-# models.py
 """
 Классы-менеджеры и модели данных
+Версия 9.6: Добавлены методы для работы с жизненным контекстом
 """
 import os
 import json
@@ -8,6 +8,7 @@ import logging
 import aiohttp
 import asyncio
 import time
+import re
 from datetime import datetime, timedelta
 from typing import Optional, Dict, List, Any, Tuple
 from collections import defaultdict
@@ -198,7 +199,7 @@ class UserContext:
     async def handle_gender_callback(self, gender: str) -> Tuple[Optional[str], Optional[InlineKeyboardMarkup]]:
         """Обрабатывает выбор пола через callback"""
         self.gender = gender
-        self.awaiting_context = None
+        self.awaiting_context = None  # Важно сбросить!
         question, keyboard = await self.ask_for_context()
         return question, keyboard
     
@@ -224,8 +225,21 @@ class UserContext:
             "day": now.day,
             "hour": now.hour,
             "minute": now.minute,
-            "time_str": now.strftime("%H:%M")
+            "time_str": now.strftime("%H:%M"),
+            "season": self.get_season()
         }
+    
+    def get_season(self) -> str:
+        """Определяет текущий сезон"""
+        month = datetime.now().month
+        if 3 <= month <= 5:
+            return "весна"
+        elif 6 <= month <= 8:
+            return "лето"
+        elif 9 <= month <= 11:
+            return "осень"
+        else:
+            return "зима"
     
     def get_prompt_context(self) -> str:
         """Возвращает контекст для вставки в промпт AI"""
@@ -242,7 +256,7 @@ class UserContext:
             lines.append(f"Город: {self.city}")
         
         day = self.get_day_context()
-        lines.append(f"Время: {day['time_str']}, {day['weekday']}" + (" (выходной)" if day['is_weekend'] else ""))
+        lines.append(f"Время: {day['time_str']}, {day['weekday']} ({day['season']})" + (" (выходной)" if day['is_weekend'] else ""))
         
         if self.weather_cache:
             lines.append(f"Погода: {self.weather_cache['icon']} {self.weather_cache['description']}, {self.weather_cache['temp']}°C")
@@ -327,6 +341,247 @@ class UserContext:
             return "золотой возраст"
         else:
             return "возраст мудрости"
+    
+    # ========== НОВЫЕ МЕТОДЫ ДЛЯ РАБОТЫ С ЖИЗНЕННЫМ КОНТЕКСТОМ ==========
+    
+    def save_life_context(self, answers: dict) -> None:
+        """Сохраняет жизненный контекст из ответов пользователя"""
+        self.family_status = answers.get('family_status')
+        self.has_children = answers.get('has_children')
+        self.children_ages = answers.get('children_ages')
+        self.work_schedule = answers.get('work_schedule')
+        self.job_title = answers.get('job_title')
+        self.commute_time = answers.get('commute_time')
+        self.housing_type = answers.get('housing_type')
+        self.has_private_space = answers.get('has_private_space')
+        self.has_car = answers.get('has_car')
+        self.support_people = answers.get('support_people')
+        self.resistance_people = answers.get('resistance_people')
+        self.energy_level = answers.get('energy_level')
+        self.life_context_complete = True
+        self.last_context_update = datetime.now()
+    
+    def parse_life_context_from_text(self, text: str) -> dict:
+        """Парсит ответы на вопросы о жизненном контексте из текста"""
+        lines = text.strip().split('\n')
+        answers = {}
+        
+        for i, line in enumerate(lines):
+            # Убираем нумерацию и лишние пробелы
+            clean = re.sub(r'^[\d️⃣🔟\s]*', '', line.strip())
+            if not clean:
+                continue
+            
+            # Семейное положение
+            if i == 0:
+                answers['family_status'] = clean
+            
+            # Дети
+            elif i == 1:
+                answers['has_children'] = 'да' in clean.lower() or 'есть' in clean.lower()
+                answers['children_ages'] = clean
+            
+            # Работа и график
+            elif i == 2:
+                # Пробуем извлечь профессию и график
+                answers['job_title'] = clean
+                if '5/2' in clean:
+                    answers['work_schedule'] = '5/2'
+                elif '2/2' in clean:
+                    answers['work_schedule'] = '2/2'
+                elif 'свободный' in clean.lower() or 'фриланс' in clean.lower():
+                    answers['work_schedule'] = 'свободный'
+                else:
+                    answers['work_schedule'] = clean
+            
+            # Время на дорогу
+            elif i == 3:
+                minutes = re.findall(r'\d+', clean)
+                answers['commute_time'] = int(minutes[0]) if minutes else None
+            
+            # Жильё
+            elif i == 4:
+                answers['housing_type'] = clean
+            
+            # Отдельное пространство
+            elif i == 5:
+                answers['has_private_space'] = 'да' in clean.lower() or 'есть' in clean.lower()
+            
+            # Машина
+            elif i == 6:
+                answers['has_car'] = 'да' in clean.lower() or 'есть' in clean.lower()
+            
+            # Поддержка
+            elif i == 7:
+                answers['support_people'] = clean
+            
+            # Сопротивление
+            elif i == 8:
+                answers['resistance_people'] = clean if 'нет' not in clean.lower() else None
+            
+            # Энергия
+            elif i == 9:
+                energy = re.findall(r'\d+', clean)
+                answers['energy_level'] = int(energy[0]) if energy else 5
+        
+        return answers
+    
+    def format_life_context(self) -> str:
+        """Форматирует жизненный контекст для вывода пользователю"""
+        if not self.life_context_complete:
+            return "Жизненный контекст не собран"
+        
+        lines = []
+        lines.append(f"👨‍👩‍👧‍👦 {self.bold('Семья:')} {self.family_status or 'не указано'}")
+        if self.has_children:
+            lines.append(f"   Дети: {self.children_ages}")
+        lines.append(f"💼 {self.bold('Работа:')} {self.job_title or 'не указана'}, график {self.work_schedule or 'не указан'}")
+        if self.commute_time:
+            lines.append(f"🚗 {self.bold('Дорога:')} {self.commute_time} мин")
+        lines.append(f"🏠 {self.bold('Жильё:')} {self.housing_type or 'не указано'}")
+        lines.append(f"   {self.bold('Отдельное пространство:')} {'✅ есть' if self.has_private_space else '❌ нет'}")
+        lines.append(f"🚗 {self.bold('Машина:')} {'✅ есть' if self.has_car else '❌ нет'}")
+        lines.append(f"🤝 {self.bold('Поддержка:')} {self.support_people or 'никого'}")
+        if self.resistance_people:
+            lines.append(f"⚠️ {self.bold('Сопротивление:')} {self.resistance_people}")
+        lines.append(f"⚡ {self.bold('Энергия:')} {self.energy_level or '?'}/10")
+        
+        return "\n".join(lines)
+    
+    def check_resource_availability(self, required_resources: dict) -> dict:
+        """
+        Проверяет наличие требуемых ресурсов
+        
+        Args:
+            required_resources: {
+                'time_per_week': часы в неделю,
+                'energy_level': требуемый уровень энергии (1-10),
+                'private_space': требуется ли отдельное пространство (bool),
+                'support': требуется ли поддержка (bool),
+                'budget': требуемый бюджет в рублях
+            }
+        
+        Returns:
+            dict с результатами проверки
+        """
+        result = {
+            'available': {},
+            'required': {},
+            'deficit': {},
+            'details': {}
+        }
+        
+        # Время (из графика работы и дороги)
+        if 'time_per_week' in required_resources:
+            # Примерная оценка свободного времени
+            available_time = self._estimate_free_time()
+            required = required_resources['time_per_week']
+            result['available']['time'] = round(available_time, 1)
+            result['required']['time'] = required
+            result['deficit']['time'] = max(0, (required - available_time) / required * 100) if required > 0 else 0
+            result['details']['time'] = f"{available_time} ч/нед из {required} ч/нед"
+        
+        # Энергия
+        if 'energy_level' in required_resources and self.energy_level:
+            required = required_resources['energy_level']
+            result['available']['energy'] = self.energy_level
+            result['required']['energy'] = required
+            result['deficit']['energy'] = max(0, (required - self.energy_level) / required * 100) if required > 0 else 0
+            result['details']['energy'] = f"{self.energy_level}/10 из {required}/10"
+        
+        # Пространство
+        if 'private_space' in required_resources and required_resources['private_space']:
+            result['available']['space'] = self.has_private_space or False
+            result['required']['space'] = True
+            result['deficit']['space'] = 100 if not self.has_private_space else 0
+            result['details']['space'] = '✅ есть' if self.has_private_space else '❌ нет'
+        
+        # Поддержка
+        if 'support' in required_resources and required_resources['support']:
+            has_support = bool(self.support_people and self.support_people != 'никого' and self.support_people != 'нет')
+            result['available']['support'] = has_support
+            result['required']['support'] = True
+            result['deficit']['support'] = 100 if not has_support else 0
+            result['details']['support'] = '✅ есть' if has_support else '❌ нет'
+        
+        # Бюджет
+        if 'budget' in required_resources and required_resources['budget'] > 0:
+            # Оценка доступного бюджета (упрощённо)
+            available_budget = self._estimate_available_budget()
+            required = required_resources['budget']
+            result['available']['budget'] = available_budget
+            result['required']['budget'] = required
+            result['deficit']['budget'] = max(0, (required - available_budget) / required * 100) if required > 0 else 0
+            result['details']['budget'] = f"{available_budget}₽ из {required}₽"
+        
+        # Общий дефицит (средневзвешенный)
+        deficits = []
+        weights = []
+        
+        if 'time' in result['deficit']:
+            deficits.append(result['deficit']['time'])
+            weights.append(2)  # время важнее
+        if 'energy' in result['deficit']:
+            deficits.append(result['deficit']['energy'])
+            weights.append(1.5)
+        if 'space' in result['deficit']:
+            deficits.append(result['deficit']['space'])
+            weights.append(2)  # пространство критично
+        if 'support' in result['deficit']:
+            deficits.append(result['deficit']['support'])
+            weights.append(1.5)
+        if 'budget' in result['deficit']:
+            deficits.append(result['deficit']['budget'])
+            weights.append(1)
+        
+        if deficits and weights:
+            weighted_sum = sum(d * w for d, w in zip(deficits, weights))
+            total_weight = sum(weights)
+            result['total_deficit'] = round(weighted_sum / total_weight, 1)
+        else:
+            result['total_deficit'] = 0
+        
+        return result
+    
+    def _estimate_free_time(self) -> float:
+        """Оценивает свободное время в часах в неделю"""
+        free_time = 0
+        
+        # Базовая оценка по графику работы
+        if self.work_schedule:
+            if '5/2' in self.work_schedule:
+                # 5/2: рабочие дни 9-18 + дорога
+                work_hours = 9 * 5  # 45 часов работа
+                commute = (self.commute_time or 60) * 5 / 60  # дорога в часах
+                free_time = (24 * 7) - work_hours - commute - (8 * 7)  # сон 8 часов
+            elif '2/2' in self.work_schedule:
+                # 2/2: 12-часовые смены
+                free_time = 24 * 7 - (12 * 3.5) - (8 * 7)  # примерно
+            elif 'свободный' in self.work_schedule.lower():
+                free_time = 8 * 7  # 8 часов в день
+            else:
+                free_time = 4 * 7  # по умолчанию 4 часа в день
+        else:
+            free_time = 4 * 7  # по умолчанию
+        
+        # Вычитаем время на семью (если есть дети)
+        if self.has_children:
+            free_time -= 2 * 7  # минус 2 часа в день на детей
+        
+        # Вычитаем время на дорогу
+        if self.commute_time:
+            free_time -= (self.commute_time * 5 / 60)  # 5 дней в неделю
+        
+        return max(0, free_time)
+    
+    def _estimate_available_budget(self) -> float:
+        """Оценивает доступный бюджет в рублях (упрощённо)"""
+        # По умолчанию 5000 рублей
+        return 5000
+    
+    def bold(self, text: str) -> str:
+        """Жирный текст для HTML-форматирования"""
+        return f"<b>{text}</b>"
 
 
 # ============================================
