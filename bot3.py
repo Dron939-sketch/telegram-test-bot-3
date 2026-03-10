@@ -283,15 +283,135 @@ def clean_text_for_safe_display(text: str) -> str:
     return text.strip()
 
 
-async def safe_send_message(message: Message, text: str, reply_markup=None, parse_mode: str = 'HTML', delete_previous: bool = True):
-    """Безопасно отправляет сообщение с HTML-разметкой и удаляет предыдущее"""
+# ============================================
+# ФУНКЦИИ ДЛЯ РАБОТЫ С ДЛИННЫМИ СООБЩЕНИЯМИ (СТРАХОВКА)
+# ============================================
+
+def split_long_message(text: str, max_length: int = 4000) -> List[str]:
+    """
+    Разбивает длинное сообщение на части по max_length символов,
+    стараясь не разрывать слова и абзацы.
+    """
+    if len(text) <= max_length:
+        return [text]
     
-    # Удаляем предыдущее сообщение бота, если оно было
-    if delete_previous and hasattr(message, 'message_id'):
+    parts = []
+    current_part = ""
+    
+    # Разбиваем по абзацам (двойной перенос строки)
+    paragraphs = text.split('\n\n')
+    
+    for para in paragraphs:
+        # Если абзац сам по себе слишком длинный
+        if len(para) > max_length:
+            # Разбиваем по предложениям
+            sentences = re.split(r'(?<=[.!?])\s+', para)
+            for sent in sentences:
+                if len(current_part) + len(sent) + 2 <= max_length:
+                    if current_part:
+                        current_part += "\n\n" + sent
+                    else:
+                        current_part = sent
+                else:
+                    if current_part:
+                        parts.append(current_part)
+                    # Если предложение слишком длинное, режем принудительно
+                    if len(sent) > max_length:
+                        # Режем по словам
+                        words = sent.split()
+                        temp = ""
+                        for word in words:
+                            if len(temp) + len(word) + 1 <= max_length:
+                                if temp:
+                                    temp += " " + word
+                                else:
+                                    temp = word
+                            else:
+                                parts.append(temp)
+                                temp = word
+                        if temp:
+                            current_part = temp
+                        else:
+                            current_part = ""
+                    else:
+                        current_part = sent
+        else:
+            if len(current_part) + len(para) + 2 <= max_length:
+                if current_part:
+                    current_part += "\n\n" + para
+                else:
+                    current_part = para
+            else:
+                if current_part:
+                    parts.append(current_part)
+                current_part = para
+    
+    if current_part:
+        parts.append(current_part)
+    
+    return parts
+
+
+async def safe_send_long_message(message: Message, text: str, reply_markup=None, parse_mode: str = 'HTML', delete_previous: bool = True):
+    """
+    Безопасно отправляет длинные сообщения, разбивая их на части
+    """
+    # Удаляем предыдущее сообщение только если оно есть и мы хотим его удалить
+    if delete_previous:
         try:
             await message.delete()
         except TelegramBadRequest as e:
-            if "message can't be deleted" not in str(e).lower():
+            if "message can't be deleted" not in str(e).lower() and "message to delete not found" not in str(e).lower():
+                logger.warning(f"Не удалось удалить сообщение: {e}")
+        except Exception as e:
+            logger.warning(f"Ошибка при удалении сообщения: {e}")
+    
+    # Разбиваем длинное сообщение
+    parts = split_long_message(text)
+    
+    first_message = None
+    for i, part in enumerate(parts):
+        try:
+            if i == 0:
+                # Первая часть с клавиатурой
+                first_message = await message.answer(part, reply_markup=reply_markup, parse_mode=parse_mode)
+            else:
+                # Остальные части без клавиатуры
+                await message.answer(part, parse_mode=parse_mode)
+        except TelegramBadRequest as e:
+            if "can't parse entities" in str(e).lower():
+                # Если ошибка парсинга, отправляем без форматирования
+                clean_part = clean_text_for_safe_display(part)
+                if i == 0:
+                    first_message = await message.answer(clean_part, reply_markup=reply_markup)
+                else:
+                    await message.answer(clean_part)
+            else:
+                logger.error(f"Ошибка при отправке части {i+1}: {e}")
+                # Пробуем отправить без форматирования
+                clean_part = clean_text_for_safe_display(part)
+                if i == 0:
+                    first_message = await message.answer(clean_part, reply_markup=reply_markup)
+                else:
+                    await message.answer(clean_part)
+    
+    return first_message
+
+
+async def safe_send_message(message: Message, text: str, reply_markup=None, parse_mode: str = 'HTML', delete_previous: bool = True):
+    """Безопасно отправляет сообщение с проверкой длины"""
+    
+    # Проверяем длину сообщения
+    if len(text) > 4000:
+        logger.warning(f"⚠️ Сообщение слишком длинное ({len(text)} символов). Разбиваем на части.")
+        return await safe_send_long_message(message, text, reply_markup, parse_mode, delete_previous)
+    
+    # Удаляем предыдущее сообщение с обработкой ошибки "не найдено"
+    if delete_previous:
+        try:
+            await message.delete()
+        except TelegramBadRequest as e:
+            if "message can't be deleted" not in str(e).lower() and "message to delete not found" not in str(e).lower():
                 logger.warning(f"Не удалось удалить сообщение: {e}")
         except Exception as e:
             logger.warning(f"Ошибка при удалении сообщения: {e}")
@@ -303,6 +423,10 @@ async def safe_send_message(message: Message, text: str, reply_markup=None, pars
             # Если ошибка парсинга, отправляем без форматирования
             clean_text = clean_text_for_safe_display(text)
             return await message.answer(clean_text, reply_markup=reply_markup)
+        elif "message is too long" in str(e).lower():
+            # Если сообщение слишком длинное, разбиваем
+            logger.warning(f"⚠️ Telegram вернул ошибку 'message is too long'. Разбиваем на части.")
+            return await safe_send_long_message(message, text, reply_markup, parse_mode, False)
         raise
 
 
