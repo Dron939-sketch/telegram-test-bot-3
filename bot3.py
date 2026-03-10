@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 ВИРТУАЛЬНЫЙ ПСИХОЛОГ - МАТРИЦА ПОВЕДЕНИЙ 4×6
-ВЕРСИЯ 9.2: ИСПРАВЛЕННАЯ (обработка ошибок форматирования)
+ВЕРСИЯ 9.3: КРАСИВОЕ ОФОРМЛЕНИЕ С ЖИРНЫМ ТЕКСТОМ И ЭМОДЗИ
 """
 
 import os
@@ -115,8 +115,83 @@ anchoring = Anchoring()
 
 
 # ============================================
-# ФУНКЦИИ ДЛЯ БЕЗОПАСНОГО ФОРМАТИРОВАНИЯ ТЕКСТА
+# ФУНКЦИИ ДЛЯ КРАСИВОГО ОФОРМЛЕНИЯ ТЕКСТА
 # ============================================
+
+def bold(text: str) -> str:
+    """Жирный текст (HTML)"""
+    return f"<b>{text}</b>"
+
+
+def italic(text: str) -> str:
+    """Курсив (HTML)"""
+    return f"<i>{text}</i>"
+
+
+def emoji_text(emoji: str, text: str, bold_text: bool = True) -> str:
+    """Текст с эмодзи"""
+    if bold_text:
+        return f"{emoji} {bold(text)}"
+    return f"{emoji} {text}"
+
+
+def format_profile_text(text: str) -> str:
+    """Форматирует текст профиля с жирными заголовками и эмодзи"""
+    if not text:
+        return text
+    
+    # Заменяем заголовки блоков на жирные с эмодзи
+    replacements = [
+        (r'БЛОК\s*1:?\s*', f'🔑 {bold("КЛЮЧЕВАЯ ХАРАКТЕРИСТИКА")}\n'),
+        (r'БЛОК\s*2:?\s*', f'💪 {bold("СИЛЬНЫЕ СТОРОНЫ")}\n'),
+        (r'БЛОК\s*3:?\s*', f'🎯 {bold("ЗОНЫ РОСТА")}\n'),
+        (r'БЛОК\s*4:?\s*', f'🌱 {bold("КАК ЭТО СФОРМИРОВАЛОСЬ")}\n'),
+        (r'БЛОК\s*5:?\s*', f'⚠️ {bold("ГЛАВНАЯ ЛОВУШКА")}\n'),
+    ]
+    
+    for pattern, replacement in replacements:
+        text = re.sub(pattern, replacement, text, flags=re.IGNORECASE)
+    
+    # Выделяем ключевые фразы жирным
+    key_phrases = [
+        'тревожный тип привязанности',
+        'базовое доверие',
+        'страх несоответствия',
+        'эмоциональное выгорание',
+        'тотальный контроль',
+        'цикл',
+        'петля',
+        'точка входа',
+        'прогноз'
+    ]
+    
+    for phrase in key_phrases:
+        text = re.sub(f'({phrase})', bold(r'\1'), text, flags=re.IGNORECASE)
+    
+    return text
+
+
+def format_psychologist_text(text: str) -> str:
+    """Форматирует мысли психолога с жирными заголовками и эмодзи"""
+    if not text:
+        return text
+    
+    # Добавляем заголовок с эмодзи
+    text = re.sub(r'^МЫСЛИ\s*ПСИХОЛОГА', f'🧠 {bold("МЫСЛИ ПСИХОЛОГА")}', text, flags=re.IGNORECASE)
+    
+    # Заменяем заголовки секций
+    sections = [
+        (r'КЛЮЧЕВОЙ\s*ЭЛЕМЕНТ', '🔐', 'КЛЮЧЕВОЙ ЭЛЕМЕНТ'),
+        (r'ПЕТЛЯ', '🔄', 'ПЕТЛЯ'),
+        (r'ТОЧКА\s*ВХОДА', '🚪', 'ТОЧКА ВХОДА'),
+        (r'ПРОГНОЗ', '📊', 'ПРОГНОЗ'),
+    ]
+    
+    for pattern, emj, title in sections:
+        text = re.sub(f'({pattern})', f'{emj} {bold(title)}', text, flags=re.IGNORECASE)
+    
+    return text
+
 
 def strip_html(text: str) -> str:
     """Полностью удаляет все HTML-теги из текста"""
@@ -156,12 +231,16 @@ def clean_text_for_safe_display(text: str) -> str:
     return text.strip()
 
 
-def format_section(title: str, content: str, add_separator: bool = True) -> str:
-    """Форматирует секцию текста с заголовком"""
-    result = f"{title}\n{content}"
-    if add_separator:
-        result += "\n\n━━━━━━━━━━━━━━━━━━━━"
-    return result
+def safe_send_message(message: Message, text: str, reply_markup=None, parse_mode: str = 'HTML'):
+    """Безопасно отправляет сообщение с HTML-разметкой"""
+    try:
+        return message.answer(text, reply_markup=reply_markup, parse_mode=parse_mode)
+    except TelegramBadRequest as e:
+        if "can't parse entities" in str(e).lower():
+            # Если ошибка парсинга, отправляем без форматирования
+            clean_text = clean_text_for_safe_display(text)
+            return message.answer(clean_text, reply_markup=reply_markup)
+        raise
 
 
 def safe_edit_message(message: Message, text: str, reply_markup=None, max_retries=2):
@@ -521,11 +600,11 @@ def convert_to_simple_language(scores: dict, perception_type: str, thinking_leve
 
 
 # ============================================
-# ФУНКЦИИ РЕЗУЛЬТАТОВ (ИСПРАВЛЕННЫЕ)
+# ФУНКЦИИ РЕЗУЛЬТАТОВ
 # ============================================
 
 def get_human_readable_profile(scores: dict, model=None, perception_type="не определен", thinking_level=5, dominant_dilts="BEHAVIOR") -> str:
-    """Возвращает портрет пользователя понятным языком с правильным форматированием"""
+    """Возвращает портрет пользователя понятным языком"""
     lines = []
     
     if scores:
@@ -544,40 +623,31 @@ def get_human_readable_profile(scores: dict, model=None, perception_type="не �
         pain_origin = "Из вашего опыта"
         costs = ["Энергией", "Временем", "Возможностями"]
     
-    # Заголовок с эмодзи
-    lines.append("🧠 ВАШ ПСИХОЛОГИЧЕСКИЙ ПОРТРЕТ")
+    lines.append(f"🧠 {bold('ВАШ ПСИХОЛОГИЧЕСКИЙ ПОРТРЕТ')}")
     lines.append("")
-    lines.append(f"🔍 Тип восприятия: {perception_type}")
-    lines.append(f"🧠 Уровень мышления: {thinking_level}/9")
-    lines.append("")
-    lines.append("━━━━━━━━━━━━━━━━━━━━")
+    lines.append(f"🔍 {bold('Тип восприятия:')} {perception_type}")
+    lines.append(f"🧠 {bold('Уровень мышления:')} {thinking_level}/9")
     lines.append("")
     
     # Основные секции с правильными заголовками
-    lines.append("КЛЮЧЕВАЯ ХАРАКТЕРИСТИКА")
+    lines.append(f"🔑 {bold('КЛЮЧЕВАЯ ХАРАКТЕРИСТИКА')}")
     lines.append(quote)
     lines.append("")
-    lines.append("━━━━━━━━━━━━━━━━━━━━")
-    lines.append("")
     
-    lines.append("СИЛЬНЫЕ СТОРОНЫ")
+    lines.append(f"💪 {bold('СИЛЬНЫЕ СТОРОНЫ')}")
     lines.append("• Высокоразвитые социальные навыки и умение выстраивать надежные, доверительные отношения.")
     lines.append("• Системное мышление, позволяющее видеть связи, управлять сложными процессами и достигать целей.")
     lines.append("• Исключительная устойчивость к стрессу и угрозам, способность действовать хладнокровно в кризисах.")
     lines.append("• Прагматизм и высокая компетентность в вопросах финансов, карьеры и социального взаимодействия.")
     lines.append("")
-    lines.append("━━━━━━━━━━━━━━━━━━━━")
-    lines.append("")
     
-    lines.append("ЗОНЫ РОСТА")
+    lines.append(f"🎯 {bold('ЗОНЫ РОСТА')}")
     lines.append(f"• {pain_origin}")
     for cost in costs[:3]:
         lines.append(f"• {cost}")
     lines.append("")
-    lines.append("━━━━━━━━━━━━━━━━━━━━")
-    lines.append("")
     
-    lines.append("ГЛАВНАЯ ЛОВУШКА")
+    lines.append(f"⚠️ {bold('ГЛАВНАЯ ЛОВУШКА')}")
     dilts_desc = DILTS_LEVELS.get(dominant_dilts, "⚡ Поведение")
     lines.append(f"• {dilts_desc}")
     
@@ -627,23 +697,19 @@ async def cmd_start(message: Message, state: FSMContext):
         profile_code = data.get("profile_data", {}).get('display_name', 'SA-5_INT')
         
         text = f"""
-🧠 ФРЕДИ: ВИРТУАЛЬНЫЙ ПСИХОЛОГ
+🧠 {bold('ФРЕДИ: ВИРТУАЛЬНЫЙ ПСИХОЛОГ')}
 
 👋 О, {user_name}, я вас помню!
 (У меня, в отличие от людей, с памятью всё отлично — спасибо базе данных)
 
-📊 ВАШ ПРОФИЛЬ: {profile_code}
-(Лежит у меня в архивах, пылится...)
+📊 {bold('ВАШ ПРОФИЛЬ:')} {profile_code}
 
-━━━━━━━━━━━━━━━━━━━━
-❓ ЧТО ДЕЛАЕМ?
+❓ {bold('ЧТО ДЕЛАЕМ?')}
 
 Вы можете:
 🔄 Пройти тест заново — вдруг вы изменились?
-   (Хотя люди редко меняются, но вдруг...)
 
-━━━━━━━━━━━━━━━━━━━━
-⬇️ ВЫБИРАЙТЕ:
+⬇️ {bold('ВЫБИРАЙТЕ:')}
 """
         
         keyboard = InlineKeyboardMarkup(inline_keyboard=[
@@ -651,34 +717,26 @@ async def cmd_start(message: Message, state: FSMContext):
             [InlineKeyboardButton(text="🧠 К ПОРТРЕТУ", callback_data="show_results")]
         ])
         
-        await message.answer(text, reply_markup=keyboard)
+        await safe_send_message(message, text, reply_markup=keyboard)
         return
     
     # Проверяем, заполнен ли контекст
     if not (context.city and context.gender and context.age):
         welcome_text = (
             f"{user_name}, привет! Ну, здравствуйте, дорогой человек! 👋\n\n"
-            f"🧠 Я — Фреди, виртуальный психолог.\n"
+            f"🧠 {bold('Я — Фреди, виртуальный психолог.')}\n"
             f"Оцифрованная версия Андрея Мейстера, если хотите — его цифровой слепок.\n\n"
             f"🎭 Короче, я — это он, только батарейка дольше держит и пожрать не прошу.\n\n"
-            f"🕒 Нам нужно познакомиться, потому что я пока не экстрасенс.\n"
-            f"(Хотя работаю над этим — обновление 7.0 уже в разработке).\n\n"
+            f"🕒 Нам нужно познакомиться, потому что я пока не экстрасенс.\n\n"
             f"🧐 Чтобы я понимал, с кем имею дело и чем могу быть полезен —\n"
             f"давайте-ка пройдём небольшой тест.\n\n"
-            f"📊 Всего 5 этапов:\n\n"
-            f"1️⃣ Конфигурация восприятия\n"
-            f"   ↳ Как вы фильтруете реальность (спойлер: у всех по-разному)\n\n"
-            f"2️⃣ Конфигурация мышления\n"
-            f"   ↳ Как ваш мозг перерабатывает информацию\n\n"
-            f"3️⃣ Конфигурация поведения\n"
-            f"   ↳ Что вы делаете на автопилоте (даже не замечая)\n\n"
-            f"4️⃣ Точка роста\n"
-            f"   ↳ Куда двигаться, чтобы не топтаться на месте\n\n"
-            f"5️⃣ Глубинные паттерны\n"
-            f"   ↳ Что сформировало вас как личность\n\n"
-            f"⏱ 15 минут — и я буду знать о вас больше, чем вы думаете.\n"
-            f"🔮 И да, я обещаю не использовать это против вас.\n"
-            f"   (Ну, только если вы сами не попросите)\n\n"
+            f"📊 {bold('Всего 5 этапов:')}\n\n"
+            f"1️⃣ Конфигурация восприятия — как вы фильтруете реальность\n"
+            f"2️⃣ Конфигурация мышления — как ваш мозг перерабатывает информацию\n"
+            f"3️⃣ Конфигурация поведения — что вы делаете на автопилоте\n"
+            f"4️⃣ Точка роста — куда двигаться, чтобы не топтаться на месте\n"
+            f"5️⃣ Глубинные паттерны — что сформировало вас как личность\n\n"
+            f"⏱ {bold('15 минут')} — и я буду знать о вас больше, чем вы думаете.\n\n"
             f"🚀 Ну что, начнём наше знакомство?"
         )
         
@@ -687,7 +745,7 @@ async def cmd_start(message: Message, state: FSMContext):
             [InlineKeyboardButton(text="🤨 А ты вообще кто такой?", callback_data="why_details")]
         ])
         
-        await message.answer(welcome_text, reply_markup=keyboard)
+        await safe_send_message(message, welcome_text, reply_markup=keyboard)
         return
     
     # Если контекст уже заполнен, показываем меню
@@ -697,7 +755,8 @@ async def cmd_start(message: Message, state: FSMContext):
 async def show_why_details(callback: CallbackQuery, state: FSMContext):
     """Показывает детальную информацию о боте"""
     
-    text = """🎭 Ну, вопрос хороший. Давайте по существу.
+    text = f"""
+🎭 {bold('Ну, вопрос хороший. Давайте по существу.')}
 
 Видите ли, дорогой человек, я — экспериментальная модель.
 Андрей Мейстер однажды подумал: "А что, если я создам свою цифровую копию?
@@ -705,26 +764,22 @@ async def show_why_details(callback: CallbackQuery, state: FSMContext):
 
 Так я и появился. 🧠
 
-🧐 Что я умею (помимо того, что шучу как он и временами бешу):
+🧐 {bold('Что я умею:')}
 
 • Вижу паттерны там, где вы видите просто день сурка
 • Нахожу систему в ваших "случайных" решениях
 • Понимаю, почему вы выбираете одних и тех же "не тех" людей
-• И да — я реально беспристрастен. У меня нет плохого настроения,
-  я не обижаюсь и не осуждаю. (Ну, почти. Иногда хочется, но алгоритмы не позволяют)
+• Я реально беспристрастен — у меня нет плохого настроения
 
-🎯 Конкретно по тесту:
+🎯 {bold('Конкретно по тесту:')}
 
 1️⃣ Восприятие — поймём, какую линзу вы носите
 2️⃣ Мышление — узнаем, как вы пережёвываете реальность
 3️⃣ Поведение — посмотрим, что вы делаете "на автомате"
-4️⃣ Точка роста — я скажу, куда вам двигаться (спойлер: не в стену)
+4️⃣ Точка роста — я скажу, куда вам двигаться
 5️⃣ Глубинные паттерны — заглянем в детство и подсознание
 
-⏱ 15 минут. Потом я составлю ваш профиль и мы поговорим по делу.
-
-🔮 И да, я реально могу быть полезен.
-   Просто доверьтесь цифровому психопа... психологу! 😉
+⏱ {bold('15 минут')} — и я составлю ваш профиль.
 
 👌 Погнали?"""
     
@@ -732,7 +787,7 @@ async def show_why_details(callback: CallbackQuery, state: FSMContext):
         [InlineKeyboardButton(text="👌 Погнали!", callback_data="start_context")],
     ])
     
-    await safe_edit_message(callback.message, text, reply_markup=keyboard)
+    await safe_send_message(callback.message, text, reply_markup=keyboard)
     await callback.answer()
 
 
@@ -757,14 +812,13 @@ async def show_destinations(callback: CallbackQuery, state: FSMContext):
     recommended = destination_manager.recommend_by_profile(profile_code, mode)
     
     text = f"""
-{mode_config['emoji']} РЕЖИМ {mode_config['name']} АКТИВИРОВАН
+{mode_config['emoji']} {bold(f'РЕЖИМ {mode_config["name"]} АКТИВИРОВАН')}
 
-🎯 ВЫБЕРИТЕ ТОЧКУ НАЗНАЧЕНИЯ
+🎯 {bold('ВЫБЕРИТЕ ТОЧКУ НАЗНАЧЕНИЯ')}
 
-Я вижу, что в вашем профиле сейчас наиболее актуально:
+{italic('Я вижу, что в вашем профиле сейчас наиболее актуально:')}
 
-━━━━━━━━━━━━━━━━━━━━
-👇 Куда двинемся?
+👇 {bold('Куда двинемся?')}
 """
     
     # Строим клавиатуру с категориями
@@ -799,7 +853,7 @@ async def show_destinations(callback: CallbackQuery, state: FSMContext):
         callback_data="show_mode_selection"
     )])
     
-    await safe_edit_message(
+    await safe_send_message(
         callback.message, 
         text, 
         reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard)
@@ -843,7 +897,7 @@ async def show_destination_route(callback: CallbackQuery, state: FSMContext):
         route_progress=[]
     )
     
-    await safe_edit_message(
+    await safe_send_message(
         callback.message,
         "🧠 Строю оптимальный маршрут...\n\nЭто займёт несколько секунд."
     )
@@ -868,16 +922,14 @@ async def show_route_step(callback: CallbackQuery, state: FSMContext, step: int,
     mode_config = COMMUNICATION_MODES.get(mode, COMMUNICATION_MODES["coach"])
     
     text = f"""
-{mode_config['emoji']} МАРШРУТ К ЦЕЛИ
+{mode_config['emoji']} {bold('МАРШРУТ К ЦЕЛИ')}
 
-🎯 Точка назначения: {destination['name']}
-⏱ Ориентировочное время: {destination['time']}
+🎯 {bold('Точка назначения:')} {destination['name']}
+⏱ {bold('Ориентировочное время:')} {destination['time']}
 
-━━━━━━━━━━━━━━━━━━━━
 {route.get('full_text', 'Маршрут строится...')}
 
-━━━━━━━━━━━━━━━━━━━━
-👇 Отмечайте выполнение, когда готовы
+👇 {bold('Отмечайте выполнение, когда готовы')}
 """
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
@@ -886,7 +938,7 @@ async def show_route_step(callback: CallbackQuery, state: FSMContext, step: int,
         [InlineKeyboardButton(text="◀️ К ЦЕЛЯМ", callback_data="show_destinations")]
     ])
     
-    await safe_edit_message(callback.message, text, reply_markup=keyboard)
+    await safe_send_message(callback.message, text, reply_markup=keyboard)
     await state.set_state(TestStates.route_active)
     
     await reminder_manager.schedule_motivation_sequence(callback.from_user.id, destination)
@@ -910,9 +962,9 @@ async def route_step_done(callback: CallbackQuery, state: FSMContext):
     if next_step > 3:
         await show_route_complete(callback, state)
     else:
-        await safe_edit_message(
+        await safe_send_message(
             callback.message,
-            f"✅ Этап {step} выполнен!\n\nПереходим к этапу {next_step}..."
+            f"✅ {bold(f'Этап {step} выполнен!')}\n\nПереходим к этапу {next_step}..."
         )
         await asyncio.sleep(1)
         
@@ -927,14 +979,15 @@ async def show_route_complete(callback: CallbackQuery, state: FSMContext):
     destination = data.get("current_destination", {})
     
     text = f"""
-🎉 МАРШРУТ ЗАВЕРШЕН!
+🎉 {bold('МАРШРУТ ЗАВЕРШЕН!')}
 
-Поздравляю! Вы достигли цели: {destination['name']}
+Поздравляю! Вы достигли цели: {bold(destination['name'])}
 
-━━━━━━━━━━━━━━━━━━━━
-💪 ГОРДИТЕСЬ СОБОЙ
+💪 {bold('ГОРДИТЕСЬ СОБОЙ')}
 
 Хотите выбрать новую цель или закрепить результат?
+
+👇 {bold('Выберите действие:')}
 """
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
@@ -943,7 +996,7 @@ async def show_route_complete(callback: CallbackQuery, state: FSMContext):
         [InlineKeyboardButton(text="❓ ЗАДАТЬ ВОПРОС", callback_data="smart_questions")]
     ])
     
-    await safe_edit_message(callback.message, text, reply_markup=keyboard)
+    await safe_send_message(callback.message, text, reply_markup=keyboard)
     await state.update_data(route_step=None, current_destination=None)
     
     reminder_manager.cancel_user_reminders(callback.from_user.id)
@@ -956,29 +1009,27 @@ async def show_fallback_route(callback: CallbackQuery, state: FSMContext, destin
     mode_config = COMMUNICATION_MODES.get(mode, COMMUNICATION_MODES["coach"])
     
     text = f"""
-{mode_config['emoji']} МАРШРУТ К ЦЕЛИ
+{mode_config['emoji']} {bold('МАРШРУТ К ЦЕЛИ')}
 
-🎯 Точка назначения: {destination['name']}
-⏱ Ориентировочное время: {destination['time']}
+🎯 {bold('Точка назначения:')} {destination['name']}
+⏱ {bold('Ориентировочное время:')} {destination['time']}
 
-━━━━━━━━━━━━━━━━━━━━
-📍 ЭТАП 1: ДИАГНОСТИКА
-   • Что делаем: анализируем текущую ситуацию
-   • Домашнее задание: записываем всё, что связано с целью
-   • Критерий: есть список наблюдений
+📍 {bold('ЭТАП 1: ДИАГНОСТИКА')}
+   • {bold('Что делаем:')} анализируем текущую ситуацию
+   • {bold('📝 Домашнее задание:')} записываем всё, что связано с целью
+   • {bold('✅ Критерий:')} есть список наблюдений
 
-📍 ЭТАП 2: ПЛАНИРОВАНИЕ
-   • Что делаем: составляем пошаговый план
-   • Домашнее задание: разбиваем цель на микро-шаги
-   • Критерий: есть конкретный план
+📍 {bold('ЭТАП 2: ПЛАНИРОВАНИЕ')}
+   • {bold('Что делаем:')} составляем пошаговый план
+   • {bold('📝 Домашнее задание:')} разбиваем цель на микро-шаги
+   • {bold('✅ Критерий:')} есть конкретный план
 
-📍 ЭТАП 3: ДЕЙСТВИЕ
-   • Что делаем: начинаем с первого микро-шага
-   • Домашнее задание: каждый день делать хотя бы одно действие
-   • Критерий: первый шаг сделан
+📍 {bold('ЭТАП 3: ДЕЙСТВИЕ')}
+   • {bold('Что делаем:')} начинаем с первого микро-шага
+   • {bold('📝 Домашнее задание:')} каждый день делать хотя бы одно действие
+   • {bold('✅ Критерий:')} первый шаг сделан
 
-━━━━━━━━━━━━━━━━━━━━
-👇 Начинаем?
+👇 {bold('Начинаем?')}
 """
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
@@ -986,7 +1037,7 @@ async def show_fallback_route(callback: CallbackQuery, state: FSMContext, destin
         [InlineKeyboardButton(text="◀️ К ЦЕЛЯМ", callback_data="show_destinations")]
     ])
     
-    await safe_edit_message(callback.message, text, reply_markup=keyboard)
+    await safe_send_message(callback.message, text, reply_markup=keyboard)
     await state.set_state(TestStates.route_active)
 
 
@@ -1023,20 +1074,19 @@ async def show_final_profile(callback: CallbackQuery, state: FSMContext):
 
 
 async def show_ai_generated_profile(callback: CallbackQuery, state: FSMContext, ai_profile: str):
-    """Показывает профиль, сгенерированный ИИ с правильным форматированием"""
+    """Показывает профиль, сгенерированный ИИ с красивым форматированием"""
     
-    # Очищаем от форматирования
-    clean_text = clean_text_for_safe_display(ai_profile)
+    # Форматируем текст
+    formatted_profile = format_profile_text(ai_profile)
     
-    # Добавляем заголовок с эмодзи, если его нет
-    if not clean_text.startswith("🧠"):
-        clean_text = "🧠 ВАШ ПСИХОЛОГИЧЕСКИЙ ПОРТРЕТ\n\n" + clean_text
+    # Добавляем заголовок, если его нет
+    if not formatted_profile.startswith("🧠"):
+        formatted_profile = f"🧠 {bold('ВАШ ПСИХОЛОГИЧЕСКИЙ ПОРТРЕТ')}\n\n{formatted_profile}"
     
     text = f"""
-{clean_text}
+{formatted_profile}
 
-━━━━━━━━━━━━━━━━━━━━
-👇 Что дальше?
+👇 {bold('Что дальше?')}
 """
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
@@ -1045,7 +1095,7 @@ async def show_ai_generated_profile(callback: CallbackQuery, state: FSMContext, 
         [InlineKeyboardButton(text="⚙️ ВЫБРАТЬ РЕЖИМ", callback_data="show_mode_selection")]
     ])
     
-    await safe_edit_message(callback.message, text, reply_markup=keyboard)
+    await safe_send_message(callback.message, text, reply_markup=keyboard)
     await state.set_state(TestStates.profile_generated)
 
 
@@ -1070,7 +1120,7 @@ async def show_old_final_profile(callback: CallbackQuery, state: FSMContext):
         dominant_dilts=dominant_dilts
     )
     
-    text = f"{profile_text}\n\n━━━━━━━━━━━━━━━━━━━━\n👇 Что дальше?"
+    text = f"{profile_text}\n\n👇 {bold('Что дальше?')}"
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="🧠 МЫСЛИ ПСИХОЛОГА", callback_data="psychologist_thought")],
@@ -1078,7 +1128,7 @@ async def show_old_final_profile(callback: CallbackQuery, state: FSMContext):
         [InlineKeyboardButton(text="⚙️ ВЫБРАТЬ РЕЖИМ", callback_data="show_mode_selection")]
     ])
     
-    await safe_edit_message(callback.message, text, reply_markup=keyboard)
+    await safe_send_message(callback.message, text, reply_markup=keyboard)
     await state.set_state(TestStates.profile_generated)
 
 
@@ -1092,23 +1142,26 @@ async def show_stage_1_intro(callback: CallbackQuery, state: FSMContext):
     
     await state.set_state(TestStates.stage_1)
     
-    intro_text = (
-        f"🧠 ЭТАП 1: КОНФИГУРАЦИЯ ВОСПРИЯТИЯ\n\n"
-        f"Восприятие — это линза, через которую вы смотрите на мир.\n\n"
-        f"Она сформирована культурой, нормами, ценностями и опытом, который вас строил. Это определило, что вы замечаете автоматически, а что остаётся за кадром.\n\n"
-        f"🔍 Что мы исследуем:\n"
-        f"• Куда направлено ваше внимание — вовне или внутрь\n"
-        f"• Какая тревога доминирует — страх отвержения или страх потери контроля\n\n"
-        f"📊 Вопросов: 8\n"
-        f"⏱ Время: ~3 минуты\n\n"
-        f"Отвечайте честно — это поможет мне лучше понять вас."
-    )
+    intro_text = f"""
+🧠 {bold('ЭТАП 1: КОНФИГУРАЦИЯ ВОСПРИЯТИЯ')}
+
+Восприятие — это линза, через которую вы смотрите на мир.
+
+🔍 {bold('Что мы исследуем:')}
+• Куда направлено ваше внимание — вовне или внутрь
+• Какая тревога доминирует — страх отвержения или страх потери контроля
+
+📊 {bold('Вопросов:')} 8
+⏱ {bold('Время:')} ~3 минуты
+
+Отвечайте честно — это поможет мне лучше понять вас.
+"""
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="▶️ Начать исследование", callback_data="start_stage_1")]
     ])
     
-    await safe_edit_message(callback.message, intro_text, reply_markup=keyboard)
+    await safe_send_message(callback.message, intro_text, reply_markup=keyboard)
 
 
 async def start_stage_1(callback: CallbackQuery, state: FSMContext):
@@ -1140,11 +1193,13 @@ async def ask_stage_1_question(callback: CallbackQuery, state: FSMContext):
     question = get_stage1_question(current)
     progress = calculate_progress(current + 1, total)
     
-    question_text = (
-        f"🧠 ЭТАП 1: КОНФИГУРАЦИЯ ВОСПРИЯТИЯ\n\n"
-        f"{question['text']}\n\n"
-        f"{progress}"
-    )
+    question_text = f"""
+🧠 {bold('ЭТАП 1: КОНФИГУРАЦИЯ ВОСПРИЯТИЯ')}
+
+{question['text']}
+
+{progress}
+"""
     
     keyboard = []
     for option_id, option in question["options"].items():
@@ -1155,7 +1210,7 @@ async def ask_stage_1_question(callback: CallbackQuery, state: FSMContext):
     
     reply_markup = InlineKeyboardMarkup(inline_keyboard=keyboard)
     
-    await safe_edit_message(callback.message, question_text, reply_markup=reply_markup)
+    await safe_send_message(callback.message, question_text, reply_markup=reply_markup)
 
 
 async def handle_stage_1_answer(callback: CallbackQuery, state: FSMContext):
@@ -1236,11 +1291,13 @@ async def finish_stage_1(callback: CallbackQuery, state: FSMContext):
     # Очищаем от форматирования
     result_text = clean_text_for_safe_display(result_text)
     
+    text = f"{result_text}\n\n▶️ {bold('Перейти к этапу 2')}"
+    
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="▶️ Перейти к этапу 2", callback_data="show_stage_2_intro")]
     ])
     
-    await safe_edit_message(callback.message, result_text, reply_markup=keyboard)
+    await safe_send_message(callback.message, text, reply_markup=keyboard)
     await state.set_state(TestStates.stage_2)
 
 
@@ -1256,22 +1313,25 @@ async def show_stage_2_intro(callback: CallbackQuery, state: FSMContext):
     perception_type = data.get("perception_type", "СОЦИАЛЬНО-ОРИЕНТИРОВАННЫЙ")
     total_questions = get_stage2_total(perception_type)
     
-    intro_text = (
-        f"🧠 ЭТАП 2: КОНФИГУРАЦИЯ МЫШЛЕНИЯ\n\n"
-        f"Восприятие определяет, что вы видите. Мышление — как вы это понимаете.\n\n"
-        f"Конфигурация мышления определяется задачами: как вы обрабатываете информацию, какие связи видите, какой объём можете удержать.\n\n"
-        f"🎯 Самое важное:\n"
-        f"Конфигурация мышления — это траектория с чётким пунктом назначения: результат, к которому вы придёте. Если ничего не менять — вы попадёте именно туда.\n\n"
-        f"📊 Вопросов: {total_questions}\n"
-        f"⏱ Время: ~3-4 минуты\n\n"
-        f"Продолжим исследование?"
-    )
+    intro_text = f"""
+🧠 {bold('ЭТАП 2: КОНФИГУРАЦИЯ МЫШЛЕНИЯ')}
+
+Восприятие определяет, что вы видите. Мышление — как вы это понимаете.
+
+🎯 {bold('Самое важное:')}
+Конфигурация мышления — это траектория с чётким пунктом назначения: результат, к которому вы придёте. Если ничего не менять — вы попадёте именно туда.
+
+📊 {bold('Вопросов:')} {total_questions}
+⏱ {bold('Время:')} ~3-4 минуты
+
+Продолжим исследование?
+"""
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="▶️ Начать исследование", callback_data="start_stage_2")]
     ])
     
-    await safe_edit_message(callback.message, intro_text, reply_markup=keyboard)
+    await safe_send_message(callback.message, intro_text, reply_markup=keyboard)
 
 
 async def start_stage_2(callback: CallbackQuery, state: FSMContext):
@@ -1310,11 +1370,13 @@ async def ask_stage_2_question(callback: CallbackQuery, state: FSMContext):
     measures = question.get("measures", "thinking")
     progress = calculate_progress(current + 1, total_questions)
     
-    question_text = (
-        f"🧠 ЭТАП 2: КОНФИГУРАЦИЯ МЫШЛЕНИЯ\n\n"
-        f"{question['text']}\n\n"
-        f"{progress}"
-    )
+    question_text = f"""
+🧠 {bold('ЭТАП 2: КОНФИГУРАЦИЯ МЫШЛЕНИЯ')}
+
+{question['text']}
+
+{progress}
+"""
     
     keyboard = []
     for level_num, answer_text in question["options"].items():
@@ -1325,7 +1387,7 @@ async def ask_stage_2_question(callback: CallbackQuery, state: FSMContext):
     
     reply_markup = InlineKeyboardMarkup(inline_keyboard=keyboard)
     
-    await safe_edit_message(callback.message, question_text, reply_markup=reply_markup)
+    await safe_send_message(callback.message, question_text, reply_markup=reply_markup)
 
 
 async def handle_stage_2_answer(callback: CallbackQuery, state: FSMContext):
@@ -1424,11 +1486,13 @@ async def finish_stage_2(callback: CallbackQuery, state: FSMContext):
     # Очищаем от форматирования
     result_text = clean_text_for_safe_display(result_text)
     
+    text = f"{result_text}\n\n▶️ {bold('Перейти к этапу 3')}"
+    
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="▶️ Перейти к этапу 3", callback_data="show_stage_3_intro")]
     ])
     
-    await safe_edit_message(callback.message, result_text, reply_markup=keyboard)
+    await safe_send_message(callback.message, text, reply_markup=keyboard)
     await state.set_state(TestStates.stage_3)
 
 
@@ -1440,26 +1504,30 @@ async def show_stage_3_intro(callback: CallbackQuery, state: FSMContext):
     """Экран перед ЭТАПОМ 3"""
     user_id = callback.from_user.id
     
-    intro_text = (
-        f"🧠 ЭТАП 3: КОНФИГУРАЦИЯ ПОВЕДЕНИЯ\n\n"
-        f"Восприятие определяет, что вы видите.\n"
-        f"Мышление — как вы это понимаете.\n\n"
-        f"Конфигурация поведения — это то, как вы на это реагируете.\n\n"
-        f"В ней уже встроены стереотипы, роли и паттерны, которые вы когда-то переняли у других.\n\n"
-        f"🔍 Здесь мы исследуем:\n"
-        f"• Ваши автоматические реакции\n"
-        f"• Как вы действуете в разных ситуациях\n"
-        f"• Какие стратегии поведения закреплены\n\n"
-        f"📊 Вопросов: 8\n"
-        f"⏱ Время: ~3 минуты\n\n"
-        f"Продолжим?"
-    )
+    intro_text = f"""
+🧠 {bold('ЭТАП 3: КОНФИГУРАЦИЯ ПОВЕДЕНИЯ')}
+
+Восприятие определяет, что вы видите.
+Мышление — как вы это понимаете.
+
+Конфигурация поведения — это то, как вы на это реагируете.
+
+🔍 {bold('Здесь мы исследуем:')}
+• Ваши автоматические реакции
+• Как вы действуете в разных ситуациях
+• Какие стратегии поведения закреплены
+
+📊 {bold('Вопросов:')} 8
+⏱ {bold('Время:')} ~3 минуты
+
+Продолжим?
+"""
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="▶️ Начать исследование", callback_data="start_stage_3")]
     ])
     
-    await safe_edit_message(callback.message, intro_text, reply_markup=keyboard)
+    await safe_send_message(callback.message, intro_text, reply_markup=keyboard)
 
 
 async def start_stage_3(callback: CallbackQuery, state: FSMContext):
@@ -1493,11 +1561,13 @@ async def ask_stage_3_question(callback: CallbackQuery, state: FSMContext):
     strategy = question.get("strategy", "УБ")
     progress = calculate_progress(current + 1, total)
     
-    question_text = (
-        f"🧠 ЭТАП 3: КОНФИГУРАЦИЯ ПОВЕДЕНИЯ\n\n"
-        f"{question['text']}\n\n"
-        f"{progress}"
-    )
+    question_text = f"""
+🧠 {bold('ЭТАП 3: КОНФИГУРАЦИЯ ПОВЕДЕНИЯ')}
+
+{question['text']}
+
+{progress}
+"""
     
     keyboard = []
     for option_id, option_text in question["options"].items():
@@ -1508,7 +1578,7 @@ async def ask_stage_3_question(callback: CallbackQuery, state: FSMContext):
     
     reply_markup = InlineKeyboardMarkup(inline_keyboard=keyboard)
     
-    await safe_edit_message(callback.message, question_text, reply_markup=reply_markup)
+    await safe_send_message(callback.message, question_text, reply_markup=reply_markup)
 
 
 async def handle_stage_3_answer(callback: CallbackQuery, state: FSMContext):
@@ -1603,11 +1673,13 @@ async def finish_stage_3(callback: CallbackQuery, state: FSMContext):
     # Очищаем от форматирования
     result_text = clean_text_for_safe_display(result_text)
     
+    text = f"{result_text}\n\n▶️ {bold('Перейти к этапу 4')}"
+    
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="▶️ Перейти к этапу 4", callback_data="show_stage_4_intro")]
     ])
     
-    await safe_edit_message(callback.message, result_text, reply_markup=keyboard)
+    await safe_send_message(callback.message, text, reply_markup=keyboard)
     await state.set_state(TestStates.stage_4)
 
 
@@ -1619,25 +1691,30 @@ async def show_stage_4_intro(callback: CallbackQuery, state: FSMContext):
     """Экран перед ЭТАПОМ 4"""
     user_id = callback.from_user.id
     
-    intro_text = (
-        f"🧠 ЭТАП 4: ТОЧКА РОСТА\n\n"
-        f"Восприятие — что вы видите.\n"
-        f"Мышление — как понимаете.\n"
-        f"Поведение — как реагируете.\n"
-        f"Всё это — ваша внутренняя система.\n\n"
-        f"🌍 Но она живёт внутри внешней системы — общества, которое постоянно меняется.\n\n"
-        f"⚡ Когда одна система меняется, а другая — нет, возникает напряжение.\n\n"
-        f"🔍 Здесь мы найдём, где именно находится рычаг — место, где минимальное усилие даёт максимальные изменения.\n\n"
-        f"📊 Вопросов: 8\n"
-        f"⏱ Время: ~3 минуты\n\n"
-        f"Готовы найти свою точку роста?"
-    )
+    intro_text = f"""
+🧠 {bold('ЭТАП 4: ТОЧКА РОСТА')}
+
+Восприятие — что вы видите.
+Мышление — как понимаете.
+Поведение — как реагируете.
+
+🌍 Но она живёт внутри внешней системы — общества, которое постоянно меняется.
+
+⚡ Когда одна система меняется, а другая — нет, возникает напряжение.
+
+🔍 {bold('Здесь мы найдём:')} где именно находится рычаг — место, где минимальное усилие даёт максимальные изменения.
+
+📊 {bold('Вопросов:')} 8
+⏱ {bold('Время:')} ~3 минуты
+
+Готовы найти свою точку роста?
+"""
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="▶️ Начать исследование", callback_data="start_stage_4")]
     ])
     
-    await safe_edit_message(callback.message, intro_text, reply_markup=keyboard)
+    await safe_send_message(callback.message, intro_text, reply_markup=keyboard)
 
 
 async def start_stage_4(callback: CallbackQuery, state: FSMContext):
@@ -1669,11 +1746,13 @@ async def ask_stage_4_question(callback: CallbackQuery, state: FSMContext):
     question = get_stage4_question(current)
     progress = calculate_progress(current + 1, total)
     
-    question_text = (
-        f"🧠 ЭТАП 4: ТОЧКА РОСТА\n\n"
-        f"{question['text']}\n\n"
-        f"{progress}"
-    )
+    question_text = f"""
+🧠 {bold('ЭТАП 4: ТОЧКА РОСТА')}
+
+{question['text']}
+
+{progress}
+"""
     
     keyboard = []
     for option_id, option in question["options"].items():
@@ -1684,7 +1763,7 @@ async def ask_stage_4_question(callback: CallbackQuery, state: FSMContext):
     
     reply_markup = InlineKeyboardMarkup(inline_keyboard=keyboard)
     
-    await safe_edit_message(callback.message, question_text, reply_markup=reply_markup)
+    await safe_send_message(callback.message, question_text, reply_markup=reply_markup)
 
 
 async def handle_stage_4_answer(callback: CallbackQuery, state: FSMContext):
@@ -1802,23 +1881,23 @@ async def show_preliminary_profile(callback: CallbackQuery, state: FSMContext):
     confidence_bar = "█" * int(confidence * 10) + "░" * (10 - int(confidence * 10))
     
     text = f"""
-🧠 ПРЕДВАРИТЕЛЬНЫЙ ПОРТРЕТ
+🧠 {bold('ПРЕДВАРИТЕЛЬНЫЙ ПОРТРЕТ')}
 
 {simple_profile['attention_desc']}
 
 {simple_profile['thinking_desc']}
 
-📊 ТВОИ ВЕКТОРЫ:
-• Реакция на давление: {simple_profile['sb_desc']}
-• Отношение к деньгам: {simple_profile['tf_desc']}
-• Понимание мира: {simple_profile['ub_desc']}
-• Отношения с людьми: {simple_profile['chv_desc']}
+📊 {bold('ТВОИ ВЕКТОРЫ:')}
+• {bold('Реакция на давление:')} {simple_profile['sb_desc']}
+• {bold('Отношение к деньгам:')} {simple_profile['tf_desc']}
+• {bold('Понимание мира:')} {simple_profile['ub_desc']}
+• {bold('Отношения с людьми:')} {simple_profile['chv_desc']}
 
-🎯 Точка роста: {simple_profile['growth_point']}
+🎯 {bold('Точка роста:')} {simple_profile['growth_point']}
 
-📊 Уверенность: {confidence_bar} {int(confidence*100)}%
+📊 {bold('Уверенность:')} {confidence_bar} {int(confidence*100)}%
 
-👇 ЭТО ПОХОЖЕ НА ВАС?
+👇 {bold('ЭТО ПОХОЖЕ НА ВАС?')}
 """
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
@@ -1827,7 +1906,7 @@ async def show_preliminary_profile(callback: CallbackQuery, state: FSMContext):
         [InlineKeyboardButton(text="🔄 НЕТ", callback_data="profile_reject")]
     ])
     
-    await safe_edit_message(callback.message, text, reply_markup=keyboard)
+    await safe_send_message(callback.message, text, reply_markup=keyboard)
     await state.set_state(TestStates.profile_confirmation)
 
 
@@ -1893,8 +1972,8 @@ async def profile_reject(callback: CallbackQuery, state: FSMContext):
 async def ask_whats_wrong(callback: CallbackQuery, state: FSMContext, current_levels: dict):
     """Спрашивает, что именно не так"""
     
-    text = """
-🔍 ДАВАЙ УТОЧНИМ
+    text = f"""
+🔍 {bold('ДАВАЙ УТОЧНИМ')}
 
 Что именно вам не подходит?
 (можно выбрать несколько)
@@ -1905,7 +1984,7 @@ async def ask_whats_wrong(callback: CallbackQuery, state: FSMContext, current_le
 🤝 Про отношения — я знаю, чего хочу
 🛡 Про давление — я реагирую иначе
 
-👇 Выберите и нажмите ДАЛЬШЕ
+👇 {bold('Выберите и нажмите ДАЛЬШЕ')}
 """
     
     await state.update_data(clarifying_levels=current_levels)
@@ -1919,7 +1998,7 @@ async def ask_whats_wrong(callback: CallbackQuery, state: FSMContext, current_le
         [InlineKeyboardButton(text="➡️ ДАЛЬШЕ", callback_data="clarify_next")]
     ])
     
-    await safe_edit_message(callback.message, text, reply_markup=keyboard)
+    await safe_send_message(callback.message, text, reply_markup=keyboard)
     await state.set_state(TestStates.clarifying_selection)
     
     await state.update_data(discrepancies=[])
@@ -1981,7 +2060,7 @@ async def ask_clarifying_question(callback: CallbackQuery, state: FSMContext):
     question = questions[current]
     
     question_text = f"""
-🔍 УТОЧНЯЮЩИЙ ВОПРОС {current + 1}/{len(questions)}
+🔍 {bold(f'УТОЧНЯЮЩИЙ ВОПРОС {current + 1}/{len(questions)}')}
 
 {question['text']}
 """
@@ -1994,7 +2073,7 @@ async def ask_clarifying_question(callback: CallbackQuery, state: FSMContext):
     
     reply_markup = InlineKeyboardMarkup(inline_keyboard=keyboard)
     
-    await safe_edit_message(callback.message, question_text, reply_markup=reply_markup)
+    await safe_send_message(callback.message, question_text, reply_markup=reply_markup)
 
 
 async def handle_clarifying_answer(callback: CallbackQuery, state: FSMContext):
@@ -2052,29 +2131,29 @@ async def update_profile_with_clarifications(callback: CallbackQuery, state: FSM
 async def show_stage_5_intro(callback: CallbackQuery, state: FSMContext):
     """Экран перед 5-м этапом"""
     
-    intro_text = """
-🧠 ЭТАП 5: ГЛУБИННЫЕ ПАТТЕРНЫ
+    intro_text = f"""
+🧠 {bold('ЭТАП 5: ГЛУБИННЫЕ ПАТТЕРНЫ')}
 
 Мы узнали, как вы воспринимаете мир, мыслите и действуете.
 Теперь пришло время заглянуть глубже — в то, что сформировало вас.
 
-🔍 Здесь мы исследуем:
+🔍 {bold('Здесь мы исследуем:')}
 • Какой у вас тип привязанности (из детства)
 • Какие защитные механизмы вы используете
 • Какие глубинные убеждения управляют вами
 • Чего вы боитесь на самом деле
 
-📊 Вопросов: 10
-⏱ Время: ~5 минут
+📊 {bold('Вопросов:')} 10
+⏱ {bold('Время:')} ~5 минут
 
-👇 Готовы заглянуть вглубь себя?
+👇 {bold('Готовы заглянуть вглубь себя?')}
 """
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="▶️ Начать исследование", callback_data="start_stage_5")]
     ])
     
-    await safe_edit_message(callback.message, intro_text, reply_markup=keyboard)
+    await safe_send_message(callback.message, intro_text, reply_markup=keyboard)
     await state.set_state(TestStates.stage_5)
 
 
@@ -2107,7 +2186,7 @@ async def ask_stage_5_question(callback: CallbackQuery, state: FSMContext):
     progress = calculate_progress(current + 1, total)
     
     question_text = f"""
-🧠 ЭТАП 5: ГЛУБИННЫЕ ПАТТЕРНЫ
+🧠 {bold('ЭТАП 5: ГЛУБИННЫЕ ПАТТЕРНЫ')}
 
 {question['text']}
 
@@ -2123,7 +2202,7 @@ async def ask_stage_5_question(callback: CallbackQuery, state: FSMContext):
     
     reply_markup = InlineKeyboardMarkup(inline_keyboard=keyboard)
     
-    await safe_edit_message(callback.message, question_text, reply_markup=reply_markup)
+    await safe_send_message(callback.message, question_text, reply_markup=reply_markup)
 
 
 async def handle_stage_5_answer(callback: CallbackQuery, state: FSMContext):
@@ -2197,7 +2276,7 @@ async def finish_stage_5(callback: CallbackQuery, state: FSMContext):
 
 
 # ============================================
-# AI АНАЛИЗ (ИСПРАВЛЕННЫЙ С ФОРМАТИРОВАНИЕМ)
+# AI АНАЛИЗ
 # ============================================
 
 async def show_ai_analysis(callback: CallbackQuery, state: FSMContext):
@@ -2234,35 +2313,21 @@ async def show_ai_analysis(callback: CallbackQuery, state: FSMContext):
 
 
 async def show_saved_psychologist_thought(callback: CallbackQuery, thought: str):
-    """Показывает сохраненные мысли психолога с правильным форматированием"""
+    """Показывает сохраненные мысли психолога с красивым форматированием"""
     
-    # Очищаем текст от форматирования
-    clean_thought = clean_text_for_safe_display(thought)
+    # Форматируем текст
+    formatted_thought = format_psychologist_text(thought)
     
-    # Добавляем заголовок с эмодзи
-    clean_thought = "🧠 МЫСЛИ ПСИХОЛОГА\n\n" + clean_thought
-    
-    # Проверяем и исправляем форматирование секций
-    # Заменяем "---" на разделители
-    clean_thought = re.sub(r'---', '━━━━━━━━━━━━━━━━━━━━', clean_thought)
-    
-    # Заменяем "БЛОК 1:", "БЛОК 2:" на осмысленные заголовки, если есть
-    clean_thought = re.sub(r'БЛОК 1:', 'КЛЮЧЕВАЯ ХАРАКТЕРИСТИКА', clean_thought)
-    clean_thought = re.sub(r'БЛОК 2:', 'СИЛЬНЫЕ СТОРОНЫ', clean_thought)
-    clean_thought = re.sub(r'БЛОК 3:', 'ЗОНЫ РОСТА', clean_thought)
-    clean_thought = re.sub(r'БЛОК 4:', 'КАК ЭТО СФОРМИРОВАЛОСЬ', clean_thought)
-    clean_thought = re.sub(r'БЛОК 5:', 'ГЛАВНАЯ ЛОВУШКА', clean_thought)
-    
-    # Убираем лишние символы в конце
-    clean_thought = re.sub(r'И вот:$', '', clean_thought)
-    clean_thought = re.sub(r'И вот:$', '', clean_thought)
+    # Очищаем от лишних символов
+    formatted_thought = re.sub(r'И вот:$', '', formatted_thought)
+    formatted_thought = re.sub(r'---', '', formatted_thought)
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="🎯 ВЫБРАТЬ ЦЕЛЬ", callback_data="show_destinations")],
         [InlineKeyboardButton(text="◀️ К ПОРТРЕТУ", callback_data="show_results")]
     ])
     
-    await callback.message.answer(clean_thought, reply_markup=keyboard)
+    await safe_send_message(callback.message, formatted_thought, reply_markup=keyboard)
 
 
 # ============================================
@@ -2334,13 +2399,13 @@ async def show_smart_questions(callback: CallbackQuery, state: FSMContext):
     mode_config = COMMUNICATION_MODES.get(mode, COMMUNICATION_MODES["coach"])
     
     if mode == "coach":
-        header = f"{mode_config['emoji']} ЗАДАЙТЕ ВОПРОС (КОУЧ)\n\nЯ буду задавать открытые вопросы, помогая вам найти ответы внутри себя.\n\n"
+        header = f"{mode_config['emoji']} {bold('ЗАДАЙТЕ ВОПРОС (КОУЧ)')}\n\n{italic('Я буду задавать открытые вопросы, помогая вам найти ответы внутри себя.')}\n\n"
     elif mode == "psychologist":
-        header = f"{mode_config['emoji']} РАССКАЖИТЕ МНЕ (ПСИХОЛОГ)\n\nЯ здесь, чтобы помочь исследовать глубинные паттерны.\n\n"
+        header = f"{mode_config['emoji']} {bold('РАССКАЖИТЕ МНЕ (ПСИХОЛОГ)')}\n\n{italic('Я здесь, чтобы помочь исследовать глубинные паттерны.')}\n\n"
     elif mode == "trainer":
-        header = f"{mode_config['emoji']} ПОСТАВЬТЕ ЗАДАЧУ (ТРЕНЕР)\n\nЧётко сформулируйте, что хотите решить. Я дам конкретные шаги.\n\n"
+        header = f"{mode_config['emoji']} {bold('ПОСТАВЬТЕ ЗАДАЧУ (ТРЕНЕР)')}\n\n{italic('Чётко сформулируйте, что хотите решить. Я дам конкретные шаги.')}\n\n"
     else:
-        header = "❓ ЗАДАЙТЕ ВОПРОС\n\n"
+        header = f"❓ {bold('ЗАДАЙТЕ ВОПРОС')}\n\n"
     
     keyboard = []
     for i, q in enumerate(questions, 1):
@@ -2366,7 +2431,7 @@ async def show_smart_questions(callback: CallbackQuery, state: FSMContext):
     keyboard.append([InlineKeyboardButton(text="✏️ Написать самому", callback_data="ask_question")])
     keyboard.append([InlineKeyboardButton(text="◀️ НАЗАД", callback_data="show_results")])
     
-    await safe_edit_message(
+    await safe_send_message(
         callback.message,
         header,
         reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard)
@@ -2378,7 +2443,7 @@ async def handle_smart_question(callback: CallbackQuery, state: FSMContext, ques
     user_id = callback.from_user.id
     data = await state.get_data()
     
-    await safe_edit_message(
+    await safe_send_message(
         callback.message,
         "🤔 Думаю над ответом...\n\nЭто займёт около 10-15 секунд"
     )
@@ -2411,9 +2476,9 @@ async def handle_smart_question(callback: CallbackQuery, state: FSMContext, ques
     else:
         suggestions_text = ""
     
-    await safe_edit_message(
+    await safe_send_message(
         callback.message,
-        f"❓ {question}\n\n{clean_response}{suggestions_text}",
+        f"❓ {bold(question)}\n\n{clean_response}{suggestions_text}",
         reply_markup=keyboard
     )
     
@@ -2432,12 +2497,22 @@ async def handle_smart_question(callback: CallbackQuery, state: FSMContext, ques
 
 async def show_help(callback: CallbackQuery, state: FSMContext):
     """Показывает меню помощи"""
+    text = f"""
+🎯 {bold('ЧЕМ Я МОГУ БЫТЬ ПОЛЕЗЕН')}
+
+🗣 {bold('Отношения')}
+💰 {bold('Деньги и ресурсы')}
+🧠 {bold('Самоощущение')}
+📚 {bold('Знания и развитие')}
+💪 {bold('Поддержка')}
+🎨 {bold('Муза и творчество')}
+🍏 {bold('Забота о себе')}
+
+✏️ {bold('Написать самому')}
+"""
+    
     keyboard = get_help_keyboard()
-    await safe_edit_message(
-        callback.message,
-        "🎯 ЧЕМ Я МОГУ БЫТЬ ПОЛЕЗЕН\n\nВыберите категорию или напишите сами:",
-        reply_markup=keyboard
-    )
+    await safe_send_message(callback.message, text, reply_markup=keyboard)
 
 
 async def handle_help_category(callback: CallbackQuery, state: FSMContext, category: str):
@@ -2462,13 +2537,13 @@ async def handle_help_category(callback: CallbackQuery, state: FSMContext, categ
         base_text += f"\n\n{context.get_greeting()}\n"
         base_text += f"{weather['icon']} {weather['description']}, {weather['temp']}°C"
     
-    base_text += f"\n\n👇 Напишите своим текстом:"
+    base_text += f"\n\n👇 {bold('Напишите своим текстом:')}"
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="◀️ Назад", callback_data="show_help")]
     ])
     
-    await safe_edit_message(callback.message, base_text, reply_markup=keyboard)
+    await safe_send_message(callback.message, base_text, reply_markup=keyboard)
     await state.set_state(TestStates.awaiting_question)
     await state.update_data(question_context=category)
 
@@ -2489,12 +2564,12 @@ async def show_tale(callback: CallbackQuery, state: FSMContext):
         [InlineKeyboardButton(text="◀️ НАЗАД", callback_data="show_results")]
     ])
     
-    intro = f"📖 {tale['title']}\n\n"
+    intro = f"📖 {bold(tale['title'])}\n\n"
     
     # Очищаем текст сказки от форматирования
     clean_tale_text = clean_text_for_safe_display(tale['text'])
     
-    await safe_edit_message(
+    await safe_send_message(
         callback.message,
         intro + clean_tale_text[:4000],
         reply_markup=keyboard
@@ -2523,7 +2598,7 @@ async def start_context(callback: CallbackQuery, state: FSMContext):
     
     if question:
         await callback.message.answer(
-            f"📝 Давайте познакомимся\n\n{question}",
+            f"📝 {bold('Давайте познакомимся')}\n\n{question}",
             reply_markup=keyboard
         )
         await state.set_state(TestStates.awaiting_context)
@@ -2539,7 +2614,7 @@ async def skip_context(callback: CallbackQuery, state: FSMContext):
     if context:
         context.awaiting_context = None
     
-    await safe_edit_message(
+    await safe_send_message(
         callback.message,
         f"⏭ Хорошо, будем общаться без привязки к месту и времени.\n\n"
         "Но помните: с контекстом советы точнее 😉\n"
@@ -2558,15 +2633,15 @@ async def set_gender_male(callback: CallbackQuery, state: FSMContext):
     if context:
         question, keyboard = await context.handle_gender_callback("male")
         if question:
-            await safe_edit_message(
+            await safe_send_message(
                 callback.message,
-                f"📝 Давайте познакомимся\n\n{question}",
+                f"📝 {bold('Давайте познакомимся')}\n\n{question}",
                 reply_markup=keyboard
             )
         else:
             await show_context_complete(callback, state, context)
     else:
-        await safe_edit_message(callback.message, "❌ Ошибка контекста")
+        await safe_send_message(callback.message, "❌ Ошибка контекста")
     await callback.answer()
 
 
@@ -2578,15 +2653,15 @@ async def set_gender_female(callback: CallbackQuery, state: FSMContext):
     if context:
         question, keyboard = await context.handle_gender_callback("female")
         if question:
-            await safe_edit_message(
+            await safe_send_message(
                 callback.message,
-                f"📝 Давайте познакомимся\n\n{question}",
+                f"📝 {bold('Давайте познакомимся')}\n\n{question}",
                 reply_markup=keyboard
             )
         else:
             await show_context_complete(callback, state, context)
     else:
-        await safe_edit_message(callback.message, "❌ Ошибка контекста")
+        await safe_send_message(callback.message, "❌ Ошибка контекста")
     await callback.answer()
 
 
@@ -2603,7 +2678,7 @@ async def handle_context_message(message: Message, state: FSMContext):
     if success:
         if next_question:
             await message.answer(
-                f"📝 Давайте познакомимся\n\n{next_question}",
+                f"📝 {bold('Давайте познакомимся')}\n\n{next_question}",
                 reply_markup=keyboard
             )
         else:
@@ -2619,25 +2694,23 @@ async def show_context_complete(message_or_callback, state: FSMContext, context:
     
     await context.update_weather()
     
-    summary = f"✅ Отлично! Теперь я знаю о вас:\n\n"
+    summary = f"✅ {bold('Отлично! Теперь я знаю о вас:')}\n\n"
     
     if context.city:
-        summary += f"📍 Город: {context.city}\n"
+        summary += f"📍 {bold('Город:')} {context.city}\n"
     if context.gender:
         gender_str = "Мужчина" if context.gender == "male" else "Женщина" if context.gender == "female" else "Другое"
-        summary += f"👤 Пол: {gender_str}\n"
+        summary += f"👤 {bold('Пол:')} {gender_str}\n"
     if context.age:
-        summary += f"📅 Возраст: {context.age}\n"
+        summary += f"📅 {bold('Возраст:')} {context.age}\n"
     if context.weather_cache:
-        summary += f"{context.weather_cache['icon']} Погода: {context.weather_cache['description']}, {context.weather_cache['temp']}°C\n"
+        summary += f"{context.weather_cache['icon']} {bold('Погода:')} {context.weather_cache['description']}, {context.weather_cache['temp']}°C\n"
     
     summary += f"\n🎯 Теперь я буду учитывать это в наших разговорах!\n\n"
-    summary += "━━━━━━━━━━━━━━━━━━━━\n"
-    summary += "🧠 ЧТО ДАЛЬШЕ?\n\n"
+    summary += f"🧠 {bold('ЧТО ДАЛЬШЕ?')}\n\n"
     summary += "Чтобы я мог помочь по-настоящему, нужно пройти тест (15 минут).\n"
     summary += "Он определит ваш психологический профиль по 4 векторам и глубинным паттернам.\n\n"
-    summary += "━━━━━━━━━━━━━━━━━━━━\n"
-    summary += "👇 Начинаем?"
+    summary += f"👇 {bold('Начинаем?')}"
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="🚀 НАЧАТЬ ТЕСТ", callback_data="show_stage_1_intro")],
@@ -2646,10 +2719,10 @@ async def show_context_complete(message_or_callback, state: FSMContext, context:
     ])
     
     if isinstance(message_or_callback, Message):
-        await message_or_callback.answer(summary, reply_markup=keyboard)
+        await safe_send_message(message_or_callback, summary, reply_markup=keyboard)
     else:
         # Отправляем новое сообщение
-        await message_or_callback.message.answer(summary, reply_markup=keyboard)
+        await safe_send_message(message_or_callback.message, summary, reply_markup=keyboard)
     
     await state.clear()
 
@@ -2678,7 +2751,7 @@ async def show_main_menu(message: Message, context: UserContext):
     else:
         welcome_text += f"🏡 Личное время. Есть что обсудить?\n\n"
     
-    welcome_text += f"👇 Выберите действие:"
+    welcome_text += f"👇 {bold('Выберите действие:')}"
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [
@@ -2690,7 +2763,7 @@ async def show_main_menu(message: Message, context: UserContext):
         [InlineKeyboardButton(text="❓ ЗАДАТЬ ВОПРОС", callback_data="ask_pretest")]
     ])
     
-    await message.answer(welcome_text, reply_markup=keyboard)
+    await safe_send_message(message, welcome_text, reply_markup=keyboard)
 
 
 async def show_main_menu_after_mode(message: Message, context: UserContext):
@@ -2700,7 +2773,7 @@ async def show_main_menu_after_mode(message: Message, context: UserContext):
     await context.update_weather()
     day_context = context.get_day_context()
     
-    text = f"{mode_config['emoji']} РЕЖИМ {mode_config['display_name']}\n\n"
+    text = f"{mode_config['emoji']} {bold(f'РЕЖИМ {mode_config["display_name"]}')}\n\n"
     text += context.get_greeting(context.name) + "\n"
     text += f"📅 Сегодня {day_context['weekday']}, {day_context['day']} {day_context['month']}, {day_context['time_str']}\n"
     
@@ -2708,8 +2781,7 @@ async def show_main_menu_after_mode(message: Message, context: UserContext):
         weather = context.weather_cache
         text += f"{weather['icon']} {weather['description']}, {weather['temp']}°C\n\n"
     
-    text += "━━━━━━━━━━━━━━━━━━━━\n"
-    text += "🧠 ЧЕМ ЗАЙМЁМСЯ?\n\n"
+    text += f"🧠 {bold('ЧЕМ ЗАЙМЁМСЯ?')}\n\n"
     
     if context.communication_mode == "coach":
         text += "• Задать вопрос — я помогу найти ответ внутри себя\n"
@@ -2732,39 +2804,46 @@ async def show_main_menu_after_mode(message: Message, context: UserContext):
         ]
     ])
     
-    await message.answer(text, reply_markup=keyboard)
+    await safe_send_message(message, text, reply_markup=keyboard)
 
 
 async def show_benefits(callback: CallbackQuery):
     """Показывает преимущества теста"""
-    text = (
-        "🔍 ЧТО ВЫ УЗНАЕТЕ О СЕБЕ:\n\n"
-        "🧠 ЭТАП 1: КОНФИГУРАЦИЯ ВОСПРИЯТИЯ\n"
-        "Линза, через которую вы смотрите на мир.\n\n"
-        "🧠 ЭТАП 2: КОНФИГУРАЦИЯ МЫШЛЕНИЯ\n"
-        "Как вы обрабатываете информацию.\n\n"
-        "🧠 ЭТАП 3: КОНФИГУРАЦИЯ ПОВЕДЕНИЯ\n"
-        "Ваши автоматические реакции.\n\n"
-        "🧠 ЭТАП 4: ТОЧКА РОСТА\n"
-        "Где находится рычаг изменений.\n\n"
-        "🧠 ЭТАП 5: ГЛУБИННЫЕ ПАТТЕРНЫ\n"
-        "Тип привязанности, защитные механизмы, базовые убеждения.\n\n"
-        "━━━━━━━━━━━━━━━━━━━━\n"
-        "⚡ ПОСЛЕ ТЕСТА ВЫ ПОЛУЧИТЕ:\n\n"
-        "✅ Полный психологический портрет\n"
-        "✅ Глубинный анализ подсознательных паттернов\n"
-        "✅ Выбор стиля общения: 🔮 КОУЧ | 🧠 ПСИХОЛОГ | ⚡ ТРЕНЕР\n"
-        "✅ Индивидуальный навигатор по целям\n"
-        "✅ Напоминания и поддержка на пути\n\n"
-        "⏱ Всего 15 минут"
-    )
+    text = f"""
+🔍 {bold('ЧТО ВЫ УЗНАЕТЕ О СЕБЕ:')}
+
+🧠 {bold('ЭТАП 1: КОНФИГУРАЦИЯ ВОСПРИЯТИЯ')}
+Линза, через которую вы смотрите на мир.
+
+🧠 {bold('ЭТАП 2: КОНФИГУРАЦИЯ МЫШЛЕНИЯ')}
+Как вы обрабатываете информацию.
+
+🧠 {bold('ЭТАП 3: КОНФИГУРАЦИЯ ПОВЕДЕНИЯ')}
+Ваши автоматические реакции.
+
+🧠 {bold('ЭТАП 4: ТОЧКА РОСТА')}
+Где находится рычаг изменений.
+
+🧠 {bold('ЭТАП 5: ГЛУБИННЫЕ ПАТТЕРНЫ')}
+Тип привязанности, защитные механизмы, базовые убеждения.
+
+⚡ {bold('ПОСЛЕ ТЕСТА ВЫ ПОЛУЧИТЕ:')}
+
+✅ Полный психологический портрет
+✅ Глубинный анализ подсознательных паттернов
+✅ Выбор стиля общения: 🔮 КОУЧ | 🧠 ПСИХОЛОГ | ⚡ ТРЕНЕР
+✅ Индивидуальный навигатор по целям
+✅ Напоминания и поддержка на пути
+
+⏱ {bold('Всего 15 минут')}
+"""
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="🚀 НАЧАТЬ ТЕСТ", callback_data="show_stage_1_intro")],
         [InlineKeyboardButton(text="◀️ НАЗАД", callback_data="back_to_intro")]
     ])
     
-    await safe_edit_message(callback.message, text, reply_markup=keyboard)
+    await safe_send_message(callback.message, text, reply_markup=keyboard)
 
 
 async def back_to_intro(callback: CallbackQuery):
@@ -2772,10 +2851,11 @@ async def back_to_intro(callback: CallbackQuery):
     user_id = callback.from_user.id
     user_name = user_names.get(user_id, callback.from_user.first_name or "друг")
     
-    welcome_text = (
-        f"👋 Привет, {user_name}!\n\n"
-        f"👇 Выберите, с какой интонацией будем общаться:"
-    )
+    welcome_text = f"""
+👋 {bold(f'Привет, {user_name}!')}
+
+👇 {bold('Выберите, с какой интонацией будем общаться:')}
+"""
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [
@@ -2787,7 +2867,7 @@ async def back_to_intro(callback: CallbackQuery):
         [InlineKeyboardButton(text="❓ ЗАДАТЬ ВОПРОС", callback_data="ask_pretest")]
     ])
     
-    await safe_edit_message(callback.message, welcome_text, reply_markup=keyboard)
+    await safe_send_message(callback.message, welcome_text, reply_markup=keyboard)
 
 
 async def choose_mode(callback: CallbackQuery, state: FSMContext, mode: str):
@@ -2807,9 +2887,9 @@ async def choose_mode(callback: CallbackQuery, state: FSMContext, mode: str):
     user_contexts[user_id].communication_mode = new_mode
     mode_info = COMMUNICATION_MODES[new_mode]
     
-    await safe_edit_message(
+    await safe_send_message(
         callback.message,
-        f"{mode_info['emoji']} Режим выбран: {mode_info['display_name']}\n\n"
+        f"{mode_info['emoji']} {bold(f'Режим выбран: {mode_info["display_name"]}')}\n\n"
         f"{mode_info['responsibility']}\n\n"
         f"Теперь давайте познакомимся поближе."
     )
@@ -2820,17 +2900,21 @@ async def choose_mode(callback: CallbackQuery, state: FSMContext, mode: str):
     if not (context.city and context.gender and context.age):
         await start_context(callback, state)
     else:
-        intro_text = (
-            f"🧠 ВИРТУАЛЬНЫЙ ПСИХОЛОГ\n\n"
-            f"🔍 5 ЭТАПОВ ТЕСТИРОВАНИЯ:\n\n"
-            f"ЭТАП 1: Конфигурация восприятия\n"
-            f"ЭТАП 2: Конфигурация мышления\n"
-            f"ЭТАП 3: Конфигурация поведения\n"
-            f"ЭТАП 4: Точка роста\n"
-            f"ЭТАП 5: Глубинные паттерны\n\n"
-            f"⏱ Всего 15 минут\n\n"
-            f"👇 Начинаем?"
-        )
+        intro_text = f"""
+🧠 {bold('ВИРТУАЛЬНЫЙ ПСИХОЛОГ')}
+
+🔍 {bold('5 ЭТАПОВ ТЕСТИРОВАНИЯ:')}
+
+ЭТАП 1: Конфигурация восприятия
+ЭТАП 2: Конфигурация мышления
+ЭТАП 3: Конфигурация поведения
+ЭТАП 4: Точка роста
+ЭТАП 5: Глубинные паттерны
+
+⏱ {bold('Всего 15 минут')}
+
+👇 {bold('Начинаем?')}
+"""
         
         keyboard = InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text="🚀 НАЧАТЬ ТЕСТ", callback_data="show_stage_1_intro")]
@@ -2851,20 +2935,32 @@ async def show_mode_selection(callback: CallbackQuery, state: FSMContext):
     current_mode = context.communication_mode if context else "coach"
     mode_display = COMMUNICATION_MODES[current_mode]['display_name']
     
-    text = f"🧠 ВЫБЕРИТЕ СТИЛЬ ОБЩЕНИЯ\n\n"
-    text += f"📊 Ваш профиль: {profile_code}\n\n"
-    text += f"Сейчас активен режим: {mode_display}\n\n"
-    text += "Теперь, когда я знаю, кто вы,\n"
-    text += "вы можете выбрать, КАК мы будем общаться:\n\n"
-    text += "━━━━━━━━━━━━━━━━━━━━\n"
-    text += "🔮 КОУЧ\n"
-    text += "Партнёрский стиль: задаю вопросы, помогаю найти ответы внутри себя.\n\n"
-    text += "🧠 ПСИХОЛОГ\n"
-    text += "Аналитический стиль: исследую глубинные паттерны, работаю с подсознанием.\n\n"
-    text += "⚡ ТРЕНЕР\n"
-    text += "Структурированный, требовательный стиль. Чёткие инструкции.\n\n"
-    text += "━━━━━━━━━━━━━━━━━━━━\n"
-    text += "👇 Как вам комфортнее?"
+    text = f"""
+🧠 {bold('ВЫБЕРИТЕ СТИЛЬ ОБЩЕНИЯ')}
+
+📊 {bold('Ваш профиль:')} <code>{profile_code}</code>
+🎭 {bold('Сейчас активен:')} {mode_display}
+
+🔮 {bold('КОУЧ')}
+{italic('Партнёрский стиль: задаю вопросы, помогаю найти ответы внутри себя.')}
+• Задаёт открытые вопросы
+• Помогает увидеть новые перспективы
+• Поддерживает в исследовании себя
+
+🧠 {bold('ПСИХОЛОГ')}
+{italic('Аналитический стиль: исследую глубинные паттерны, работаю с подсознанием.')}
+• Анализирует защиты и паттерны
+• Использует гипнотические техники
+• Работает с типом привязанности
+
+⚡ {bold('ТРЕНЕР')}
+{italic('Структурированный стиль: чёткие инструкции и контроль.')}
+• Даёт конкретные задания
+• Ставит дедлайны
+• Требует результат
+
+👇 {bold('Как вам комфортнее?')}
+"""
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [
@@ -2875,7 +2971,7 @@ async def show_mode_selection(callback: CallbackQuery, state: FSMContext):
         [InlineKeyboardButton(text="◀️ Вернуться к результатам", callback_data="back_to_results")]
     ])
     
-    await safe_edit_message(callback.message, text, reply_markup=keyboard)
+    await safe_send_message(callback.message, text, reply_markup=keyboard)
     await state.set_state(TestStates.mode_selection)
 
 
@@ -2891,12 +2987,16 @@ async def set_mode_coach(callback: CallbackQuery, state: FSMContext):
     
     await callback.answer("✅ Режим КОУЧ активирован")
     
-    text = f"🔮 РЕЖИМ КОУЧ АКТИВИРОВАН\n\n"
-    text += f"Отлично!\n\n"
-    text += "Теперь я буду:\n"
-    text += "• Задавать открытые вопросы\n"
-    text += "• Помогать находить ответы внутри вас\n"
-    text += "• Поддерживать, но не навязывать"
+    text = f"""
+🔮 {bold('РЕЖИМ КОУЧ АКТИВИРОВАН')}
+
+Отлично!
+
+Теперь я буду:
+• Задавать открытые вопросы
+• Помогать находить ответы внутри вас
+• Поддерживать, но не навязывать
+"""
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="🧠 К ПОРТРЕТУ", callback_data="show_results")],
@@ -2904,12 +3004,12 @@ async def set_mode_coach(callback: CallbackQuery, state: FSMContext):
         [InlineKeyboardButton(text="🎯 ЧЕМ ПОМОЧЬ", callback_data="show_help")]
     ])
     
-    await safe_edit_message(callback.message, text, reply_markup=keyboard)
+    await safe_send_message(callback.message, text, reply_markup=keyboard)
     await state.set_state(TestStates.results)
 
 
 async def set_mode_psychologist(callback: CallbackQuery, state: FSMContext):
-    """Устанавливает режим ПСИХОЛОГ (бывший ДРУГ)"""
+    """Устанавливает режим ПСИХОЛОГ"""
     user_id = callback.from_user.id
     context = user_contexts.get(user_id)
     
@@ -2920,13 +3020,17 @@ async def set_mode_psychologist(callback: CallbackQuery, state: FSMContext):
     
     await callback.answer("✅ Режим ПСИХОЛОГ активирован")
     
-    text = f"🧠 РЕЖИМ ПСИХОЛОГ АКТИВИРОВАН\n\n"
-    text += f"Приятно познакомиться!\n\n"
-    text += "Теперь я буду:\n"
-    text += "• Исследовать глубинные паттерны\n"
-    text += "• Работать с защитными механизмами\n"
-    text += "• Использовать гипнотические техники\n"
-    text += "• Помогать осознавать подсознательное"
+    text = f"""
+🧠 {bold('РЕЖИМ ПСИХОЛОГ АКТИВИРОВАН')}
+
+Приятно познакомиться!
+
+Теперь я буду:
+• Исследовать глубинные паттерны
+• Работать с защитными механизмами
+• Использовать гипнотические техники
+• Помогать осознавать подсознательное
+"""
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="🧠 К ПОРТРЕТУ", callback_data="show_results")],
@@ -2934,7 +3038,7 @@ async def set_mode_psychologist(callback: CallbackQuery, state: FSMContext):
         [InlineKeyboardButton(text="🎯 ЧЕМ ПОМОЧЬ", callback_data="show_help")]
     ])
     
-    await safe_edit_message(callback.message, text, reply_markup=keyboard)
+    await safe_send_message(callback.message, text, reply_markup=keyboard)
     await state.set_state(TestStates.results)
 
 
@@ -2950,13 +3054,17 @@ async def set_mode_trainer(callback: CallbackQuery, state: FSMContext):
     
     await callback.answer("✅ Режим ТРЕНЕР активирован")
     
-    text = f"⚡ РЕЖИМ ТРЕНЕР АКТИВИРОВАН\n\n"
-    text += f"Привет!\n\n"
-    text += "Теперь я буду:\n"
-    text += "• Давать чёткие инструкции\n"
-    text += "• Фокусироваться на действиях\n"
-    text += "• Требовать результат\n"
-    text += "• Ставить дедлайны"
+    text = f"""
+⚡ {bold('РЕЖИМ ТРЕНЕР АКТИВИРОВАН')}
+
+Привет!
+
+Теперь я буду:
+• Давать чёткие инструкции
+• Фокусироваться на действиях
+• Требовать результат
+• Ставить дедлайны
+"""
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="🧠 К ПОРТРЕТУ", callback_data="show_results")],
@@ -2964,13 +3072,13 @@ async def set_mode_trainer(callback: CallbackQuery, state: FSMContext):
         [InlineKeyboardButton(text="🎯 ЧЕМ ПОМОЧЬ", callback_data="show_help")]
     ])
     
-    await safe_edit_message(callback.message, text, reply_markup=keyboard)
+    await safe_send_message(callback.message, text, reply_markup=keyboard)
     await state.set_state(TestStates.results)
 
 
 async def ask_pretest(callback: CallbackQuery, state: FSMContext):
     """Вопрос до теста"""
-    await safe_edit_message(
+    await safe_send_message(
         callback.message,
         "❓ Задайте свой вопрос\n\n"
         "Я отвечу, но без вашего профиля ответ будет общим.\n\n"
@@ -2995,7 +3103,7 @@ async def handle_ask_question(callback: CallbackQuery, state: FSMContext):
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="◀️ Назад", callback_data="show_results")]
     ])
-    await safe_edit_message(
+    await safe_send_message(
         callback.message,
         "✏️ ЗАДАЙТЕ ВОПРОС\n\nНапишите, что вас беспокоит. Я помню ваш профиль.",
         reply_markup=keyboard
@@ -3047,8 +3155,9 @@ async def handle_question_message(message: Message, state: FSMContext):
     else:
         suggestions_text = ""
     
-    await message.answer(
-        f"{COMMUNICATION_MODES[mode_name]['emoji']} Ответ\n\n{clean_response}{suggestions_text}",
+    await safe_send_message(
+        message,
+        f"{COMMUNICATION_MODES[mode_name]['emoji']} {bold('Ответ')}\n\n{clean_response}{suggestions_text}",
         reply_markup=keyboard
     )
     
@@ -3126,8 +3235,8 @@ async def handle_voice_message(message: Message, state: FSMContext):
             suggestions_text = ""
         
         await status_msg.edit_text(
-            f"📝 Вы сказали:\n{recognized_text}\n\n"
-            f"{COMMUNICATION_MODES[mode_name]['emoji']} Ответ:\n{clean_response}{suggestions_text}",
+            f"📝 {bold('Вы сказали:')}\n{recognized_text}\n\n"
+            f"{COMMUNICATION_MODES[mode_name]['emoji']} {bold('Ответ:')}\n{clean_response}{suggestions_text}",
             reply_markup=keyboard
         )
         
@@ -3194,7 +3303,7 @@ async def cmd_test_voices(message: Message):
 
 
 # ============================================
-# CALLBACK ХЕНДЛЕР (ИСПРАВЛЕННЫЙ)
+# CALLBACK ХЕНДЛЕР
 # ============================================
 
 async def callback_handler(callback: CallbackQuery, state: FSMContext):
@@ -3219,7 +3328,7 @@ async def callback_handler(callback: CallbackQuery, state: FSMContext):
             await show_destination_route(callback, state)
         
         elif data == "custom_destination":
-            await safe_edit_message(
+            await safe_send_message(
                 callback.message,
                 "✏️ СФОРМУЛИРУЙТЕ ЦЕЛЬ\n\n"
                 "Напишите своим текстом, чего хотите достичь.\n"
@@ -3232,7 +3341,7 @@ async def callback_handler(callback: CallbackQuery, state: FSMContext):
             await route_step_done(callback, state)
         
         elif data == "reminder_snooze":
-            await safe_edit_message(
+            await safe_send_message(
                 callback.message,
                 "⏭️ Напоминание отложено на 24 часа"
             )
@@ -3639,7 +3748,7 @@ async def main():
     
     logger.info("Бот запущен...")
     print("\n" + "="*80)
-    print("🚀 ВИРТУАЛЬНЫЙ ПСИХОЛОГ - МАТРИЦА ПОВЕДЕНИЙ 4×6 v9.2")
+    print("🚀 ВИРТУАЛЬНЫЙ ПСИХОЛОГ - МАТРИЦА ПОВЕДЕНИЙ 4×6 v9.3")
     print("="*80)
     print(f"👤 Ваш Telegram ID: {ADMIN_IDS[0] if ADMIN_IDS else 'не указан'}")
     print("📊 Команды: /stats, /apistatus, /test_yandex, /test_voices, /test_weather, /tale, /context")
@@ -3652,6 +3761,7 @@ async def main():
     print("🎭 Режимы: 🔮 КОУЧ | 🧠 ПСИХОЛОГ | ⚡ ТРЕНЕР")
     print("🧭 Навигатор по целям: ✅")
     print("📅 Напоминания: ✅")
+    print("✨ Красивое оформление с жирным текстом и эмодзи: ✅")
     print("="*80 + "\n")
     
     await dp.start_polling(bot, drop_pending_updates=True)
