@@ -3879,7 +3879,7 @@ async def show_tale(callback: CallbackQuery, state: FSMContext):
 # ============================================
 
 async def start_context(callback: CallbackQuery, state: FSMContext):
-    """Начинает сбор контекста"""
+    """Начинает сбор контекста (обязательный)"""
     user_id = callback.from_user.id
     
     if user_id not in user_contexts:
@@ -3895,9 +3895,13 @@ async def start_context(callback: CallbackQuery, state: FSMContext):
     question, keyboard = await context.ask_for_context()
     
     if question:
-        await callback.message.answer(
+        # 👇 ИСПРАВЛЕНО: используем safe_send_message с parse_mode='HTML'
+        await safe_send_message(
+            callback.message,
             f"📝 {bold('Давайте познакомимся')}\n\n{question}",
-            reply_markup=keyboard
+            reply_markup=keyboard,
+            parse_mode='HTML',  # 👈 ВАЖНО!
+            delete_previous=True
         )
         await state.set_state(TestStates.awaiting_context)
     else:
