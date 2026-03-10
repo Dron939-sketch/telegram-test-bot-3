@@ -56,6 +56,7 @@ from reality_check import (
 
 # === НОВЫЙ ИМПОРТ: система режимов ===
 from modes import get_mode, get_available_modes, get_mode_description
+from morning_messages import MorningMessageManager
 
 # Импортируем описания профилей и вопросы
 from profiles import (
@@ -3761,37 +3762,6 @@ async def show_ai_analysis(callback: CallbackQuery, state: FSMContext):
             reply_markup=keyboard,
             delete_previous=True
         )
-
-
-async def show_saved_psychologist_thought(callback: CallbackQuery, thought: str):
-    """Показывает сохраненные мысли психолога с красивым форматированием"""
-    
-    user_id = callback.from_user.id
-    context = user_contexts.get(user_id)
-    user_name = context.name if context and context.name else ""
-    
-    # Форматируем текст
-    formatted_thought = format_psychologist_text(thought, user_name)
-    
-    # Добавляем заголовок, если его нет
-    if not formatted_thought.startswith("🧠"):
-        formatted_thought = f"🧠 {bold('МЫСЛИ ПСИХОЛОГА')}\n\n{formatted_thought}"
-    
-    # 🔥 ВАЖНО: создаем новые кнопки для возврата к профилю
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🎯 ВЫБРАТЬ ЦЕЛЬ", callback_data="show_dynamic_destinations")],
-        [InlineKeyboardButton(text="◀️ К ПОРТРЕТУ", callback_data="show_results")]
-    ])
-    
-    # Удаляем предыдущее сообщение
-    try:
-        await callback.message.delete()
-    except:
-        pass
-    
-    # Отправляем новое сообщение с новыми кнопками
-    await callback.message.answer(formatted_thought, reply_markup=keyboard, parse_mode='HTML')
-
 
 # ============================================
 # SMART QUESTIONS
