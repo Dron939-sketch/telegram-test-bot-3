@@ -355,6 +355,7 @@ def split_long_message(text: str, max_length: int = 4000) -> List[str]:
 async def safe_send_long_message(message: Message, text: str, reply_markup=None, parse_mode: str = 'HTML', delete_previous: bool = True):
     """
     Безопасно отправляет длинные сообщения, разбивая их на части
+    Кнопки прикрепляются к последнему сообщению
     """
     # Удаляем предыдущее сообщение только если оно есть и мы хотим его удалить
     if delete_previous:
@@ -369,12 +370,12 @@ async def safe_send_long_message(message: Message, text: str, reply_markup=None,
     # Разбиваем длинное сообщение
     parts = split_long_message(text)
     
-    first_message = None
+    last_message = None
     for i, part in enumerate(parts):
         try:
-            if i == 0:
-                # Первая часть с клавиатурой
-                first_message = await message.answer(part, reply_markup=reply_markup, parse_mode=parse_mode)
+            if i == len(parts) - 1:
+                # Последняя часть - с клавиатурой
+                last_message = await message.answer(part, reply_markup=reply_markup, parse_mode=parse_mode)
             else:
                 # Остальные части без клавиатуры
                 await message.answer(part, parse_mode=parse_mode)
@@ -382,20 +383,20 @@ async def safe_send_long_message(message: Message, text: str, reply_markup=None,
             if "can't parse entities" in str(e).lower():
                 # Если ошибка парсинга, отправляем без форматирования
                 clean_part = clean_text_for_safe_display(part)
-                if i == 0:
-                    first_message = await message.answer(clean_part, reply_markup=reply_markup)
+                if i == len(parts) - 1:
+                    last_message = await message.answer(clean_part, reply_markup=reply_markup)
                 else:
                     await message.answer(clean_part)
             else:
                 logger.error(f"Ошибка при отправке части {i+1}: {e}")
                 # Пробуем отправить без форматирования
                 clean_part = clean_text_for_safe_display(part)
-                if i == 0:
-                    first_message = await message.answer(clean_part, reply_markup=reply_markup)
+                if i == len(parts) - 1:
+                    last_message = await message.answer(clean_part, reply_markup=reply_markup)
                 else:
                     await message.answer(clean_part)
     
-    return first_message
+    return last_message
 
 
 async def safe_send_message(message: Message, text: str, reply_markup=None, parse_mode: str = 'HTML', delete_previous: bool = True):
@@ -2390,33 +2391,32 @@ async def show_ai_generated_profile(callback: CallbackQuery, state: FSMContext, 
 👇 {bold('Что дальше?')}
 """
     
-    # 🔥 ВАЖНО: всегда создаем новые кнопки, не используем старые
+    # 🔥 ВАЖНО: всегда создаем новые кнопки
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="🧠 МЫСЛИ ПСИХОЛОГА", callback_data="psychologist_thought")],
         [InlineKeyboardButton(text="🎯 ВЫБРАТЬ ЦЕЛЬ", callback_data="show_dynamic_destinations")],
         [InlineKeyboardButton(text="⚙️ ВЫБРАТЬ РЕЖИМ", callback_data="show_mode_selection")]
     ])
     
-    # Удаляем статусное сообщение, если оно есть
+    # Удаляем статусное сообщение
     if status_msg:
         try:
             await status_msg.delete()
         except:
             pass
     
-    # 🔥 ИСПРАВЛЕНО: используем callback.message, а не callback.message напрямую
-    # и гарантированно удаляем предыдущее сообщение
-    try:
-        # Пытаемся удалить предыдущее сообщение
-        await callback.message.delete()
-    except:
-        pass
-    
-    # Отправляем новое сообщение с новыми кнопками
-    await callback.message.answer(text, reply_markup=keyboard, parse_mode='HTML')
+    # 🔥 ИСПРАВЛЕНО: используем safe_send_message для автоматического разбиения
+    await safe_send_message(
+        callback.message,
+        text,
+        reply_markup=keyboard,
+        parse_mode='HTML',
+        delete_previous=True
+    )
     
     await state.set_state(TestStates.profile_generated)
-    
+
+
 async def show_old_final_profile(callback: CallbackQuery, state: FSMContext, status_msg: Message = None):
     """Старая версия финального профиля (резерв)"""
     data = await state.get_data()
@@ -2447,24 +2447,53 @@ async def show_old_final_profile(callback: CallbackQuery, state: FSMContext, sta
         [InlineKeyboardButton(text="⚙️ ВЫБРАТЬ РЕЖИМ", callback_data="show_mode_selection")]
     ])
     
-    # Удаляем статусное сообщение, если оно есть
+    # Удаляем статусное сообщение
     if status_msg:
         try:
             await status_msg.delete()
         except:
             pass
     
-    # Удаляем предыдущее сообщение
-    try:
-        await callback.message.delete()
-    except:
-        pass
-    
-    # Отправляем новое сообщение с новыми кнопками
-    await callback.message.answer(text, reply_markup=keyboard, parse_mode='HTML')
+    # 🔥 ИСПРАВЛЕНО: используем safe_send_message
+    await safe_send_message(
+        callback.message,
+        text,
+        reply_markup=keyboard,
+        parse_mode='HTML',
+        delete_previous=True
+    )
     
     await state.set_state(TestStates.profile_generated)
 
+
+async def show_saved_psychologist_thought(callback: CallbackQuery, thought: str):
+    """Показывает сохраненные мысли психолога с красивым форматированием"""
+    
+    user_id = callback.from_user.id
+    context = user_contexts.get(user_id)
+    user_name = context.name if context and context.name else ""
+    
+    # Форматируем текст
+    formatted_thought = format_psychologist_text(thought, user_name)
+    
+    # Добавляем заголовок, если его нет
+    if not formatted_thought.startswith("🧠"):
+        formatted_thought = f"🧠 {bold('МЫСЛИ ПСИХОЛОГА')}\n\n{formatted_thought}"
+    
+    # 🔥 ВАЖНО: создаем новые кнопки для возврата к профилю
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🎯 ВЫБРАТЬ ЦЕЛЬ", callback_data="show_dynamic_destinations")],
+        [InlineKeyboardButton(text="◀️ К ПОРТРЕТУ", callback_data="show_results")]
+    ])
+    
+    # 🔥 ИСПРАВЛЕНО: используем safe_send_message
+    await safe_send_message(
+        callback.message,
+        formatted_thought,
+        reply_markup=keyboard,
+        parse_mode='HTML',
+        delete_previous=True
+    )
 # ============================================
 # ОБРАБОТЧИКИ ЭТАПА 1
 # ============================================
