@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 ВИРТУАЛЬНЫЙ ПСИХОЛОГ - МАТРИЦА ПОВЕДЕНИЙ 4×6
-ВЕРСИЯ 9.4: КРАСИВОЕ ОФОРМЛЕНИЕ, ОЧИСТКА ЧАТА, ТОЛЬКО МУЖСКИЕ ГОЛОСА
+ВЕРСИЯ 9.5: НОВЫЕ ЭКРАНЫ ПОДТВЕРЖДЕНИЯ РЕЖИМА И ДИНАМИЧЕСКИЕ ЦЕЛИ
 """
 
 import os
@@ -774,6 +774,483 @@ async def show_mode_selection(callback: CallbackQuery, state: FSMContext):
     
     await safe_send_message(callback.message, text, reply_markup=keyboard, delete_previous=True)
     await state.set_state(TestStates.mode_selection)
+
+
+# ============================================
+# НОВЫЙ ЭКРАН ПОДТВЕРЖДЕНИЯ РЕЖИМА
+# ============================================
+
+async def show_mode_selected(callback: CallbackQuery, state: FSMContext, mode: str):
+    """Показывает экран подтверждения выбранного режима"""
+    user_id = callback.from_user.id
+    data = await state.get_data()
+    context = user_contexts.get(user_id)
+    user_name = context.name if context and context.name else "друг"
+    
+    profile_data = data.get("profile_data", {})
+    profile_code = profile_data.get('display_name', 'СБ-4_ТФ-4_УБ-4_ЧВ-4')
+    
+    mode_config = COMMUNICATION_MODES.get(mode, COMMUNICATION_MODES["coach"])
+    
+    # Тексты для разных режимов
+    mode_texts = {
+        "coach": {
+            "title": f"ты выбрал режим: 🔮 КОУЧ",
+            "description": "Отлично! Теперь я буду работать в партнёрском стиле — задавать вопросы, отражать твои мысли, помогать тебе самому находить решения.",
+            "changes": [
+                "Я не буду давать готовых ответов — <b>ты будешь находить их сам</b>",
+                "Буду направлять вопросами, а не указаниями",
+                "<b>Сфокусируемся на твоих целях</b> и твоём видении"
+            ],
+            "how_next": "Ты ставишь мне цель — и я <b>просчитываю маршрут из точки А в точку Б</b>. Всё последующее взаимодействие будет определяться тем, куда ты хочешь прийти."
+        },
+        "psychologist": {
+            "title": f"ты выбрал режим: 🧠 ПСИХОЛОГ",
+            "description": "Хорошо. Теперь я буду работать в глубинном стиле — исследовать твои паттерны, защитные механизмы, прошлый опыт. <b>Пойдём к корню.</b>",
+            "changes": [
+                "Будем <b>копать вглубь</b>, а не скользить по поверхности",
+                "<b>Сфокусируемся на причинах</b>, а не следствиях",
+                "Я буду использовать терапевтические техники"
+            ],
+            "how_next": "Ты ставишь мне цель — я <b>просчитываю маршрут и определяю места, которые нужно проработать</b>. Точки, где застревают старые сценарии. Узлы, которые держат систему."
+        },
+        "trainer": {
+            "title": f"ты выбрал режим: ⚡ ТРЕНЕР",
+            "description": "Отлично! Теперь я буду работать в тренировочном стиле — давать чёткие инструкции, упражнения, ставить дедлайны. <b>Требовать выполнения.</b>",
+            "changes": [
+                "Буду формировать твои <b>поведенческие и мыслительные навыки</b>",
+                "<b>Получишь конкретные инструменты и алгоритмы</b>",
+                "<b>Сфокусируемся на действиях и результате</b>"
+            ],
+            "how_next": "Ты ставишь мне цель — я <b>просчитываю маршрут и составляю список навыков</b>, которые тебе понадобятся. Чему придётся научиться. Какие алгоритмы освоить."
+        }
+    }
+    
+    text = mode_texts.get(mode, mode_texts["coach"])
+    
+    # Формируем текст
+    changes_text = "\n".join([f"• {change}" for change in text["changes"]])
+    
+    full_text = f"""
+🧠 {bold('ФРЕДИ: РЕЖИМ ВЫБРАН')}
+
+{user_name}, {bold(text["title"])}
+
+{text["description"]}
+
+{bold('Что меняется:')}
+{changes_text}
+
+{bold('Твой профиль:')} {profile_code}
+
+{bold('Как дальше:')}
+{text["how_next"]}
+
+👇 {bold(f'С чего начнём, {user_name}?')}
+"""
+    
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(text="❓ ЗАДАТЬ ВОПРОС", callback_data="show_question_input"),
+            InlineKeyboardButton(text="🎯 ВЫБРАТЬ ЦЕЛЬ", callback_data="show_dynamic_destinations")
+        ],
+        [InlineKeyboardButton(text="◀️ СМЕНИТЬ РЕЖИМ", callback_data="show_mode_selection")]
+    ])
+    
+    await safe_send_message(callback.message, full_text, reply_markup=keyboard, delete_previous=True)
+    await state.set_state(TestStates.results)
+
+
+# ============================================
+# ЭКРАН ВВОДА ВОПРОСА
+# ============================================
+
+async def show_question_input(callback: CallbackQuery, state: FSMContext):
+    """Показывает экран ввода вопроса"""
+    user_id = callback.from_user.id
+    data = await state.get_data()
+    context = user_contexts.get(user_id)
+    user_name = context.name if context and context.name else "друг"
+    
+    profile_data = data.get("profile_data", {})
+    profile_code = profile_data.get('display_name', 'СБ-4_ТФ-4_УБ-4_ЧВ-4')
+    
+    mode = data.get("communication_mode", "coach")
+    mode_config = COMMUNICATION_MODES.get(mode, COMMUNICATION_MODES["coach"])
+    
+    # Примеры вопросов для разных режимов
+    examples = {
+        "coach": [
+            "Как найти своё предназначение?",
+            "Что делать с неопределённостью?",
+            "Как перестать сомневаться?"
+        ],
+        "psychologist": [
+            "Почему реагирую на одни и те же триггеры?",
+            "Откуда этот сценарий в отношениях?",
+            "Как проработать детскую травму?"
+        ],
+        "trainer": [
+            "Как научиться быстро принимать решения?",
+            "Какие навыки нужны для роста дохода?",
+            "Как действовать в конфликте?"
+        ]
+    }
+    
+    mode_examples = examples.get(mode, examples["coach"])
+    examples_text = "\n".join([f"• {ex}" for ex in mode_examples])
+    
+    text = f"""
+🧠 {bold('ФРЕДИ: ЗАДАЙТЕ ВОПРОС')}
+
+{user_name}, {bold('задавай вопрос.')} Я отвечу с учётом твоего профиля и выбранного режима.
+
+{bold('Твой профиль:')} {profile_code}
+{bold('Режим:')} {mode_config['emoji']} {mode_config['name']}
+
+📝 {bold('Напиши вопрос текстом')} или отправь голосовое сообщение.
+
+👇 {bold('Примеры:')}
+{examples_text}
+"""
+    
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="◀️ НАЗАД", callback_data="back_to_mode_selected")]
+    ])
+    
+    await safe_send_message(callback.message, text, reply_markup=keyboard, delete_previous=True)
+    await state.set_state(TestStates.awaiting_question)
+
+
+# ============================================
+# ДИНАМИЧЕСКИЙ ПОДБОР ЦЕЛЕЙ
+# ============================================
+
+async def get_dynamic_destinations(profile_code: str, mode: str) -> List[Dict]:
+    """Динамически подбирает цели под профиль и режим"""
+    
+    # Парсим профиль
+    parts = profile_code.split('_')
+    scores = {}
+    for part in parts:
+        if '-' in part:
+            vec, val = part.split('-')
+            scores[vec] = int(val)
+    
+    if not scores:
+        scores = {"СБ": 4, "ТФ": 4, "УБ": 4, "ЧВ": 4}
+    
+    # Находим слабые и сильные стороны
+    sorted_vectors = sorted(scores.items(), key=lambda x: x[1])
+    weakest = sorted_vectors[0] if sorted_vectors else ("СБ", 4)
+    strongest = sorted_vectors[-1] if sorted_vectors else ("ЧВ", 4)
+    
+    # База целей для разных режимов
+    destinations_db = {
+        "coach": {
+            "weak": {
+                "СБ": [
+                    {"id": "fear_work", "name": "Проработать страхи", "time": "3-4 недели", "difficulty": "medium"},
+                    {"id": "boundaries", "name": "Научиться защищать границы", "time": "2-3 недели", "difficulty": "medium"},
+                    {"id": "calm", "name": "Найти внутреннее спокойствие", "time": "3-5 недель", "difficulty": "hard"}
+                ],
+                "ТФ": [
+                    {"id": "money_blocks", "name": "Проработать денежные блоки", "time": "3-4 недели", "difficulty": "medium"},
+                    {"id": "income_growth", "name": "Увеличить доход", "time": "4-6 недель", "difficulty": "hard"},
+                    {"id": "financial_plan", "name": "Создать финансовый план", "time": "2-3 недели", "difficulty": "easy"}
+                ],
+                "УБ": [
+                    {"id": "meaning", "name": "Найти смысл и предназначение", "time": "4-6 недель", "difficulty": "hard"},
+                    {"id": "system_thinking", "name": "Развить системное мышление", "time": "3-5 недель", "difficulty": "medium"},
+                    {"id": "trust", "name": "Научиться доверять миру", "time": "3-4 недели", "difficulty": "medium"}
+                ],
+                "ЧВ": [
+                    {"id": "relations", "name": "Улучшить отношения", "time": "4-6 недель", "difficulty": "hard"},
+                    {"id": "boundaries_people", "name": "Выстроить границы с людьми", "time": "3-4 недели", "difficulty": "medium"},
+                    {"id": "attachment", "name": "Проработать тип привязанности", "time": "5-7 недель", "difficulty": "hard"}
+                ]
+            },
+            "strong": {
+                "СБ": [
+                    {"id": "leadership", "name": "Развить лидерские качества", "time": "4-6 недель", "difficulty": "medium"},
+                    {"id": "stress_resistance", "name": "Усилить стрессоустойчивость", "time": "3-4 недели", "difficulty": "easy"}
+                ],
+                "ТФ": [
+                    {"id": "business", "name": "Развить бизнес-мышление", "time": "5-7 недель", "difficulty": "hard"},
+                    {"id": "investments", "name": "Начать инвестировать", "time": "4-6 недель", "difficulty": "medium"}
+                ],
+                "УБ": [
+                    {"id": "strategy", "name": "Развить стратегическое мышление", "time": "4-6 недель", "difficulty": "medium"},
+                    {"id": "wisdom", "name": "Углубить понимание себя", "time": "3-5 недель", "difficulty": "easy"}
+                ],
+                "ЧВ": [
+                    {"id": "empathy", "name": "Развить эмпатию", "time": "3-4 недели", "difficulty": "easy"},
+                    {"id": "community", "name": "Создать сообщество", "time": "6-8 недель", "difficulty": "hard"}
+                ]
+            },
+            "general": [
+                {"id": "purpose", "name": "Найти предназначение", "time": "5-7 недель", "difficulty": "hard"},
+                {"id": "balance", "name": "Обрести баланс", "time": "4-6 недель", "difficulty": "medium"},
+                {"id": "growth", "name": "Личностный рост", "time": "6-8 недель", "difficulty": "medium"}
+            ]
+        },
+        "psychologist": {
+            "weak": {
+                "СБ": [
+                    {"id": "fear_origin", "name": "Найти источник страхов", "time": "4-6 недель", "difficulty": "hard"},
+                    {"id": "trauma", "name": "Проработать травму", "time": "6-8 недель", "difficulty": "hard"},
+                    {"id": "safety", "name": "Сформировать базовое чувство безопасности", "time": "5-7 недель", "difficulty": "hard"}
+                ],
+                "ТФ": [
+                    {"id": "money_psychology", "name": "Понять психологию денег", "time": "4-5 недель", "difficulty": "medium"},
+                    {"id": "worth", "name": "Проработать чувство собственной ценности", "time": "5-7 недель", "difficulty": "hard"},
+                    {"id": "scarcity", "name": "Проработать сценарий дефицита", "time": "4-6 недель", "difficulty": "medium"}
+                ],
+                "УБ": [
+                    {"id": "core_beliefs", "name": "Найти глубинные убеждения", "time": "5-7 недель", "difficulty": "hard"},
+                    {"id": "schemas", "name": "Проработать жизненные сценарии", "time": "6-8 недель", "difficulty": "hard"},
+                    {"id": "meaning_deep", "name": "Экзистенциальный поиск", "time": "7-9 недель", "difficulty": "hard"}
+                ],
+                "ЧВ": [
+                    {"id": "attachment_style", "name": "Проработать тип привязанности", "time": "6-8 недель", "difficulty": "hard"},
+                    {"id": "inner_child", "name": "Исцелить внутреннего ребёнка", "time": "5-7 недель", "difficulty": "hard"},
+                    {"id": "family_system", "name": "Проработать семейную систему", "time": "6-8 недель", "difficulty": "hard"}
+                ]
+            },
+            "strong": {
+                "СБ": [
+                    {"id": "resilience", "name": "Укрепить психологическую устойчивость", "time": "4-6 недель", "difficulty": "medium"},
+                    {"id": "protection", "name": "Трансформировать защитные механизмы", "time": "5-7 недель", "difficulty": "medium"}
+                ],
+                "ТФ": [
+                    {"id": "abundance", "name": "Сформировать мышление изобилия", "time": "5-7 недель", "difficulty": "hard"},
+                    {"id": "money_freedom", "name": "Обрести финансовую свободу", "time": "6-8 недель", "difficulty": "hard"}
+                ],
+                "УБ": [
+                    {"id": "wisdom_deep", "name": "Углубить мудрость", "time": "5-7 недель", "difficulty": "medium"},
+                    {"id": "integration", "name": "Интегрировать тени", "time": "6-8 недель", "difficulty": "hard"}
+                ],
+                "ЧВ": [
+                    {"id": "intimacy", "name": "Научиться близости", "time": "5-7 недель", "difficulty": "hard"},
+                    {"id": "love", "name": "Проработать способность любить", "time": "6-8 недель", "difficulty": "hard"}
+                ]
+            },
+            "general": [
+                {"id": "self_discovery", "name": "Глубинное самопознание", "time": "7-9 недель", "difficulty": "hard"},
+                {"id": "healing", "name": "Исцеление внутренних ран", "time": "8-10 недель", "difficulty": "hard"},
+                {"id": "integration_deep", "name": "Интеграция личности", "time": "9-12 недель", "difficulty": "hard"}
+            ]
+        },
+        "trainer": {
+            "weak": {
+                "СБ": [
+                    {"id": "assertiveness", "name": "Развить ассертивность", "time": "3-4 недели", "difficulty": "medium"},
+                    {"id": "conflict_skills", "name": "Освоить навыки конфликта", "time": "4-5 недель", "difficulty": "medium"},
+                    {"id": "courage", "name": "Тренировка смелости", "time": "3-5 недель", "difficulty": "hard"}
+                ],
+                "ТФ": [
+                    {"id": "money_skills", "name": "Освоить навыки управления деньгами", "time": "3-4 недели", "difficulty": "easy"},
+                    {"id": "income_skills", "name": "Навыки увеличения дохода", "time": "4-6 недель", "difficulty": "medium"},
+                    {"id": "investment_skills", "name": "Навыки инвестирования", "time": "5-7 недель", "difficulty": "hard"}
+                ],
+                "УБ": [
+                    {"id": "thinking_tools", "name": "Освоить инструменты мышления", "time": "4-5 недель", "difficulty": "medium"},
+                    {"id": "triz", "name": "Научиться ТРИЗ", "time": "5-7 недель", "difficulty": "hard"},
+                    {"id": "decision_making", "name": "Навыки принятия решений", "time": "3-4 недели", "difficulty": "easy"}
+                ],
+                "ЧВ": [
+                    {"id": "communication_skills", "name": "Развить навыки общения", "time": "3-4 недели", "difficulty": "easy"},
+                    {"id": "negotiation", "name": "Навыки переговоров", "time": "4-6 недель", "difficulty": "medium"},
+                    {"id": "influence", "name": "Навыки влияния", "time": "5-7 недель", "difficulty": "hard"}
+                ]
+            },
+            "strong": {
+                "СБ": [
+                    {"id": "leader_courage", "name": "Лидерская смелость", "time": "4-6 недель", "difficulty": "medium"},
+                    {"id": "crisis_management", "name": "Управление в кризисах", "time": "5-7 недель", "difficulty": "hard"}
+                ],
+                "ТФ": [
+                    {"id": "wealth_building", "name": "Навыки создания капитала", "time": "6-8 недель", "difficulty": "hard"},
+                    {"id": "financial_strategy", "name": "Финансовая стратегия", "time": "5-7 недель", "difficulty": "hard"}
+                ],
+                "УБ": [
+                    {"id": "system_analysis", "name": "Системный анализ", "time": "5-7 недель", "difficulty": "hard"},
+                    {"id": "strategic_thinking", "name": "Стратегическое мышление", "time": "6-8 недель", "difficulty": "hard"}
+                ],
+                "ЧВ": [
+                    {"id": "team_building", "name": "Построение команды", "time": "5-7 недель", "difficulty": "hard"},
+                    {"id": "leadership", "name": "Лидерские навыки", "time": "6-8 недель", "difficulty": "hard"}
+                ]
+            },
+            "general": [
+                {"id": "productivity", "name": "Повысить продуктивность", "time": "4-6 недель", "difficulty": "medium"},
+                {"id": "habit_building", "name": "Сформировать полезные привычки", "time": "3-5 недель", "difficulty": "easy"},
+                {"id": "skill_mastery", "name": "Мастерство в ключевых навыках", "time": "8-10 недель", "difficulty": "hard"}
+            ]
+        }
+    }
+    
+    mode_db = destinations_db.get(mode, destinations_db["coach"])
+    
+    # Собираем цели
+    destinations = []
+    
+    # Цели для слабого вектора
+    if weakest[0] in mode_db["weak"]:
+        destinations.extend(mode_db["weak"][weakest[0]])
+    
+    # Цели для сильного вектора (развитие силы)
+    if strongest[0] in mode_db["strong"]:
+        destinations.extend(mode_db["strong"][strongest[0]])
+    
+    # Добавляем общие цели
+    destinations.extend(mode_db["general"])
+    
+    # Убираем дубликаты по id
+    seen = set()
+    unique_destinations = []
+    for dest in destinations:
+        if dest["id"] not in seen:
+            seen.add(dest["id"])
+            unique_destinations.append(dest)
+    
+    return unique_destinations[:9]  # Не больше 9 целей
+
+
+# ============================================
+# ЭКРАН ДИНАМИЧЕСКОГО ВЫБОРА ЦЕЛЕЙ
+# ============================================
+
+async def show_dynamic_destinations(callback: CallbackQuery, state: FSMContext):
+    """Показывает динамически подобранные цели"""
+    
+    user_id = callback.from_user.id
+    data = await state.get_data()
+    context = user_contexts.get(user_id)
+    user_name = context.name if context and context.name else "друг"
+    
+    mode = data.get("communication_mode", "coach")
+    mode_config = COMMUNICATION_MODES.get(mode, COMMUNICATION_MODES["coach"])
+    
+    profile_data = data.get("profile_data", {})
+    profile_code = profile_data.get('display_name', 'СБ-4_ТФ-4_УБ-4_ЧВ-4')
+    
+    # Получаем динамические цели
+    destinations = await get_dynamic_destinations(profile_code, mode)
+    
+    text = f"""
+🧠 {bold('ФРЕДИ: ВЫБЕРИТЕ ЦЕЛЬ')}
+
+{user_name}, я проанализировал твой профиль и подобрал цели, которые сейчас наиболее актуальны.
+
+{bold('Твой профиль:')} {profile_code}
+{bold('Режим:')} {mode_config['emoji']} {mode_config['name']}
+
+👇 {bold('Куда двинемся?')}
+"""
+    
+    # Строим клавиатуру
+    keyboard = []
+    row = []
+    
+    for i, dest in enumerate(destinations):
+        # Определяем эмодзи сложности
+        difficulty_emoji = {
+            "easy": "🟢",
+            "medium": "🟡",
+            "hard": "🔴"
+        }.get(dest["difficulty"], "⚪")
+        
+        button_text = f"{difficulty_emoji} {dest['name']}"
+        
+        row.append(InlineKeyboardButton(
+            text=button_text,
+            callback_data=f"dynamic_dest_{dest['id']}"
+        ))
+        
+        if len(row) == 2 or i == len(destinations) - 1:
+            keyboard.append(row)
+            row = []
+    
+    keyboard.append([InlineKeyboardButton(
+        text="✏️ Сформулирую сам", 
+        callback_data="custom_destination"
+    )])
+    keyboard.append([InlineKeyboardButton(
+        text="◀️ НАЗАД", 
+        callback_data="back_to_mode_selected"
+    )])
+    
+    await safe_send_message(
+        callback.message,
+        text,
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard),
+        delete_previous=True
+    )
+    await state.set_state(TestStates.destination_selection)
+
+
+# ============================================
+# ОБРАБОТЧИК ВЫБОРА ДИНАМИЧЕСКОЙ ЦЕЛИ
+# ============================================
+
+async def handle_dynamic_destination(callback: CallbackQuery, state: FSMContext):
+    """Обрабатывает выбор динамической цели"""
+    
+    dest_id = callback.data.replace("dynamic_dest_", "")
+    
+    user_id = callback.from_user.id
+    data = await state.get_data()
+    mode = data.get("communication_mode", "coach")
+    profile_code = data.get("profile_data", {}).get('display_name', 'СБ-4_ТФ-4_УБ-4_ЧВ-4')
+    
+    # Получаем все цели
+    all_destinations = await get_dynamic_destinations(profile_code, mode)
+    
+    # Находим выбранную
+    dest_info = None
+    for dest in all_destinations:
+        if dest["id"] == dest_id:
+            dest_info = dest
+            break
+    
+    if not dest_info:
+        await callback.answer("Цель не найдена")
+        return
+    
+    # Сохраняем выбранную цель
+    await state.update_data(
+        current_destination=dest_info,
+        route_step=1,
+        route_progress=[]
+    )
+    
+    await safe_send_message(
+        callback.message,
+        f"🧠 Строю оптимальный маршрут к цели: {bold(dest_info['name'])}...\n\nЭто займёт несколько секунд.",
+        delete_previous=True
+    )
+    
+    # Генерируем маршрут
+    from services import generate_route_ai
+    route = await generate_route_ai(user_id, data, dest_info)
+    
+    if route:
+        await state.update_data(current_route=route)
+        await show_route_step(callback, state, 1, route)
+    else:
+        await show_fallback_route(callback, state, dest_info)
+
+
+# ============================================
+# ВОЗВРАТ К ЭКРАНУ РЕЖИМА
+# ============================================
+
+async def back_to_mode_selected(callback: CallbackQuery, state: FSMContext):
+    """Возврат к экрану выбранного режима"""
+    data = await state.get_data()
+    mode = data.get("communication_mode", "coach")
+    await show_mode_selected(callback, state, mode)
 
 
 # ============================================
@@ -3055,28 +3532,8 @@ async def set_mode_coach(callback: CallbackQuery, state: FSMContext):
         context.communication_mode = "coach"
     
     await state.update_data(communication_mode="coach")
-    
     await callback.answer("✅ Режим КОУЧ активирован")
-    
-    text = f"""
-🔮 {bold('РЕЖИМ КОУЧ АКТИВИРОВАН')}
-
-Отлично!
-
-Теперь я буду:
-• Задавать открытые вопросы
-• Помогать находить ответы внутри вас
-• Поддерживать, но не навязывать
-"""
-    
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🧠 К ПОРТРЕТУ", callback_data="show_results")],
-        [InlineKeyboardButton(text="❓ ЗАДАТЬ ВОПРОС", callback_data="smart_questions")],
-        [InlineKeyboardButton(text="🎯 ЧЕМ ПОМОЧЬ", callback_data="show_help")]
-    ])
-    
-    await safe_send_message(callback.message, text, reply_markup=keyboard, delete_previous=True)
-    await state.set_state(TestStates.results)
+    await show_mode_selected(callback, state, "coach")
 
 
 async def set_mode_psychologist(callback: CallbackQuery, state: FSMContext):
@@ -3088,29 +3545,8 @@ async def set_mode_psychologist(callback: CallbackQuery, state: FSMContext):
         context.communication_mode = "psychologist"
     
     await state.update_data(communication_mode="psychologist")
-    
     await callback.answer("✅ Режим ПСИХОЛОГ активирован")
-    
-    text = f"""
-🧠 {bold('РЕЖИМ ПСИХОЛОГ АКТИВИРОВАН')}
-
-Приятно познакомиться!
-
-Теперь я буду:
-• Исследовать глубинные паттерны
-• Работать с защитными механизмами
-• Использовать гипнотические техники
-• Помогать осознавать подсознательное
-"""
-    
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🧠 К ПОРТРЕТУ", callback_data="show_results")],
-        [InlineKeyboardButton(text="❓ ЗАДАТЬ ВОПРОС", callback_data="smart_questions")],
-        [InlineKeyboardButton(text="🎯 ЧЕМ ПОМОЧЬ", callback_data="show_help")]
-    ])
-    
-    await safe_send_message(callback.message, text, reply_markup=keyboard, delete_previous=True)
-    await state.set_state(TestStates.results)
+    await show_mode_selected(callback, state, "psychologist")
 
 
 async def set_mode_trainer(callback: CallbackQuery, state: FSMContext):
@@ -3122,29 +3558,8 @@ async def set_mode_trainer(callback: CallbackQuery, state: FSMContext):
         context.communication_mode = "trainer"
     
     await state.update_data(communication_mode="trainer")
-    
     await callback.answer("✅ Режим ТРЕНЕР активирован")
-    
-    text = f"""
-⚡ {bold('РЕЖИМ ТРЕНЕР АКТИВИРОВАН')}
-
-Привет!
-
-Теперь я буду:
-• Давать чёткие инструкции
-• Фокусироваться на действиях
-• Требовать результат
-• Ставить дедлайны
-"""
-    
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🧠 К ПОРТРЕТУ", callback_data="show_results")],
-        [InlineKeyboardButton(text="❓ ЗАДАТЬ ВОПРОС", callback_data="smart_questions")],
-        [InlineKeyboardButton(text="🎯 ЧЕМ ПОМОЧЬ", callback_data="show_help")]
-    ])
-    
-    await safe_send_message(callback.message, text, reply_markup=keyboard, delete_previous=True)
-    await state.set_state(TestStates.results)
+    await show_mode_selected(callback, state, "trainer")
 
 
 async def ask_pretest(callback: CallbackQuery, state: FSMContext):
@@ -3383,7 +3798,7 @@ async def cmd_test_voices(message: Message):
 
 
 # ============================================
-# CALLBACK ХЕНДЛЕР
+# CALLBACK ХЕНДЛЕР (ОБНОВЛЕННЫЙ)
 # ============================================
 
 async def callback_handler(callback: CallbackQuery, state: FSMContext):
@@ -3435,6 +3850,19 @@ async def callback_handler(callback: CallbackQuery, state: FSMContext):
         
         elif data == "psychologist_thought":
             await show_ai_analysis(callback, state)
+        
+        # НОВЫЕ ОБРАБОТЧИКИ
+        elif data == "show_question_input":
+            await show_question_input(callback, state)
+        
+        elif data == "show_dynamic_destinations":
+            await show_dynamic_destinations(callback, state)
+        
+        elif data.startswith("dynamic_dest_"):
+            await handle_dynamic_destination(callback, state)
+        
+        elif data == "back_to_mode_selected":
+            await back_to_mode_selected(callback, state)
         
         # Режимы
         elif data == "mode_hard":
@@ -3830,7 +4258,7 @@ async def main():
     
     logger.info("Бот запущен...")
     print("\n" + "="*80)
-    print("🚀 ВИРТУАЛЬНЫЙ ПСИХОЛОГ - МАТРИЦА ПОВЕДЕНИЙ 4×6 v9.4")
+    print("🚀 ВИРТУАЛЬНЫЙ ПСИХОЛОГ - МАТРИЦА ПОВЕДЕНИЙ 4×6 v9.5")
     print("="*80)
     print(f"👤 Ваш Telegram ID: {ADMIN_IDS[0] if ADMIN_IDS else 'не указан'}")
     print("📊 Команды: /stats, /apistatus, /test_yandex, /test_voices, /test_weather, /tale, /context")
@@ -3841,6 +4269,7 @@ async def main():
     print("🧠 5 этапов тестирования: ✅")
     print("🧠 Динамическая генерация профиля: ✅")
     print("🎭 Режимы: 🔮 КОУЧ | 🧠 ПСИХОЛОГ | ⚡ ТРЕНЕР")
+    print("🎯 Динамический подбор целей: ✅")
     print("🧭 Навигатор по целям: ✅")
     print("📅 Напоминания: ✅")
     print("✨ Красивое оформление с жирным текстом и эмодзи: ✅")
