@@ -4479,10 +4479,23 @@ async def handle_ask_question(callback: CallbackQuery, state: FSMContext):
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="◀️ Назад", callback_data="show_results")]
     ])
+    
+    # 🔥 ТЕКСТ БЕЗ ВЕРХНЕГО ЗАГОЛОВКА
+    text = f"""
+✏️ {bold('ЗАДАВАЙТЕ ЛЮБОЙ ВОПРОС')}
+
+Если мой создатель знает ответ на него — значит и я вам что-то отвечу 😉
+
+🎤 {bold('Можно просто отправить голосовое сообщение')} — я внимательно выслушаю.
+
+👇 Напишите или нажмите на микрофон:
+"""
+    
     await safe_send_message(
         callback.message,
-        "✏️ ЗАДАЙТЕ ВОПРОС\n\nНапишите, что вас беспокоит. Я помню ваш профиль.",
+        text,
         reply_markup=keyboard,
+        parse_mode='HTML',
         delete_previous=True
     )
     await state.set_state(TestStates.awaiting_question)
