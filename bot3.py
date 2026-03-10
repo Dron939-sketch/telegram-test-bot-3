@@ -4680,6 +4680,8 @@ async def callback_handler(callback: CallbackQuery, state: FSMContext):
             await profile_doubt(callback, state)
         elif data == "profile_reject":
             await profile_reject(callback, state)
+        elif data == "goodbye":
+            await handle_goodbye(callback, state)
         
         elif data.startswith("discrepancy_"):
             disc = data.replace("discrepancy_", "")
