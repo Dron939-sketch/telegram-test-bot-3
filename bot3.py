@@ -4909,13 +4909,17 @@ async def callback_handler(callback: CallbackQuery, state: FSMContext):
         elif data == "smart_questions":
             await show_smart_questions(callback, state)
         elif data.startswith("ask_"):
-            state_data = await state.get_data()
-            idx = int(data.split("_")[1]) - 1
-            questions = state_data.get("smart_questions", [])
-            if 0 <= idx < len(questions):
-                await handle_smart_question(callback, state, questions[idx])
-        elif data == "ask_question":
-            await handle_ask_question(callback, state)
+            parts = data.split("_")
+            # 🔥 ПРОВЕРЯЕМ, ЧТО ВТОРАЯ ЧАСТЬ - ЭТО ЧИСЛО
+            if len(parts) > 1 and parts[1].isdigit():
+                idx = int(parts[1]) - 1
+                state_data = await state.get_data()
+                questions = state_data.get("smart_questions", [])
+                if 0 <= idx < len(questions):
+                    await handle_smart_question(callback, state, questions[idx])
+            else:
+                # Если это не число, значит это наша новая кнопка "ask_question"
+                await handle_ask_question(callback, state)
         elif data == "show_help":
             await show_help(callback, state)
         elif data == "show_tale":
