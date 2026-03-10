@@ -112,7 +112,7 @@ async def text_to_speech(text: str, mode: str = "coach") -> Optional[bytes]:
         "Authorization": f"Api-Key {YANDEX_API_KEY}",
     }
     
-    # Получаем настройки голоса из VOICE_SETTINGS (новое!)
+    # Получаем настройки голоса из VOICE_SETTINGS
     voice_settings = VOICE_SETTINGS.get(mode, VOICE_SETTINGS["coach"])
     voice = voice_settings["voice"]
     emotion = voice_settings["emotion"]
@@ -580,21 +580,58 @@ async def generate_psychologist_thought(user_id: int, state_data: dict) -> str:
 
 
 # ============================================
-# ГЕНЕРАЦИЯ МАРШРУТА
+# ГЕНЕРАЦИЯ МАРШРУТА (ОБНОВЛЕННАЯ ВЕРСИЯ)
 # ============================================
 
 async def generate_route_ai(user_id: int, state_data: dict, destination: dict) -> Optional[Dict]:
-    """Генерирует маршрут через DeepSeek"""
+    """Генерирует маршрут через DeepSeek с учётом режима"""
     
     data = state_data
     mode = data.get("communication_mode", "coach")
     mode_config = COMMUNICATION_MODES.get(mode, COMMUNICATION_MODES["coach"])
     
     profile_data = data.get("profile_data", {})
-    profile_code = profile_data.get('display_name', 'SA-5_INT')
+    profile_code = profile_data.get('display_name', 'СБ-4_ТФ-4_УБ-4_ЧВ-4')
     deep_patterns = data.get("deep_patterns", {})
     
-    prompt = f"""ТЫ — НАВИГАТОР. На основе профиля пользователя и выбранной цели, составь пошаговый маршрут.
+    # Промпты для разных режимов
+    mode_prompts = {
+        "coach": """
+ТЫ — КОУЧ-НАВИГАТОР. Составь пошаговый маршрут к цели, используя коучинговый подход.
+
+ФОРМАТ ОТВЕТА (строго соблюдай):
+📍 ЭТАП 1: [Название]
+   • Что делаем: исследуем, рефлексируем, задаём вопросы
+   • Домашнее задание: упражнения на осознание
+   • Критерий: что поймёшь или осознаешь
+
+СТИЛЬ: Вдохновляющий, поддерживающий, с фокусом на открытиях
+""",
+        "psychologist": """
+ТЫ — ПСИХОЛОГ-НАВИГАТОР. Составь терапевтический маршрут к цели.
+
+ФОРМАТ ОТВЕТА (строго соблюдай):
+📍 ЭТАП 1: [Название]
+   • Что делаем: исследуем глубинные причины, работаем с защитами
+   • Домашнее задание: терапевтические практики, дневник чувств
+   • Критерий: какие инсайты появятся, что изменится в ощущениях
+
+СТИЛЬ: Глубокий, бережный, с фокусом на исцелении
+""",
+        "trainer": """
+ТЫ — ТРЕНЕР-НАВИГАТОР. Составь тренировочный маршрут к цели.
+
+ФОРМАТ ОТВЕТА (строго соблюдай):
+📍 ЭТАП 1: [Название]
+   • Что делаем: конкретные действия, упражнения, тренировки
+   • Домашнее задание: чёткие задания с дедлайнами
+   • Критерий: какие навыки освоишь, какие результаты получишь
+
+СТИЛЬ: Чёткий, структурированный, с фокусом на результате
+"""
+    }
+    
+    prompt = f"""{mode_prompts.get(mode, mode_prompts["coach"])}
 
 === ДАННЫЕ ПОЛЬЗОВАТЕЛЯ ===
 
@@ -603,23 +640,11 @@ async def generate_route_ai(user_id: int, state_data: dict, destination: dict) -
 ГЛУБИННЫЕ ПАТТЕРНЫ:
 {json.dumps(deep_patterns, ensure_ascii=False, indent=2) if deep_patterns else "не определены"}
 
-ВЫБРАННЫЙ РЕЖИМ: {mode_config['name']} - {mode_config['responsibility']}
-
 ВЫБРАННАЯ ЦЕЛЬ: {destination['name']}
-Ориентировочное время: {destination['time']}
 Сложность: {destination.get('difficulty', 'medium')}
 
 === ЗАДАЧА ===
-Составь маршрут из 3-5 этапов. Для каждого этапа укажи:
-
-📍 ЭТАП [номер]: [Название этапа]
-   • Что делаем: конкретное действие
-   • Домашнее задание: что нужно сделать за неделю
-   • Критерий выполнения: как поймем, что этап пройден
-
-Учитывай профиль пользователя и выбранный режим.
-
-СТИЛЬ: {mode_config['system_prompt'][:200]}
+Составь маршрут из 3-5 этапов в указанном формате. Учитывай профиль пользователя и выбранный режим.
 
 ОБЪЕМ: 1500-2000 символов.
 """
@@ -629,7 +654,6 @@ async def generate_route_ai(user_id: int, state_data: dict, destination: dict) -
     if not response:
         return None
     
-    # Парсим ответ в структуру
     return {"full_text": response, "steps": 3}
 
 
