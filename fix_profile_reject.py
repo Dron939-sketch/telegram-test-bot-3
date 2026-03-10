@@ -20,6 +20,7 @@ def backup_file(filename):
 def find_main_file():
     """Ищет основной файл бота"""
     possible_names = [
+        "bot3.py",  # Добавим ваш файл первым
         "main.py",
         "bot.py",
         "fredi.py",
@@ -38,7 +39,7 @@ def find_main_file():
     for file in py_files:
         try:
             with open(file, 'r', encoding='utf-8') as f:
-                content = f.read(5000)  # Читаем первые 5000 символов
+                content = f.read(5000)
                 if 'profile_reject' in content and 'TestStates' in content:
                     print(f"✅ Найден файл: {file} (содержит profile_reject)")
                     return file
@@ -49,7 +50,7 @@ def find_main_file():
     return None
 
 def create_new_profile_reject_function():
-    """Создает новую функцию profile_reject"""
+    """Создает новую функцию profile_reject (исправленная версия без проблем с кавычками)"""
     return '''async def profile_reject(callback: CallbackQuery, state: FSMContext):
     """Пользователь полностью не согласен - показываем анекдот"""
     
@@ -60,7 +61,7 @@ def create_new_profile_reject_function():
     
     # Текст с анекдотом
     anecdote = """
-🧠 {bold('ЧЕСТНОСТЬ - ЛУЧШАЯ ПОЛИТИКА')}
+🧠 <b>ЧЕСТНОСТЬ - ЛУЧШАЯ ПОЛИТИКА</b>
 
 Две подруги решили сходить на ипподром. Приходят, а там скачки, все ставки делают. Решили и они ставку сделать — вдруг повезёт? Одна другой и говорит: «Слушай, у тебя какой размер груди?». Вторая: «Второй… а у тебя?». Первая: «Третий… ну давай на пятую поставим — чтоб сумма была…».
 
@@ -72,11 +73,8 @@ def create_new_profile_reject_function():
 
 Мужики переглянулись: «Не напиздили бы — выиграли…».
 
-{bold('Мораль:')} Если врать в тесте — результат будет как у мужиков на скачках. Хотите попробовать еще раз?
+<b>Мораль:</b> Если врать в тесте — результат будет как у мужиков на скачках. Хотите попробовать еще раз?
 """
-    
-    # Форматируем текст с жирным выделением
-    formatted_text = anecdote.format(bold=bold)
     
     # Кнопки: "🔄 Пройти тест еще раз" и "👋 Досвидули"
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
@@ -86,7 +84,7 @@ def create_new_profile_reject_function():
     
     await safe_send_message(
         callback.message,
-        formatted_text,
+        anecdote,
         reply_markup=keyboard,
         parse_mode='HTML',
         delete_previous=True
@@ -102,7 +100,7 @@ def create_goodbye_function():
     # Отправляем прощальное сообщение
     await safe_send_message(
         callback.message,
-        f"👋 {bold('До свидания!')}\\n\\nБуду рад помочь, если решите вернуться. Просто напишите /start",
+        f"👋 <b>До свидания!</b>\\n\\nБуду рад помочь, если решите вернуться. Просто напишите /start",
         parse_mode='HTML',
         delete_previous=True
     )
