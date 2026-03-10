@@ -4036,6 +4036,42 @@ async def handle_context_message(message: Message, state: FSMContext):
     
     return True
 
+async def show_context_complete(message_or_callback, state: FSMContext, context: UserContext):
+    """Показывает итоговый экран после сбора контекста"""
+    
+    await context.update_weather()
+    
+    summary = f"✅ {bold('Отлично! Теперь я знаю о вас:')}\n\n"
+    
+    if context.city:
+        summary += f"📍 {bold('Город:')} {context.city}\n"
+    if context.gender:
+        gender_str = "Мужчина" if context.gender == "male" else "Женщина" if context.gender == "female" else "Другое"
+        summary += f"👤 {bold('Пол:')} {gender_str}\n"
+    if context.age:
+        summary += f"📅 {bold('Возраст:')} {context.age}\n"
+    if context.weather_cache:
+        summary += f"{context.weather_cache['icon']} {bold('Погода:')} {context.weather_cache['description']}, {context.weather_cache['temp']}°C\n"
+    
+    summary += f"\n🎯 Теперь я буду учитывать это в наших разговорах!\n\n"
+    summary += f"🧠 {bold('ЧТО ДАЛЬШЕ?')}\n\n"
+    summary += "Чтобы я мог помочь по-настоящему, нужно пройти тест (15 минут).\n"
+    summary += "Он определит ваш психологический профиль по 4 векторам и глубинным паттернам.\n\n"
+    summary += f"👇 {bold('Начинаем?')}"
+    
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🚀 НАЧАТЬ ТЕСТ", callback_data="show_stage_1_intro")],
+        [InlineKeyboardButton(text="📖 ЧТО ДАЕТ ТЕСТ", callback_data="show_benefits")],
+        [InlineKeyboardButton(text="❓ ЗАДАТЬ ВОПРОС", callback_data="ask_pretest")]
+    ])
+    
+    if isinstance(message_or_callback, Message):
+        await safe_send_message(message_or_callback, summary, reply_markup=keyboard)
+    else:
+        await safe_send_message(message_or_callback.message, summary, reply_markup=keyboard, delete_previous=True)
+    
+    await state.clear()
+
 # ============================================
 # СТАРТ И НАВИГАЦИЯ
 # ============================================
