@@ -5,16 +5,17 @@
 
 import asyncio
 import logging
+import random
 from datetime import datetime, timedelta
-from typing import Dict, Optional
-import pytz  # нужно добавить в requirements.txt
+from typing import Dict, Optional, List, Any
 
+import pytz
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, BufferedInputFile
 
-from config import COMMUNICATION_MODES
 from profiles import VECTORS, LEVEL_PROFILES
 
 logger = logging.getLogger(__name__)
+
 
 class MorningMessageManager:
     """Менеджер утренних сообщений с учетом местного времени"""
@@ -26,6 +27,7 @@ class MorningMessageManager:
         self.user_data = None
     
     def set_bot(self, bot):
+        """Устанавливает экземпляр бота"""
         self.bot = bot
     
     def set_contexts(self, user_contexts, user_data):
@@ -41,40 +43,35 @@ class MorningMessageManager:
         # Отменяем предыдущую задачу для этого пользователя
         if user_id in self.scheduled_tasks:
             self.scheduled_tasks[user_id].cancel()
+            logger.info(f"⏰ Отменена предыдущая задача для пользователя {user_id}")
         
         # Получаем часовой пояс пользователя
         context = self.user_contexts.get(user_id) if self.user_contexts else None
         timezone = self._get_user_timezone(context)
         
-        # Рассчитываем время до следующего утра 9:00 по местному времени
+        # Текущее время в UTC и в местном времени пользователя
         now_utc = datetime.now(pytz.UTC)
         now_local = now_utc.astimezone(timezone)
         
-        # Целевое время - завтра в 9:00 по местному времени
-        target_local = now_local.replace(hour=9, minute=0, second=0, microsecond=0) + timedelta(days=1)
+        # Целевое время - сегодня или завтра в 9:00 по местному времени
+        target_local = now_local.replace(hour=9, minute=0, second=0, microsecond=0)
         
-        # Если сейчас уже после 9:00, то завтра будет правильно (мы уже добавили день)
-        # Но если сейчас, например, 8:00, то завтра в 9:00 - это через 25 часов, а нам нужно сегодня?
-        # Проверяем, не прошло ли уже 9:00 сегодня
-        if now_local.hour < 9:
-            # Если сейчас до 9:00, то отправляем сегодня в 9:00
-            target_local = now_local.replace(hour=9, minute=0, second=0, microsecond=0)
+        # Если сейчас уже после 9:00, то переносим на завтра
+        if now_local.hour >= 9:
+            target_local = target_local + timedelta(days=1)
         
         # Конвертируем обратно в UTC для asyncio.sleep
         target_utc = target_local.astimezone(pytz.UTC)
-        now_utc = datetime.now(pytz.UTC)
-        
         seconds_until_target = (target_utc - now_utc).total_seconds()
         
-        # Если время уже прошло (маленький запас на случай погрешности)
-        if seconds_until_target < 60:
-            # Отправляем через 1 минуту (для тестирования)
-            seconds_until_target = 60
-            logger.warning(f"⚠️ Целевое время уже прошло для пользователя {user_id}, отправлю через минуту")
+        # На всякий случай проверяем, что время положительное
+        if seconds_until_target < 0:
+            seconds_until_target = 60  # запасная минута
+            logger.warning(f"⚠️ Отрицательная задержка для пользователя {user_id}, установлена 60 сек")
         
         logger.info(
             f"📅 Запланировано утреннее сообщение для пользователя {user_id}\n"
-            f"   Местное время: {now_local.strftime('%Y-%m-%d %H:%M')} ({timezone})\n"
+            f"   Местное время сейчас: {now_local.strftime('%Y-%m-%d %H:%M')} ({timezone})\n"
             f"   Отправка в: {target_local.strftime('%Y-%m-%d %H:%M')}\n"
             f"   Через: {seconds_until_target/3600:.1f} часов"
         )
@@ -92,11 +89,11 @@ class MorningMessageManager:
     
     def _get_user_timezone(self, context) -> pytz.timezone:
         """Определяет часовой пояс пользователя"""
-        if context and context.timezone:
+        if context and hasattr(context, 'timezone') and context.timezone:
             try:
                 return pytz.timezone(context.timezone)
-            except:
-                pass
+            except Exception as e:
+                logger.warning(f"⚠️ Ошибка при определении часового пояса {context.timezone}: {e}")
         
         # По умолчанию Москва
         return pytz.timezone("Europe/Moscow")
@@ -116,7 +113,7 @@ class MorningMessageManager:
             context = self.user_contexts.get(user_id) if self.user_contexts else None
             mode = context.communication_mode if context else "coach"
             
-            # Обновляем погоду (API использует город, время там не важно)
+            # Обновляем погоду
             if context:
                 await context.update_weather()
             
@@ -141,15 +138,18 @@ class MorningMessageManager:
             )
             
             # Отправляем голосовое сообщение
-            from services import text_to_speech
-            audio_data = await text_to_speech(text, mode)
-            if audio_data:
-                audio_file = BufferedInputFile(audio_data, filename="morning.ogg")
-                await self.bot.send_voice(
-                    user_id,
-                    audio_file,
-                    caption="🎙 Доброе утро!"
-                )
+            try:
+                from services import text_to_speech
+                audio_data = await text_to_speech(text, mode)
+                if audio_data:
+                    audio_file = BufferedInputFile(audio_data, filename="morning.ogg")
+                    await self.bot.send_voice(
+                        user_id,
+                        audio_file,
+                        caption="🎙 Доброе утро!"
+                    )
+            except Exception as e:
+                logger.error(f"❌ Ошибка при отправке голосового сообщения: {e}")
             
             logger.info(f"✅ Утреннее сообщение отправлено пользователю {user_id} в {datetime.now(timezone).strftime('%H:%M')}")
             
@@ -176,8 +176,10 @@ class MorningMessageManager:
         else:
             greeting = "Доброй ночи"
         
-        # Обращение
-        address = context.get_address() if context and context.communication_mode == "friend" else ""
+        # Обращение (если есть)
+        address = ""
+        if context and hasattr(context, 'get_address'):
+            address = context.get_address()
         
         if address:
             greeting = f"{greeting}, {address}"
@@ -185,13 +187,10 @@ class MorningMessageManager:
             greeting = f"{greeting}, {user_name}"
         
         # Погода
-        weather_text = ""
-        if context and context.weather_cache:
-            weather = context.weather_cache
-            weather_text = self._get_weather_inspiration(weather, hour)
+        weather_text = self._get_weather_text(context, hour)
         
         # Вдохновение на основе профиля
-        inspiration = self._get_profile_inspiration(scores, profile_data)
+        inspiration = self._get_profile_inspiration(scores)
         
         # Совет на день
         daily_tip = self._get_daily_tip(scores)
@@ -212,13 +211,17 @@ class MorningMessageManager:
         
         return text.strip()
     
-    def _get_weather_inspiration(self, weather: dict, hour: int) -> str:
-        """Вдохновение на основе погоды и времени суток"""
+    def _get_weather_text(self, context, hour: int) -> str:
+        """Формирует текст о погоде"""
+        if not context or not hasattr(context, 'weather_cache') or not context.weather_cache:
+            return "За окном новый день, полный возможностей."
+        
+        weather = context.weather_cache
         temp = weather.get('temp', 0)
         desc = weather.get('description', '')
         icon = weather.get('icon', '☁️')
         
-        # Время суток
+        # Определяем время суток
         if 5 <= hour < 12:
             time_word = "утро"
         elif 12 <= hour < 18:
@@ -228,8 +231,9 @@ class MorningMessageManager:
         else:
             time_word = "ночь"
         
-        if temp < -10:
-            return f"{icon} Морозное {time_word}, {temp}°C. Даже в холод можно найти тепло внутри себя."
+        # Подбираем вдохновляющий комментарий под погоду
+        if temp < -15:
+            return f"{icon} Морозное {time_word}, {temp}°C. Даже в самый холод можно найти тепло внутри себя."
         elif temp < 0:
             return f"{icon} {desc}, {temp}°C. Холодно, но твоя внутренняя искра уже согревает."
         elif temp < 10:
@@ -241,8 +245,8 @@ class MorningMessageManager:
         else:
             return f"{icon} Жаркое {time_word}, {temp}°C. Даже солнце сегодня хочет тебя вдохновить."
     
-    def _get_profile_inspiration(self, scores: dict, profile_data: dict) -> str:
-        """Вдохновение на основе профиля (без изменений)"""
+    def _get_profile_inspiration(self, scores: dict) -> str:
+        """Вдохновение на основе профиля"""
         if not scores:
             return "Каждый день — это новая страница твоей истории."
         
@@ -254,8 +258,8 @@ class MorningMessageManager:
         weak_vector, weak_score = weakest
         strong_vector, strong_score = strongest
         
-        weak_lvl = level(weak_score)
-        strong_lvl = level(strong_score)
+        weak_lvl = self._level(weak_score)
+        strong_lvl = self._level(strong_score)
         
         # Вдохновение для слабой стороны
         weak_inspirations = {
@@ -289,22 +293,20 @@ class MorningMessageManager:
             "ЧВ": "Твоя эмпатия — это мост к другим людям. Не бойся открываться."
         }
         
-        # Выбираем случайное вдохновение
-        import random
         weak_text = random.choice(weak_inspirations.get(weak_vector, ["Сегодня — день новых возможностей."]))
         strong_text = strong_inspirations.get(strong_vector, "")
         
         return f"{weak_text}\n\n{strong_text}"
     
     def _get_daily_tip(self, scores: dict) -> str:
-        """Совет на день на основе профиля (без изменений)"""
+        """Совет на день на основе профиля"""
         if not scores:
             return "Найди 5 минут для себя и просто подыши."
         
         # Находим самое слабое место
         min_vector = min(scores.items(), key=lambda x: x[1])
         vector, score = min_vector
-        lvl = level(score)
+        lvl = self._level(score)
         
         tips = {
             "СБ": {
@@ -345,20 +347,25 @@ class MorningMessageManager:
         tip = vector_tips.get(lvl, "Сделай что-то хорошее для себя сегодня.")
         
         return tip
-
-
-# Вспомогательная функция
-def level(score: float) -> int:
-    """Дробный балл 1..4 → целый уровень 1..6"""
-    if score <= 1.49:
-        return 1
-    elif score <= 2.00:
-        return 2
-    elif score <= 2.50:
-        return 3
-    elif score <= 3.00:
-        return 4
-    elif score <= 3.50:
-        return 5
-    else:
-        return 6
+    
+    def _level(self, score: float) -> int:
+        """Дробный балл 1..4 → целый уровень 1..6"""
+        if score <= 1.49:
+            return 1
+        elif score <= 2.00:
+            return 2
+        elif score <= 2.50:
+            return 3
+        elif score <= 3.00:
+            return 4
+        elif score <= 3.50:
+            return 5
+        else:
+            return 6
+    
+    def cancel_user_morning(self, user_id: int):
+        """Отменяет утреннее сообщение для пользователя"""
+        if user_id in self.scheduled_tasks:
+            self.scheduled_tasks[user_id].cancel()
+            del self.scheduled_tasks[user_id]
+            logger.info(f"⏰ Отменено утреннее сообщение для пользователя {user_id}")
