@@ -1,4 +1,3 @@
-# config.py
 """
 Конфигурация и константы бота
 """
@@ -291,3 +290,11 @@ REMINDER_SETTINGS = {
         ]
     }
 }
+
+# ============================================
+# API URL (ДОБАВИТЬ ЭТО В КОНЕЦ ФАЙЛА)
+# ============================================
+
+DEEPSEEK_API_URL = "https://api.deepseek.com/v1/chat/completions"
+DEEPGRAM_API_URL = "https://api.deepgram.com/v1/listen"
+YANDEX_TTS_API_URL = "https://tts.api.cloud.yandex.net/speech/v1/tts:synthesize"
