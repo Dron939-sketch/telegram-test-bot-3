@@ -2338,7 +2338,7 @@ async def show_final_profile(callback: CallbackQuery, state: FSMContext):
         await show_ai_generated_profile(callback, state, data["ai_generated_profile"])
         return
     
-    # Отправляем статусное сообщение
+    # Отправляем статусное сообщение (БЕЗ КНОПОК)
     status_msg = await callback.message.answer(
         "🧠 Анализирую данные...\n\n"
         "Собираю воедино результаты 5 этапов тестирования.\n"
