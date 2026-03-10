@@ -4,7 +4,7 @@ import random
 import json
 from .base_mode import BaseMode
 from profiles import VECTORS, LEVEL_PROFILES
-from hypno_module import HypnoOrchestrator, TherapeuticTales, Anchoring  # Убрали HypnoticInduction
+from hypno_module import HypnoOrchestrator, TherapeuticTales, Anchoring  # Убираем HypnoticInduction
 
 
 class PsychologistMode(BaseMode):
@@ -156,7 +156,8 @@ class PsychologistMode(BaseMode):
         
         # 1. Если запрос на гипноз или глубокую работу
         if any(word in question_lower for word in ["гипноз", "транс", "расслабиться", "уснуть"]):
-            response = self._hypnotic_induction(question)
+            # Используем оркестратор для гипнотической индукции
+            response = self._generate_hypnotic_induction()
             self.last_tools_used.append("hypnosis")
             hypnotic_suggestion = True
         
@@ -209,6 +210,31 @@ class PsychologistMode(BaseMode):
             "tale_suggested": tale_suggested
         }
     
+    def _generate_hypnotic_induction(self) -> str:
+        """Генерирует гипнотическую индукцию используя hypno_module"""
+        # Используем класс ParadoxCommands и HypnoQuestions из hypno_module
+        from hypno_module import ParadoxCommands, HypnoQuestions, MiltonModel
+        
+        pc = ParadoxCommands()
+        hq = HypnoQuestions()
+        mm = MiltonModel()
+        
+        induction = f"""Устройтесь поудобнее, закройте глаза, если хотите...
+
+{pc.not_command("напрягаться")} Просто позвольте себе быть здесь и сейчас.
+
+{hq.simple("почувствовать своё дыхание")} Сделайте глубокий вдох... и медленный выдох...
+
+{mm.milton_phrase()} И с каждым выдохом вы можете позволить себе расслабляться всё больше...
+
+{pc.prohibition("спешить")} Всё идёт своим чередом, в своём темпе.
+
+{mm.deletion("Ваше бессознательное знает, что вам нужно...")}
+
+И когда будете готовы, вы можете вернуться... с новым пониманием... с новыми ресурсами..."""
+        
+        return induction
+    
     def _detect_defense(self, text: str) -> bool:
         """Определяет, есть ли в тексте защитный механизм"""
         defense_markers = {
@@ -227,12 +253,17 @@ class PsychologistMode(BaseMode):
     
     def _work_with_defense(self, question: str) -> str:
         """Работает с защитным механизмом"""
+        # Используем трюизмы из hypno_module для создания согласия
+        from hypno_module import Truisms
+        
+        tru = Truisms()
+        
         # Мягкая конфронтация с защитой
         responses = [
-            "Я замечаю, что вы говорите об этом очень логично. А что происходит в теле, когда вы это рассказываете?",
-            "Когда вы говорите 'всё нормально' — какую часть чувств вы оставляете за скобками?",
-            "Интересно, а если посмотреть на это не с логической, а с чувственной стороны — что там?",
-            "Я слышу ваши объяснения. А что, если просто побыть с этим чувством, не объясняя?"
+            f"{tru.about_self('Я замечаю, что вы говорите об этом очень логично')}. А что происходит в теле, когда вы это рассказываете?",
+            f"Когда вы говорите 'всё нормально' — какую часть чувств вы оставляете за скобками?",
+            f"{tru.possibility('Интересно, а если посмотреть на это не с логической, а с чувственной стороны')} — что там?",
+            f"{tru.fact()} Я слышу ваши объяснения. А что, если просто побыть с этим чувством, не объясняя?"
         ]
         return random.choice(responses)
     
@@ -325,18 +356,6 @@ class PsychologistMode(BaseMode):
             f"Где-то глубоко внутри уже есть ответ... и он может проявиться в своё время..."
         ]
         return random.choice(suggestions)
-    
-    def _hypnotic_induction(self, request: str) -> str:
-        """Проводит гипнотическую индукцию (если запросили)"""
-        induction = """Хорошо. Устройтесь поудобнее, закройте глаза, если хотите.
-Сделайте глубокий вдох... и медленный выдох...
-И с каждым выдохом вы можете позволить себе расслабляться всё больше...
-
-Ваше бессознательное знает, что вам нужно для исцеления...
-И оно может показать это в образах, чувствах, мыслях...
-
-Просто позвольте этому случиться..."""
-        return induction
     
     def _identify_current_issue(self, question: str) -> str:
         """Определяет текущую проблему из вопроса"""
