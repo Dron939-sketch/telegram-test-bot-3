@@ -4502,11 +4502,12 @@ async def handle_ask_question(callback: CallbackQuery, state: FSMContext):
 
 
 async def handle_question_message(message: Message, state: FSMContext):
-    """Обработка вопроса после теста с использованием только профиля"""
+    """Обработка вопроса с использованием контекстного анализатора"""
     user_id = message.from_user.id
     data = await state.get_data()
+    user_name = user_names.get(user_id, "друг")
     
-    # 🔥 ПРОВЕРЯЕМ, ЕСТЬ ЛИ ПРОФИЛЬ
+    # 🔥 ПРОВЕРЯЕМ, ЕСТЬ ЛИ ПРОФИЛЬ (ваша原有 проверка)
     test_completed = False
     
     if is_test_completed(data):
@@ -4528,27 +4529,37 @@ async def handle_question_message(message: Message, state: FSMContext):
     
     thinking = await message.answer("🤔 Думаю над ответом...")
     
-    # 🔥 ФОРМИРУЕМ ОТВЕТ НА ОСНОВЕ ПРОФИЛЯ, БЕЗ РЕЖИМОВ
-    # Получаем данные профиля
+    # 🔥 НОВОЕ: создаем анализатор из данных пользователя
+    from question_analyzer import create_analyzer_from_user_data
+    analyzer = create_analyzer_from_user_data(data, user_name)
+    
+    # Получаем данные профиля (как и было)
     profile_data = data.get("profile_data", {})
     scores = {}
     for k in VECTORS:
         levels = data.get("behavioral_levels", {}).get(k, [])
         scores[k] = sum(levels) / len(levels) if levels else 3.0
     
-    # Формируем контекст для ответа
+    # Формируем контекст для ответа (как и было)
     context_text = f"Профиль пользователя: {profile_data.get('display_name', 'не определен')}\n"
     context_text += f"Тип восприятия: {data.get('perception_type', 'не определен')}\n"
     context_text += f"Уровень мышления: {data.get('thinking_level', 5)}/9\n"
     
-    # Добавляем информацию о слабых и сильных сторонах
     if scores:
         weakest = min(scores.items(), key=lambda x: x[1])
         strongest = max(scores.items(), key=lambda x: x[1])
         context_text += f"Зона роста: {VECTORS[weakest[0]]['name']}\n"
         context_text += f"Сильная сторона: {VECTORS[strongest[0]]['name']}\n"
     
-    # Формируем промпт для ИИ
+    # 🔥 НОВОЕ: добавляем глубинный анализ, если есть анализатор
+    if analyzer:
+        reflection = analyzer.get_reflection_text(message.text)
+        analysis_context = f"\nГлубинный анализ вопроса:\n{reflection}\n"
+        analysis_context += "ВАЖНО: В ответе НЕ ДАВАЙ СОВЕТОВ И ИНСТРУКЦИЙ. Не говори 'попробуйте', 'начните с', 'вам стоит'. Просто отрази то, что видишь."
+    else:
+        analysis_context = ""
+    
+    # Формируем промпт для ИИ (обновленный)
     prompt = f"""
 Ты - психолог Фреди. Ответь на вопрос пользователя, учитывая его психологический профиль.
 
@@ -4556,10 +4567,11 @@ async def handle_question_message(message: Message, state: FSMContext):
 
 Профиль пользователя:
 {context_text}
+{analysis_context}
 
 История диалога: {data.get('history', [])}
 
-Дай развернутый, полезный ответ, основанный на профиле пользователя.
+Дай развернутый, эмпатичный ответ.
 """
     
     # Получаем ответ от ИИ
@@ -4579,7 +4591,7 @@ async def handle_question_message(message: Message, state: FSMContext):
     # Очищаем ответ от форматирования
     clean_response = clean_text_for_safe_display(response)
     
-    # 🔥 НОВАЯ КЛАВИАТУРА БЕЗ РЕЖИМА
+    # Клавиатура (оставляем вашу)
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [
             InlineKeyboardButton(text="🎤 ЗАДАТЬ ЕЩЁ", callback_data="ask_question"),
@@ -4596,7 +4608,7 @@ async def handle_question_message(message: Message, state: FSMContext):
         delete_previous=True
     )
     
-    # Голосовой ответ (используем голос коуча по умолчанию)
+    # Голосовой ответ
     audio_data = await text_to_speech(response, "coach")
     if audio_data:
         audio_file = BufferedInputFile(audio_data, filename="response.ogg")
