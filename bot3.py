@@ -4502,12 +4502,12 @@ async def handle_ask_question(callback: CallbackQuery, state: FSMContext):
 
 
 async def handle_question_message(message: Message, state: FSMContext):
-    """Обработка вопроса с использованием контекстного анализатора"""
+    """Обработка вопроса с использованием контекстного анализатора и голосовыми инструкциями"""
     user_id = message.from_user.id
     data = await state.get_data()
     user_name = user_names.get(user_id, "друг")
     
-    # 🔥 ПРОВЕРЯЕМ, ЕСТЬ ЛИ ПРОФИЛЬ (ваша原有 проверка)
+    # 🔥 ПРОВЕРЯЕМ, ЕСТЬ ЛИ ПРОФИЛЬ
     test_completed = False
     
     if is_test_completed(data):
@@ -4527,20 +4527,20 @@ async def handle_question_message(message: Message, state: FSMContext):
         )
         return
     
-    thinking = await message.answer("🤔 Думаю над ответом...")
+    thinking = await message.answer("🎙 Думаю над ответом...")
     
-    # 🔥 НОВОЕ: создаем анализатор из данных пользователя
+    # Создаем анализатор из данных пользователя
     from question_analyzer import create_analyzer_from_user_data
     analyzer = create_analyzer_from_user_data(data, user_name)
     
-    # Получаем данные профиля (как и было)
+    # Получаем данные профиля
     profile_data = data.get("profile_data", {})
     scores = {}
     for k in VECTORS:
         levels = data.get("behavioral_levels", {}).get(k, [])
         scores[k] = sum(levels) / len(levels) if levels else 3.0
     
-    # Формируем контекст для ответа (как и было)
+    # Формируем контекст для ответа
     context_text = f"Профиль пользователя: {profile_data.get('display_name', 'не определен')}\n"
     context_text += f"Тип восприятия: {data.get('perception_type', 'не определен')}\n"
     context_text += f"Уровень мышления: {data.get('thinking_level', 5)}/9\n"
@@ -4551,31 +4551,49 @@ async def handle_question_message(message: Message, state: FSMContext):
         context_text += f"Зона роста: {VECTORS[weakest[0]]['name']}\n"
         context_text += f"Сильная сторона: {VECTORS[strongest[0]]['name']}\n"
     
-    # 🔥 НОВОЕ: добавляем глубинный анализ, если есть анализатор
+    # Добавляем глубинный анализ, если есть анализатор
     if analyzer:
         reflection = analyzer.get_reflection_text(message.text)
         analysis_context = f"\nГлубинный анализ вопроса:\n{reflection}\n"
-        analysis_context += "ВАЖНО: В ответе НЕ ДАВАЙ СОВЕТОВ И ИНСТРУКЦИЙ. Не говори 'попробуйте', 'начните с', 'вам стоит'. Просто отрази то, что видишь."
+        analysis_context += "ВАЖНО: В ответе НЕ ДАВАЙ СОВЕТОВ И ИНСТРУКЦИЙ. Просто отрази то, что видишь."
     else:
         analysis_context = ""
     
-    # Формируем промпт для ИИ (обновленный)
+    # 🔥 НОВЫЙ ПРОМПТ С ИНСТРУКЦИЯМИ ДЛЯ ГОЛОСА
     prompt = f"""
-Ты - психолог Фреди. Ответь на вопрос пользователя, учитывая его психологический профиль.
+Ты - психолог Фреди. Ты общаешься с пользователем ГОЛОСОМ (через синтез речи).
 
-Вопрос: {message.text}
+❗️ВАЖНЕЙШИЕ ПРАВИЛА ДЛЯ ТВОИХ ОТВЕТОВ:
 
-Профиль пользователя:
+1. Твой текст БУДЕТ ОЗВУЧЕН, поэтому:
+   - НЕ ИСПОЛЬЗУЙ НИКАКИЕ СИМВОЛЫ: * # _ - • → [ ] ( ) 
+   - НЕ ИСПОЛЬЗУЙ НУМЕРАЦИЮ (1., 2., 3.)
+   - НЕ ИСПОЛЬЗУЙ МАРКИРОВАННЫЕ СПИСКИ
+   - Пиши ТОЛЬКО ТЕКСТ, как в разговоре
+
+2. Стиль речи - теплый, эмпатичный психологический разговор:
+   - Используй имя пользователя: {user_name}
+   - Говори короткими предложениями
+   - Добавляй паузы с помощью многоточий...
+   - Задавай риторические вопросы
+
+3. Твой ответ должен быть ПОЛНЫМ и ЗАКОНЧЕННЫМ:
+   - Не обрывай мысль на полуслове
+   - Закончи каждую мысль точкой
+
+Вопрос пользователя: {message.text}
+
+Информация о пользователе:
 {context_text}
 {analysis_context}
 
 История диалога: {data.get('history', [])}
 
-Дай развернутый, эмпатичный ответ.
+Напиши свой ответ ТОЛЬКО ТЕКСТОМ, готовым для озвучивания.
 """
     
-    # Получаем ответ от ИИ
-    response = await call_deepseek(prompt, max_tokens=600)
+    # Получаем ответ от ИИ с увеличенным лимитом (чтобы не обрывался)
+    response = await call_deepseek(prompt, max_tokens=1000)
     
     if not response:
         response = "Извините, я немного задумался. Можете повторить вопрос?"
@@ -4588,10 +4606,12 @@ async def handle_question_message(message: Message, state: FSMContext):
     
     await thinking.delete()
     
-    # Очищаем ответ от форматирования
-    clean_response = clean_text_for_safe_display(response)
+    # 👇 ВАЖНО: для отображения в чате используем clean_text_for_safe_display (с эмодзи и жирным)
+    display_response = clean_text_for_safe_display(response)
     
-    # Клавиатура (оставляем вашу)
+    # 👇 ДЛЯ ГОЛОСА используем response как есть (он уже чистый от ИИ)
+    
+    # Клавиатура
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [
             InlineKeyboardButton(text="🎤 ЗАДАТЬ ЕЩЁ", callback_data="ask_question"),
@@ -4601,14 +4621,15 @@ async def handle_question_message(message: Message, state: FSMContext):
         [InlineKeyboardButton(text="◀️ К ПОРТРЕТУ", callback_data="show_results")]
     ])
     
+    # Отправляем текстовый ответ (с форматированием для чата)
     await safe_send_message(
         message,
-        f"💭 {bold('Ответ')}\n\n{clean_response}",
+        f"💭 {bold('Ответ')}\n\n{display_response}",
         reply_markup=keyboard,
         delete_previous=True
     )
     
-    # Голосовой ответ
+    # Голосовой ответ (используем чистый response без форматирования)
     audio_data = await text_to_speech(response, "coach")
     if audio_data:
         audio_file = BufferedInputFile(audio_data, filename="response.ogg")
@@ -4618,7 +4639,6 @@ async def handle_question_message(message: Message, state: FSMContext):
         )
     
     await state.set_state(TestStates.results)
-
 
 async def handle_voice_message(message: Message, state: FSMContext):
     """Обработка голосового сообщения с использованием режимов"""
