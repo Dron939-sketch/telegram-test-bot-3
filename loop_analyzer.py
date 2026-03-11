@@ -460,7 +460,7 @@ class LoopAnalyzer:
         
         return "\n".join(lines)
     
-     def get_statistics(self) -> Dict[str, Any]:
+    def get_statistics(self) -> Dict[str, Any]:
         """
         Возвращает статистику по анализу
         
