@@ -5311,7 +5311,7 @@ async def handle_weekend_ideas(callback: CallbackQuery, state: FSMContext):
     user_id = callback.from_user.id
     data = await state.get_data()
     context = user_contexts.get(user_id)
-    user_name = user_names.get(user_id, "друг")
+    user_name = user_names.get(user_id, "друг")  # 👈 УЖЕ ПРАВИЛЬНО
     
     # Проверяем, есть ли профиль
     if not is_test_completed(data):
@@ -5335,13 +5335,21 @@ async def handle_weekend_ideas(callback: CallbackQuery, state: FSMContext):
     
     # Получаем идеи от планировщика
     global weekend_planner
-    ideas_text = await weekend_planner.get_weekend_ideas(
-        user_id=user_id,
-        user_name=user_name,
-        scores=scores,
-        profile_data=profile_data,
-        context=context
-    )
+    try:  # 👈 ДОБАВЛЕНА ОБРАБОТКА ОШИБОК
+        ideas_text = await weekend_planner.get_weekend_ideas(
+            user_id=user_id,
+            user_name=user_name,
+            scores=scores,
+            profile_data=profile_data,
+            context=context
+        )
+    except Exception as e:
+        logger.error(f"Ошибка генерации идей: {e}")
+        await status_msg.delete()
+        await callback.message.answer(
+            "😔 Что-то пошло не так. Попробуй позже или задай вопрос психологу."
+        )
+        return
     
     # Удаляем статусное сообщение
     await status_msg.delete()
