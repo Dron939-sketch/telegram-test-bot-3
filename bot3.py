@@ -98,6 +98,7 @@ from test_questions import (
     map_to_stage3_feedback_level
 )
 from hypno_module import HypnoOrchestrator, TherapeuticTales, Anchoring
+from weekend_planner import get_weekend_planner, get_weekend_ideas_keyboard
 
 # Настройка логирования
 logging.basicConfig(
@@ -123,6 +124,9 @@ morning_manager = MorningMessageManager()
 hypno = HypnoOrchestrator()
 tales = TherapeuticTales()
 anchoring = Anchoring()
+
+# Инициализируем планировщик выходных
+weekend_planner = get_weekend_planner()
 
 
 # ============================================
@@ -4791,9 +4795,14 @@ async def callback_handler(callback: CallbackQuery, state: FSMContext):
     data = callback.data
     
     try:
-        # Новые экраны
+         # Новые экраны
         if data == "why_details":
             await show_why_details(callback, state)
+            return
+        
+        # НОВЫЙ ОБРАБОТЧИК для идей на выходные
+        elif data == "weekend_ideas":
+            await handle_weekend_ideas(callback, state)
             return
         
         # Навигация по точкам
@@ -5290,6 +5299,64 @@ async def main():
     print("="*80 + "\n")
     
     await dp.start_polling(bot, drop_pending_updates=True)
+
+
+# ============================================
+# ОБРАБОТЧИК ИДЕЙ НА ВЫХОДНЫЕ
+# ============================================
+
+async def handle_weekend_ideas(callback: CallbackQuery, state: FSMContext):
+    """Генерирует и показывает идеи на выходные с учётом профиля"""
+    
+    user_id = callback.from_user.id
+    data = await state.get_data()
+    context = user_contexts.get(user_id)
+    user_name = user_names.get(user_id, "друг")
+    
+    # Проверяем, есть ли профиль
+    if not is_test_completed(data):
+        await callback.message.answer(
+            "❓ Сначала нужно пройти тест, чтобы я понимал твой профиль. Используй /start"
+        )
+        return
+    
+    # Получаем scores из данных
+    scores = {}
+    for k in VECTORS:
+        levels = data.get("behavioral_levels", {}).get(k, [])
+        scores[k] = sum(levels) / len(levels) if levels else 3.0
+    
+    profile_data = data.get("profile_data", {})
+    
+    # Отправляем статусное сообщение
+    status_msg = await callback.message.answer(
+        "🎨 Генерирую идеи специально для тебя...\n\nЭто займёт несколько секунд."
+    )
+    
+    # Получаем идеи от планировщика
+    global weekend_planner
+    ideas_text = await weekend_planner.get_weekend_ideas(
+        user_id=user_id,
+        user_name=user_name,
+        scores=scores,
+        profile_data=profile_data,
+        context=context
+    )
+    
+    # Удаляем статусное сообщение
+    await status_msg.delete()
+    
+    # Создаём клавиатуру для взаимодействия с идеями
+    from weekend_planner import get_weekend_ideas_keyboard
+    keyboard = get_weekend_ideas_keyboard()
+    
+    # Отправляем результат
+    await safe_send_message(
+        callback.message,
+        ideas_text,
+        reply_markup=keyboard,
+        delete_previous=True
+    )
 
 
 if __name__ == "__main__":
