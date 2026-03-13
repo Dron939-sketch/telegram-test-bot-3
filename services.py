@@ -72,9 +72,9 @@ def make_json_serializable(obj):
 # DEEPSEEK API
 # ============================================
 
-async def call_deepseek(prompt: str, system_prompt: str = None, max_tokens: int = 1000, temperature: float = 0.7) -> Optional[str]:
+async def call_deepseek(prompt: str, system_prompt: str = None, max_tokens: int = 1000, temperature: float = 0.7, retry_count: int = 2) -> Optional[str]:
     """
-    Универсальная функция вызова DeepSeek API
+    Универсальная функция вызова DeepSeek API с повторными попытками
     """
     if not DEEPSEEK_API_KEY:
         logger.error("❌ DEEPSEEK_API_KEY не настроен")
@@ -100,22 +100,48 @@ async def call_deepseek(prompt: str, system_prompt: str = None, max_tokens: int 
         "presence_penalty": 0.3
     }
     
-    try:
-        async with aiohttp.ClientSession() as session:
-            async with session.post(DEEPSEEK_API_URL, headers=headers, json=payload, timeout=60) as response:
-                if response.status == 200:
-                    data = await response.json()
-                    return data['choices'][0]['message']['content'].strip()
-                else:
-                    error_text = await response.text()
-                    logger.error(f"❌ DeepSeek API error {response.status}: {error_text[:200]}")
-                    return None
-    except asyncio.TimeoutError:
-        logger.error("❌ DeepSeek API timeout")
-        return None
-    except Exception as e:
-        logger.error(f"❌ DeepSeek API exception: {e}")
-        return None
+    for attempt in range(retry_count + 1):
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.post(
+                    DEEPSEEK_API_URL, 
+                    headers=headers, 
+                    json=payload, 
+                    timeout=60
+                ) as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        return data['choices'][0]['message']['content'].strip()
+                    else:
+                        error_text = await response.text()
+                        logger.error(f"❌ DeepSeek API error {response.status}: {error_text[:200]}")
+                        
+                        if attempt < retry_count:
+                            wait_time = 2 ** attempt  # 1, 2, 4 секунды
+                            logger.info(f"🔄 Повторная попытка {attempt + 1}/{retry_count} через {wait_time}с...")
+                            await asyncio.sleep(wait_time)
+                            continue
+                        return None
+                        
+        except asyncio.TimeoutError:
+            logger.error(f"❌ DeepSeek API timeout (попытка {attempt + 1}/{retry_count + 1})")
+            if attempt < retry_count:
+                wait_time = 2 ** attempt
+                logger.info(f"🔄 Повтор через {wait_time}с...")
+                await asyncio.sleep(wait_time)
+                continue
+            return None
+            
+        except Exception as e:
+            logger.error(f"❌ DeepSeek API exception (попытка {attempt + 1}): {e}")
+            if attempt < retry_count:
+                wait_time = 2 ** attempt
+                logger.info(f"🔄 Повтор через {wait_time}с...")
+                await asyncio.sleep(wait_time)
+                continue
+            return None
+    
+    return None
 
 
 # ============================================
