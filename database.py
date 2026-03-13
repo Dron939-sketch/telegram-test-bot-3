@@ -2,7 +2,7 @@
 Модуль для работы с PostgreSQL базой данных бота "Фреди"
 Все таблицы имеют префикс fredi_ для избежания конфликтов
 
-Версия 1.0 - Полная интеграция с существующими структурами данных
+Версия 1.0 - ПОЛНАЯ ИНТЕГРАЦИЯ со всеми структурами данных
 """
 
 import asyncpg
@@ -89,27 +89,31 @@ class BotDatabase:
                 )
             """)
             
-            # Таблица контекста пользователей (UserContext)
+            # Таблица контекста пользователей (UserContext) - ВСЕ ПОЛЯ
             await conn.execute("""
                 CREATE TABLE IF NOT EXISTS fredi_user_contexts (
                     user_id BIGINT PRIMARY KEY REFERENCES fredi_users(user_id) ON DELETE CASCADE,
                     
-                    -- Основные данные
+                    -- 👤 ЛИЧНЫЕ ДАННЫЕ (СОХРАНЯЕМ!)
                     name TEXT,
+                    age INTEGER,
+                    gender TEXT,
                     city TEXT,
+                    birth_date DATE,
+                    
+                    -- 🕒 ЧАСОВОЙ ПОЯС
                     timezone TEXT DEFAULT 'Europe/Moscow',
                     timezone_offset INTEGER DEFAULT 3,
-                    gender TEXT,
-                    age INTEGER,
-                    birth_date DATE,
+                    
+                    -- ⚙️ НАСТРОЙКИ
                     communication_mode TEXT DEFAULT 'coach',
                     last_context_update TIMESTAMP WITH TIME ZONE,
                     
-                    -- Погода (кэш)
+                    -- 🌤 ПОГОДА (кэш)
                     weather_cache JSONB,
                     weather_cache_time TIMESTAMP WITH TIME ZONE,
                     
-                    -- Жизненный контекст
+                    -- 👨‍👩‍👧‍👦 ЖИЗНЕННЫЙ КОНТЕКСТ (для проверки реальности)
                     family_status TEXT,
                     has_children BOOLEAN DEFAULT FALSE,
                     children_ages TEXT,
@@ -124,20 +128,20 @@ class BotDatabase:
                     energy_level INTEGER,
                     life_context_complete BOOLEAN DEFAULT FALSE,
                     
-                    -- Состояние сбора контекста
+                    -- 📋 СОСТОЯНИЕ СБОРА КОНТЕКСТА
                     awaiting_context TEXT,
                     
-                    -- Временные метки
+                    -- 🕐 ВРЕМЕННЫЕ МЕТКИ
                     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
                     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
                 )
             """)
             
-            # Таблица данных пользователей (user_data)
+            # Таблица данных пользователей (user_data) - ВСЕ ДАННЫЕ ТЕСТА
             await conn.execute("""
                 CREATE TABLE IF NOT EXISTS fredi_user_data (
                     user_id BIGINT PRIMARY KEY REFERENCES fredi_users(user_id) ON DELETE CASCADE,
-                    data JSONB NOT NULL,
+                    data JSONB NOT NULL,  -- весь словарь user_data[user_id]
                     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
                     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
                 )
@@ -167,54 +171,115 @@ class BotDatabase:
                 )
             """)
             
-            # Таблица результатов тестов
+            # Таблица результатов тестов (ПОЛНЫЙ ПРОФИЛЬ)
             await conn.execute("""
                 CREATE TABLE IF NOT EXISTS fredi_test_results (
                     id BIGSERIAL PRIMARY KEY,
                     user_id BIGINT REFERENCES fredi_users(user_id) ON DELETE CASCADE,
                     test_type TEXT NOT NULL,  -- 'full_profile', 'stage1', 'stage2', etc
-                    results JSONB NOT NULL,   -- полные результаты
+                    results JSONB NOT NULL,   -- полные результаты теста
+                    
+                    -- 👤 ПРОФИЛЬ ПОЛЬЗОВАТЕЛЯ (для быстрого доступа)
                     profile_code TEXT,        -- СБ-4_ТФ-4_УБ-4_ЧВ-4
-                    perception_type TEXT,      -- тип восприятия
-                    thinking_level INTEGER,    -- уровень мышления 1-9
+                    perception_type TEXT,      -- тип восприятия (этап 1)
+                    thinking_level INTEGER,    -- уровень мышления 1-9 (этап 2)
+                    
+                    -- 📊 ВЕКТОРЫ
                     vectors JSONB,             -- баллы по векторам {"СБ": 3.5, "ТФ": 4.2, ...}
-                    deep_patterns JSONB,       -- результаты 5 этапа
+                    behavioral_levels JSONB,   -- уровни поведения {"СБ": [2,3,4], ...}
+                    
+                    -- 🌀 ГЛУБИННЫЕ ПАТТЕРНЫ (этап 5)
+                    deep_patterns JSONB,        -- тип привязанности, защиты, убеждения
+                    
+                    -- 🔒 КОНФАЙНМЕНТ-МОДЕЛЬ
+                    confinement_model JSONB,
+                    
+                    -- 🎯 ЦЕЛИ И МАРШРУТЫ
+                    current_destination JSONB,
+                    current_route JSONB,
+                    
                     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
                 )
             """)
             
-            # Таблица ответов на тест (детализированно)
+            # Таблица ответов на тест (ДЕТАЛЬНО)
             await conn.execute("""
                 CREATE TABLE IF NOT EXISTS fredi_test_answers (
                     id BIGSERIAL PRIMARY KEY,
                     user_id BIGINT REFERENCES fredi_users(user_id) ON DELETE CASCADE,
                     test_result_id BIGINT REFERENCES fredi_test_results(id) ON DELETE CASCADE,
-                    stage INTEGER NOT NULL,    -- 1,2,3,4,5
+                    
+                    -- 📝 ДАННЫЕ ВОПРОСА
+                    stage INTEGER NOT NULL,     -- 1,2,3,4,5
                     question_index INTEGER NOT NULL,
                     question_text TEXT,
                     answer_text TEXT,
-                    answer_value TEXT,         -- ключ опции (a,b,c,d или 1,2,3,4)
-                    scores JSONB,              -- для этапа 1: {"EXTERNAL": 2, ...}
-                    measures TEXT,              -- для этапа 2: 'СБ', 'ТФ', 'ЧВ', 'УБ', 'thinking'
-                    strategy TEXT,              -- для этапа 3: 'СБ', 'ТФ', 'УБ', 'ЧВ'
-                    dilts TEXT,                  -- для этапа 4: 'ENVIRONMENT', 'BEHAVIOR', etc
-                    pattern TEXT,                -- для этапа 5: 'secure', 'avoidant', etc
-                    target TEXT,                  -- для этапа 5: 'attachment', 'defense', etc
+                    answer_value TEXT,           -- ключ опции (a,b,c,d или 1,2,3,4)
+                    
+                    -- 🎯 СПЕЦИФИЧЕСКИЕ ПОЛЯ ДЛЯ РАЗНЫХ ЭТАПОВ
+                    scores JSONB,                 -- для этапа 1: {"EXTERNAL": 2, ...}
+                    measures TEXT,                  -- для этапа 2: 'СБ', 'ТФ', 'ЧВ', 'УБ', 'thinking'
+                    strategy TEXT,                  -- для этапа 3: 'СБ', 'ТФ', 'УБ', 'ЧВ'
+                    dilts TEXT,                      -- для этапа 4: 'ENVIRONMENT', 'BEHAVIOR', etc
+                    pattern TEXT,                    -- для этапа 5: 'secure', 'avoidant', etc
+                    target TEXT,                      -- для этапа 5: 'attachment', 'defense', etc
+                    
                     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
                 )
             """)
             
-            # Таблица напоминаний
+            # Таблица гипнотических якорей (из hypno_module)
+            await conn.execute("""
+                CREATE TABLE IF NOT EXISTS fredi_hypno_anchors (
+                    id BIGSERIAL PRIMARY KEY,
+                    user_id BIGINT REFERENCES fredi_users(user_id) ON DELETE CASCADE,
+                    anchor_name TEXT NOT NULL,
+                    anchor_state TEXT NOT NULL,  -- 'calm', 'confidence', 'action', etc
+                    anchor_phrase TEXT NOT NULL,
+                    emoji TEXT,
+                    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+                    last_used TIMESTAMP WITH TIME ZONE,
+                    use_count INTEGER DEFAULT 0
+                )
+            """)
+            
+            # Таблица напоминаний (для morning_messages и reminder_manager)
             await conn.execute("""
                 CREATE TABLE IF NOT EXISTS fredi_reminders (
                     id BIGSERIAL PRIMARY KEY,
                     user_id BIGINT REFERENCES fredi_users(user_id) ON DELETE CASCADE,
                     reminder_type TEXT NOT NULL,  -- 'morning_message', 'motivation', 'checkin', 'deadline'
                     remind_at TIMESTAMP WITH TIME ZONE NOT NULL,
-                    data JSONB,
+                    data JSONB,                    -- дополнительные данные (текст, задача и т.д.)
                     is_sent BOOLEAN DEFAULT FALSE,
                     sent_at TIMESTAMP WITH TIME ZONE,
                     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+                )
+            """)
+            
+            # Таблица кэша идей на выходные (из weekend_planner)
+            await conn.execute("""
+                CREATE TABLE IF NOT EXISTS fredi_weekend_ideas_cache (
+                    id BIGSERIAL PRIMARY KEY,
+                    user_id BIGINT REFERENCES fredi_users(user_id) ON DELETE CASCADE,
+                    ideas_text TEXT NOT NULL,
+                    main_vector TEXT,
+                    main_level INTEGER,
+                    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+                    expires_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() + INTERVAL '1 hour'
+                )
+            """)
+            
+            # Таблица анализов вопросов (из question_analyzer)
+            await conn.execute("""
+                CREATE TABLE IF NOT EXISTS fredi_question_analysis_cache (
+                    id BIGSERIAL PRIMARY KEY,
+                    user_id BIGINT REFERENCES fredi_users(user_id) ON DELETE CASCADE,
+                    question_hash INTEGER NOT NULL,
+                    question_text TEXT,
+                    analysis JSONB NOT NULL,       -- полный анализ вопроса
+                    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+                    expires_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() + INTERVAL '5 minutes'
                 )
             """)
             
@@ -223,20 +288,25 @@ class BotDatabase:
                 CREATE TABLE IF NOT EXISTS fredi_events (
                     id BIGSERIAL PRIMARY KEY,
                     user_id BIGINT REFERENCES fredi_users(user_id) ON DELETE CASCADE,
-                    event_type TEXT NOT NULL,   -- 'start', 'test_completed', 'question_asked', 'route_started'
+                    event_type TEXT NOT NULL,   -- 'start', 'test_completed', 'question_asked', 'route_started', 'hypnosis_used'
                     event_data JSONB,
                     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
                 )
             """)
             
-            # Индексы для быстрого поиска
+            # ИНДЕКСЫ ДЛЯ БЫСТРОГО ПОИСКА
             await conn.execute("CREATE INDEX IF NOT EXISTS idx_reminders_remind_at ON fredi_reminders(remind_at) WHERE is_sent = FALSE")
             await conn.execute("CREATE INDEX IF NOT EXISTS idx_events_user_id ON fredi_events(user_id)")
             await conn.execute("CREATE INDEX IF NOT EXISTS idx_events_type ON fredi_events(event_type)")
+            await conn.execute("CREATE INDEX IF NOT EXISTS idx_events_created ON fredi_events(created_at)")
             await conn.execute("CREATE INDEX IF NOT EXISTS idx_test_results_user_id ON fredi_test_results(user_id)")
             await conn.execute("CREATE INDEX IF NOT EXISTS idx_test_results_profile ON fredi_test_results(profile_code)")
+            await conn.execute("CREATE INDEX IF NOT EXISTS idx_weekend_cache_expires ON fredi_weekend_ideas_cache(expires_at)")
+            await conn.execute("CREATE INDEX IF NOT EXISTS idx_question_cache_hash ON fredi_question_analysis_cache(user_id, question_hash)")
+            await conn.execute("CREATE INDEX IF NOT EXISTS idx_question_cache_expires ON fredi_question_analysis_cache(expires_at)")
+            await conn.execute("CREATE INDEX IF NOT EXISTS idx_hypno_anchors_user ON fredi_hypno_anchors(user_id)")
             
-            logger.info("✅ Таблицы созданы или уже существуют")
+            logger.info("✅ Все таблицы созданы или уже существуют")
     
     # ====================== ПОЛЬЗОВАТЕЛИ ======================
     
@@ -300,7 +370,7 @@ class BotDatabase:
                 UPDATE fredi_users SET last_activity = NOW() WHERE user_id = $1
             """, user_id)
     
-    # ====================== КОНТЕКСТ ПОЛЬЗОВАТЕЛЯ ======================
+    # ====================== КОНТЕКСТ ПОЛЬЗОВАТЕЛЯ (СОХРАНЯЕМ ВСЕ!) ======================
     
     async def save_user_context(self, user_id: int, context_obj) -> None:
         """
@@ -316,26 +386,30 @@ class BotDatabase:
         async with self.get_connection() as conn:
             await conn.execute("""
                 INSERT INTO fredi_user_contexts (
-                    user_id, name, city, timezone, timezone_offset, gender, age,
-                    birth_date, communication_mode, last_context_update,
+                    user_id, name, age, gender, city, birth_date,
+                    timezone, timezone_offset, communication_mode, last_context_update,
                     weather_cache, weather_cache_time,
                     family_status, has_children, children_ages, work_schedule,
                     job_title, commute_time, housing_type, has_private_space,
                     has_car, support_people, resistance_people, energy_level,
                     life_context_complete, awaiting_context, updated_at
                 ) VALUES (
-                    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
-                    $11, $12, $13, $14, $15, $16, $17, $18, $19, $20,
-                    $21, $22, $23, $24, $25, $26, NOW()
+                    $1, $2, $3, $4, $5, $6,
+                    $7, $8, $9, $10,
+                    $11, $12,
+                    $13, $14, $15, $16,
+                    $17, $18, $19, $20,
+                    $21, $22, $23, $24,
+                    $25, $26, NOW()
                 )
                 ON CONFLICT (user_id) DO UPDATE SET
                     name = EXCLUDED.name,
+                    age = EXCLUDED.age,
+                    gender = EXCLUDED.gender,
                     city = EXCLUDED.city,
+                    birth_date = EXCLUDED.birth_date,
                     timezone = EXCLUDED.timezone,
                     timezone_offset = EXCLUDED.timezone_offset,
-                    gender = EXCLUDED.gender,
-                    age = EXCLUDED.age,
-                    birth_date = EXCLUDED.birth_date,
                     communication_mode = EXCLUDED.communication_mode,
                     last_context_update = EXCLUDED.last_context_update,
                     weather_cache = EXCLUDED.weather_cache,
@@ -358,12 +432,12 @@ class BotDatabase:
             """,
                 user_id,
                 getattr(context_obj, 'name', None),
+                getattr(context_obj, 'age', None),
+                getattr(context_obj, 'gender', None),
                 getattr(context_obj, 'city', None),
+                getattr(context_obj, 'birth_date', None),
                 getattr(context_obj, 'timezone', 'Europe/Moscow'),
                 getattr(context_obj, 'timezone_offset', 3),
-                getattr(context_obj, 'gender', None),
-                getattr(context_obj, 'age', None),
-                getattr(context_obj, 'birth_date', None),
                 getattr(context_obj, 'communication_mode', 'coach'),
                 getattr(context_obj, 'last_context_update', None),
                 json.dumps(getattr(context_obj, 'weather_cache', {})),
@@ -416,7 +490,7 @@ class BotDatabase:
         
         Args:
             user_id: ID пользователя
-            data: Словарь с данными пользователя
+            data: Словарь с данными пользователя (весь user_data[user_id])
         """
         # Сначала убеждаемся, что пользователь существует
         await self.save_telegram_user(user_id)
@@ -563,7 +637,11 @@ class BotDatabase:
         perception_type: Optional[str] = None,
         thinking_level: Optional[int] = None,
         vectors: Optional[Dict[str, float]] = None,
-        deep_patterns: Optional[Dict] = None
+        behavioral_levels: Optional[Dict[str, List[int]]] = None,
+        deep_patterns: Optional[Dict] = None,
+        confinement_model: Optional[Dict] = None,
+        current_destination: Optional[Dict] = None,
+        current_route: Optional[Dict] = None
     ) -> int:
         """Сохраняет результат тестирования"""
         
@@ -579,8 +657,9 @@ class BotDatabase:
             test_id = await conn.fetchval("""
                 INSERT INTO fredi_test_results (
                     user_id, test_type, results, profile_code,
-                    perception_type, thinking_level, vectors, deep_patterns
-                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                    perception_type, thinking_level, vectors, behavioral_levels,
+                    deep_patterns, confinement_model, current_destination, current_route
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
                 RETURNING id
             """,
                 user_id,
@@ -590,7 +669,11 @@ class BotDatabase:
                 perception_type,
                 thinking_level,
                 json.dumps(vectors) if vectors else None,
-                json.dumps(deep_patterns) if deep_patterns else None
+                json.dumps(behavioral_levels) if behavioral_levels else None,
+                json.dumps(deep_patterns) if deep_patterns else None,
+                json.dumps(confinement_model) if confinement_model else None,
+                json.dumps(current_destination) if current_destination else None,
+                json.dumps(current_route) if current_route else None
             )
             
             return test_id
@@ -624,8 +707,16 @@ class BotDatabase:
                 data['results'] = json.loads(data['results'])
                 if data.get('vectors'):
                     data['vectors'] = json.loads(data['vectors'])
+                if data.get('behavioral_levels'):
+                    data['behavioral_levels'] = json.loads(data['behavioral_levels'])
                 if data.get('deep_patterns'):
                     data['deep_patterns'] = json.loads(data['deep_patterns'])
+                if data.get('confinement_model'):
+                    data['confinement_model'] = json.loads(data['confinement_model'])
+                if data.get('current_destination'):
+                    data['current_destination'] = json.loads(data['current_destination'])
+                if data.get('current_route'):
+                    data['current_route'] = json.loads(data['current_route'])
                 results.append(data)
             
             return results
@@ -694,6 +785,59 @@ class BotDatabase:
                 answers.append(data)
             
             return answers
+    
+    # ====================== ГИПНОТИЧЕСКИЕ ЯКОРЯ ======================
+    
+    async def save_hypno_anchor(
+        self,
+        user_id: int,
+        anchor_name: str,
+        anchor_state: str,
+        anchor_phrase: str,
+        emoji: Optional[str] = None
+    ) -> int:
+        """Сохраняет гипнотический якорь"""
+        async with self.get_connection() as conn:
+            anchor_id = await conn.fetchval("""
+                INSERT INTO fredi_hypno_anchors (user_id, anchor_name, anchor_state, anchor_phrase, emoji)
+                VALUES ($1, $2, $3, $4, $5)
+                ON CONFLICT (user_id, anchor_name) DO UPDATE SET
+                    anchor_state = EXCLUDED.anchor_state,
+                    anchor_phrase = EXCLUDED.anchor_phrase,
+                    emoji = EXCLUDED.emoji,
+                    last_used = NOW(),
+                    use_count = fredi_hypno_anchors.use_count + 1
+                RETURNING id
+            """, user_id, anchor_name, anchor_state, anchor_phrase, emoji)
+            
+            return anchor_id
+    
+    async def get_user_anchors(self, user_id: int) -> List[Dict]:
+        """Получает все якоря пользователя"""
+        async with self.get_connection() as conn:
+            rows = await conn.fetch("""
+                SELECT * FROM fredi_hypno_anchors
+                WHERE user_id = $1
+                ORDER BY use_count DESC, last_used DESC
+            """, user_id)
+            
+            return [dict(row) for row in rows]
+    
+    async def fire_anchor(self, user_id: int, anchor_name: str) -> Optional[str]:
+        """Активирует якорь и обновляет статистику использования"""
+        async with self.get_connection() as conn:
+            row = await conn.fetchrow("""
+                UPDATE fredi_hypno_anchors
+                SET last_used = NOW(), use_count = use_count + 1
+                WHERE user_id = $1 AND anchor_name = $2
+                RETURNING anchor_phrase, emoji
+            """, user_id, anchor_name)
+            
+            if row:
+                emoji = row['emoji'] or ''
+                return f"{emoji} {row['anchor_phrase']}".strip()
+            
+            return None
     
     # ====================== НАПОМИНАНИЯ ======================
     
@@ -770,6 +914,87 @@ class BotDatabase:
                 reminders.append(data)
             
             return reminders
+    
+    # ====================== КЭШ ИДЕЙ НА ВЫХОДНЫЕ ======================
+    
+    async def cache_weekend_ideas(
+        self,
+        user_id: int,
+        ideas_text: str,
+        main_vector: str,
+        main_level: int
+    ) -> int:
+        """Сохраняет сгенерированные идеи на выходные в кэш"""
+        async with self.get_connection() as conn:
+            # Удаляем старые записи для этого пользователя
+            await conn.execute("""
+                DELETE FROM fredi_weekend_ideas_cache
+                WHERE user_id = $1
+            """, user_id)
+            
+            # Вставляем новую
+            cache_id = await conn.fetchval("""
+                INSERT INTO fredi_weekend_ideas_cache (user_id, ideas_text, main_vector, main_level)
+                VALUES ($1, $2, $3, $4)
+                RETURNING id
+            """, user_id, ideas_text, main_vector, main_level)
+            
+            return cache_id
+    
+    async def get_cached_weekend_ideas(self, user_id: int) -> Optional[str]:
+        """Получает кэшированные идеи на выходные (если не истекли)"""
+        async with self.get_connection() as conn:
+            row = await conn.fetchrow("""
+                SELECT ideas_text FROM fredi_weekend_ideas_cache
+                WHERE user_id = $1 AND expires_at > NOW()
+                ORDER BY created_at DESC
+                LIMIT 1
+            """, user_id)
+            
+            return row['ideas_text'] if row else None
+    
+    # ====================== КЭШ АНАЛИЗА ВОПРОСОВ ======================
+    
+    async def cache_question_analysis(
+        self,
+        user_id: int,
+        question: str,
+        analysis: Dict[str, Any]
+    ) -> int:
+        """Сохраняет анализ вопроса в кэш"""
+        question_hash = hash(question) % 1000000
+        
+        async with self.get_connection() as conn:
+            # Удаляем старые записи с таким же хешем
+            await conn.execute("""
+                DELETE FROM fredi_question_analysis_cache
+                WHERE user_id = $1 AND question_hash = $2
+            """, user_id, question_hash)
+            
+            cache_id = await conn.fetchval("""
+                INSERT INTO fredi_question_analysis_cache (user_id, question_hash, question_text, analysis)
+                VALUES ($1, $2, $3, $4)
+                RETURNING id
+            """, user_id, question_hash, question[:200], json.dumps(analysis, default=str))
+            
+            return cache_id
+    
+    async def get_cached_question_analysis(self, user_id: int, question: str) -> Optional[Dict]:
+        """Получает кэшированный анализ вопроса (если не истек)"""
+        question_hash = hash(question) % 1000000
+        
+        async with self.get_connection() as conn:
+            row = await conn.fetchrow("""
+                SELECT analysis FROM fredi_question_analysis_cache
+                WHERE user_id = $1 AND question_hash = $2 AND expires_at > NOW()
+                ORDER BY created_at DESC
+                LIMIT 1
+            """, user_id, question_hash)
+            
+            if row and row['analysis']:
+                return json.loads(row['analysis'])
+            
+            return None
     
     # ====================== СОБЫТИЯ И СТАТИСТИКА ======================
     
@@ -878,13 +1103,13 @@ class BotDatabase:
         """
         async with self.get_connection() as conn:
             # Удаляем старые события
-            deleted_events = await conn.execute("""
+            await conn.execute("""
                 DELETE FROM fredi_events
                 WHERE created_at < NOW() - INTERVAL '$1 days'
             """, days)
             
             # Деактивируем старые неактивные маршруты (старше 90 дней)
-            deleted_routes = await conn.execute("""
+            await conn.execute("""
                 UPDATE fredi_user_routes
                 SET is_active = FALSE
                 WHERE is_active = TRUE
@@ -892,13 +1117,21 @@ class BotDatabase:
             """)
             
             # Удаляем старые напоминания (отправленные или просроченные более чем на 7 дней)
-            deleted_reminders = await conn.execute("""
+            await conn.execute("""
                 DELETE FROM fredi_reminders
                 WHERE (is_sent = TRUE AND sent_at < NOW() - INTERVAL '7 days')
                    OR (is_sent = FALSE AND remind_at < NOW() - INTERVAL '7 days')
             """)
             
-            logger.info(f"🧹 Очистка данных: {deleted_events} событий, {deleted_routes} маршрутов, {deleted_reminders} напоминаний")
+            # Очищаем старый кэш
+            await conn.execute("""
+                DELETE FROM fredi_weekend_ideas_cache WHERE expires_at < NOW()
+            """)
+            await conn.execute("""
+                DELETE FROM fredi_question_analysis_cache WHERE expires_at < NOW()
+            """)
+            
+            logger.info(f"🧹 Очистка старых данных выполнена")
     
     # ====================== МИГРАЦИЯ СУЩЕСТВУЮЩИХ ПОЛЬЗОВАТЕЛЕЙ ======================
     
@@ -922,6 +1155,7 @@ class BotDatabase:
         migrated_contexts = 0
         migrated_data = 0
         migrated_routes = 0
+        migrated_tests = 0
         
         for user_id in set(
             list(user_data_dict.keys()) +
@@ -930,27 +1164,32 @@ class BotDatabase:
             list(user_routes_dict.keys())
         ):
             # Сохраняем пользователя
-            if user_id in user_names_dict:
+            first_name = user_names_dict.get(user_id)
+            if first_name:
                 await self.save_telegram_user(
                     user_id=user_id,
-                    first_name=user_names_dict[user_id]
+                    first_name=first_name
                 )
                 migrated_users += 1
             
             # Сохраняем контекст
             if user_id in user_contexts_dict:
-                await self.save_user_context(user_id, user_contexts_dict[user_id])
+                context = user_contexts_dict[user_id]
+                # Убеждаемся, что имя сохранено в контексте
+                if not hasattr(context, 'name') or not context.name:
+                    context.name = user_names_dict.get(user_id)
+                await self.save_user_context(user_id, context)
                 migrated_contexts += 1
             
             # Сохраняем данные
             if user_id in user_data_dict:
-                await self.save_user_data(user_id, user_data_dict[user_id])
+                data = user_data_dict[user_id]
+                await self.save_user_data(user_id, data)
                 migrated_data += 1
                 
                 # Если есть результаты теста, сохраняем их отдельно
-                data = user_data_dict[user_id]
                 if data.get('profile_data') or data.get('ai_generated_profile'):
-                    await self.save_test_result(
+                    test_id = await self.save_test_result(
                         user_id=user_id,
                         test_type='full_profile',
                         results=data,
@@ -958,8 +1197,29 @@ class BotDatabase:
                         perception_type=data.get('perception_type'),
                         thinking_level=data.get('thinking_level'),
                         vectors=data.get('behavioral_levels'),
-                        deep_patterns=data.get('deep_patterns')
+                        deep_patterns=data.get('deep_patterns'),
+                        confinement_model=data.get('confinement_model')
                     )
+                    migrated_tests += 1
+                    
+                    # Сохраняем ответы на тест, если есть
+                    if test_id and data.get('all_answers'):
+                        for answer in data['all_answers']:
+                            await self.save_test_answer(
+                                user_id=user_id,
+                                test_result_id=test_id,
+                                stage=answer.get('stage', 0),
+                                question_index=answer.get('question_index', 0),
+                                question_text=answer.get('question', ''),
+                                answer_text=answer.get('answer', ''),
+                                answer_value=answer.get('option', ''),
+                                scores=answer.get('scores'),
+                                measures=answer.get('measures'),
+                                strategy=answer.get('strategy'),
+                                dilts=answer.get('dilts'),
+                                pattern=answer.get('pattern'),
+                                target=answer.get('target')
+                            )
             
             # Сохраняем маршруты
             if user_id in user_routes_dict:
@@ -973,11 +1233,12 @@ class BotDatabase:
                 migrated_routes += 1
         
         logger.info(f"✅ Мигрировано: {migrated_users} пользователей, {migrated_contexts} контекстов, "
-                   f"{migrated_data} наборов данных, {migrated_routes} маршрутов")
+                   f"{migrated_data} наборов данных, {migrated_routes} маршрутов, {migrated_tests} тестов")
         
         return {
             'users': migrated_users,
             'contexts': migrated_contexts,
             'data': migrated_data,
-            'routes': migrated_routes
+            'routes': migrated_routes,
+            'tests': migrated_tests
         }
