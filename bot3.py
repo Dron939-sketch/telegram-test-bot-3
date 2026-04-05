@@ -3806,6 +3806,9 @@ async def show_ai_analysis(callback: CallbackQuery, state: FSMContext):
     
     if thought:
         await state.update_data(psychologist_thought=thought)
+        # Сохраняем мысли психолога в БД
+        state_data = await state.get_data()
+        save_test_data_sync(callback.from_user.id, state_data, extra={'psychologist_thought': thought})
         # Удаляем статусное и показываем результат
         await status_msg.delete()
         await show_saved_psychologist_thought(callback, thought)
