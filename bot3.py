@@ -99,36 +99,11 @@ from test_questions import (
 )
 from hypno_module import HypnoOrchestrator, TherapeuticTales, Anchoring
 from weekend_planner import get_weekend_planner, get_weekend_ideas_keyboard
-
-# ============================================
-# ПОДКЛЮЧЕНИЕ К ЕДИНОЙ БД ФРЕДИ
-# ============================================
-_DB_URL = os.environ.get(
-    "DATABASE_URL",
-    "postgresql://fredi_db_flz2_user:PP1FP91G1P6mn1uS8iBLGlk38bKqzkGy@dpg-d739b31r0fns739a7oj0-a.oregon-postgres.render.com/fredi_db_flz2"
-).replace("?sslmode=require", "").replace("?ssl=true", "").strip()
-
-async def _save_tg_user(user_id: int, username: str = None, first_name: str = None, last_name: str = None):
-    """Сохраняет пользователя Telegram в единую БД Фреди"""
-    try:
-        import asyncpg
-        conn = await asyncpg.connect(_DB_URL, ssl='require', timeout=10)
-        try:
-            await conn.execute("""
-                INSERT INTO fredi_users (user_id, username, first_name, last_name, created_at, updated_at, last_activity)
-                VALUES ($1, $2, $3, $4, NOW(), NOW(), NOW())
-                ON CONFLICT (user_id) DO UPDATE SET
-                    username = EXCLUDED.username,
-                    first_name = EXCLUDED.first_name,
-                    last_name = EXCLUDED.last_name,
-                    updated_at = NOW(),
-                    last_activity = NOW()
-            """, user_id, username, first_name, last_name)
-            logger.info(f"💾 TG пользователь {user_id} сохранён в fredi_db")
-        finally:
-            await conn.close()
-    except Exception as e:
-        logger.warning(f"⚠️ Не удалось сохранить TG пользователя {user_id}: {e}")
+from db_tg import (
+    save_user, save_test_data, save_context,
+    save_test_result, load_user_data, load_user_context,
+    save_test_data_sync, save_context_sync
+)
 
 # Настройка логирования
 logging.basicConfig(
@@ -1655,6 +1630,9 @@ async def process_life_context(message: Message, state: FSMContext):
     
     context.life_context_complete = True
     
+    # Сохраняем контекст в БД
+    save_context_sync(user_id, context)
+    
     # Получаем сохранённую цель
     data = await state.get_data()
     goal = data.get("pending_goal") or data.get("current_destination")
@@ -2012,19 +1990,35 @@ async def cmd_start(message: Message, state: FSMContext):
     
     user_names[user_id] = user_name
     
-    # Сохраняем пользователя в единую БД Фреди
-    asyncio.create_task(_save_tg_user(
+    await state.clear()
+    
+    # Сохраняем пользователя и загружаем данные из БД
+    asyncio.create_task(save_user(
         user_id=user_id,
         username=message.from_user.username,
         first_name=message.from_user.first_name,
         last_name=message.from_user.last_name,
     ))
     
-    await state.clear()
+    # Загружаем сохранённые данные теста из БД
+    saved_data = await load_user_data(user_id)
+    if saved_data:
+        await state.update_data(**saved_data)
+        logger.info(f"📥 Загружены данные пользователя {user_id} из БД")
     
     if user_id not in user_contexts:
         user_contexts[user_id] = UserContext(user_id)
         user_contexts[user_id].name = user_name
+        # Загружаем контекст из БД
+        saved_ctx = await load_user_context(user_id)
+        if saved_ctx:
+            ctx = user_contexts[user_id]
+            ctx.name = saved_ctx.get('name') or user_name
+            ctx.city = saved_ctx.get('city')
+            ctx.age = saved_ctx.get('age')
+            ctx.gender = saved_ctx.get('gender')
+            ctx.communication_mode = saved_ctx.get('communication_mode', 'coach')
+            logger.info(f"📥 Загружен контекст пользователя {user_id} из БД")
     
     stats.register_start(user_id)
     
@@ -2429,6 +2423,9 @@ async def show_final_profile(callback: CallbackQuery, state: FSMContext):
     # Используем функцию с очисткой
     if ai_profile:
         await state.update_data(ai_generated_profile=ai_profile)
+        # Сохраняем финальный профиль в БД
+        state_data = await state.get_data()
+        save_test_data_sync(callback.from_user.id, state_data)
         await show_ai_generated_profile(callback, state, ai_profile, status_msg)
     else:
         await show_old_final_profile(callback, state, status_msg)
@@ -2730,6 +2727,10 @@ async def finish_stage_1(callback: CallbackQuery, state: FSMContext):
     
     logger.info(f"✅ User {user_id}: Stage 1 complete, type={perception_type}")
     
+    # Сохраняем прогресс в БД
+    state_data = await state.get_data()
+    save_test_data_sync(user_id, state_data)
+    
     result_text = STAGE_1_FEEDBACK.get(perception_type, STAGE_1_FEEDBACK["СОЦИАЛЬНО-ОРИЕНТИРОВАННЫЙ"])
     
     # Очищаем от форматирования
@@ -2922,6 +2923,10 @@ async def finish_stage_2(callback: CallbackQuery, state: FSMContext):
     level_group = get_level_group(thinking_level)
     
     logger.info(f"✅ User {user_id}: Stage 2 complete, level={thinking_level}")
+    
+    # Сохраняем прогресс в БД
+    state_data = await state.get_data()
+    save_test_data_sync(user_id, state_data)
     
     result_text = STAGE_2_FEEDBACK.get((perception_type, level_group))
     if not result_text:
@@ -3293,6 +3298,11 @@ async def finish_stage_4(callback: CallbackQuery, state: FSMContext):
     await state.update_data(confinement_model=model.to_dict())
     
     logger.info(f"✅ User {user_id}: Stage 4 complete, profile={profile_data.get('display_name', 'unknown')}")
+    
+    # Сохраняем профиль в БД
+    state_data = await state.get_data()
+    save_test_data_sync(user_id, state_data)
+    asyncio.create_task(save_test_result(user_id, state_data))
     
     # Показываем предварительный профиль
     await show_preliminary_profile(callback, state)
@@ -3763,6 +3773,10 @@ async def finish_stage_5(callback: CallbackQuery, state: FSMContext):
     await state.update_data(deep_patterns=deep_patterns)
     
     logger.info(f"✅ User {callback.from_user.id}: Stage 5 complete")
+    
+    # Сохраняем финальные данные в БД
+    state_data = await state.get_data()
+    save_test_data_sync(callback.from_user.id, state_data)
     
     await show_final_profile(callback, state)
 
