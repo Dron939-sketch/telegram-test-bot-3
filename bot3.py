@@ -2729,7 +2729,7 @@ async def finish_stage_1(callback: CallbackQuery, state: FSMContext):
     
     # Сохраняем прогресс в БД
     state_data = await state.get_data()
-    save_test_data_sync(user_id, state_data)
+    save_test_data_sync(user_id, state_data, extra={'perception_type': perception_type})
     
     result_text = STAGE_1_FEEDBACK.get(perception_type, STAGE_1_FEEDBACK["СОЦИАЛЬНО-ОРИЕНТИРОВАННЫЙ"])
     
@@ -2926,7 +2926,7 @@ async def finish_stage_2(callback: CallbackQuery, state: FSMContext):
     
     # Сохраняем прогресс в БД
     state_data = await state.get_data()
-    save_test_data_sync(user_id, state_data)
+    save_test_data_sync(user_id, state_data, extra={'thinking_level': thinking_level})
     
     result_text = STAGE_2_FEEDBACK.get((perception_type, level_group))
     if not result_text:
