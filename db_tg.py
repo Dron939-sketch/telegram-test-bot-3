@@ -184,6 +184,9 @@ async def save_test_result(user_id: int, data: Dict):
     try:
         profile_data = data.get('profile_data', {})
         behavioral_levels = data.get('behavioral_levels', {})
+        perception_type = data.get('perception_type')
+        thinking_level = data.get('thinking_level')
+        logger.info(f"📊 save_test_result {user_id}: profile={profile_data.get('display_name')}, perception={perception_type}, thinking={thinking_level}")
 
         # Считаем векторы
         vectors = {}
@@ -203,8 +206,8 @@ async def save_test_result(user_id: int, data: Dict):
                 'full_profile',
                 json.dumps(data, default=str, ensure_ascii=False),
                 profile_data.get('display_name'),
-                data.get('perception_type'),
-                data.get('thinking_level'),
+                perception_type,
+                thinking_level,
                 json.dumps(vectors, ensure_ascii=False),
                 json.dumps(behavioral_levels, ensure_ascii=False),
                 json.dumps(data.get('deep_patterns', {}), ensure_ascii=False),
@@ -216,9 +219,13 @@ async def save_test_result(user_id: int, data: Dict):
         logger.warning(f"⚠️ save_test_result {user_id}: {e}")
 
 
-def save_test_data_sync(user_id: int, data: Dict):
+def save_test_data_sync(user_id: int, data: Dict, extra: Dict = None):
     """Синхронная обёртка — запускает сохранение в фоне"""
-    asyncio.create_task(save_test_data(user_id, data))
+    if extra:
+        merged = {**data, **extra}
+    else:
+        merged = data
+    asyncio.create_task(save_test_data(user_id, merged))
 
 
 def save_context_sync(user_id: int, context):
