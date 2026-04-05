@@ -100,6 +100,36 @@ from test_questions import (
 from hypno_module import HypnoOrchestrator, TherapeuticTales, Anchoring
 from weekend_planner import get_weekend_planner, get_weekend_ideas_keyboard
 
+# ============================================
+# ПОДКЛЮЧЕНИЕ К ЕДИНОЙ БД ФРЕДИ
+# ============================================
+_DB_URL = os.environ.get(
+    "DATABASE_URL",
+    "postgresql://fredi_db_flz2_user:PP1FP91G1P6mn1uS8iBLGlk38bKqzkGy@dpg-d739b31r0fns739a7oj0-a.oregon-postgres.render.com/fredi_db_flz2"
+).replace("?sslmode=require", "").replace("?ssl=true", "").strip()
+
+async def _save_tg_user(user_id: int, username: str = None, first_name: str = None, last_name: str = None):
+    """Сохраняет пользователя Telegram в единую БД Фреди"""
+    try:
+        import asyncpg
+        conn = await asyncpg.connect(_DB_URL, ssl='require', timeout=10)
+        try:
+            await conn.execute("""
+                INSERT INTO fredi_users (user_id, username, first_name, last_name, created_at, updated_at, last_activity)
+                VALUES ($1, $2, $3, $4, NOW(), NOW(), NOW())
+                ON CONFLICT (user_id) DO UPDATE SET
+                    username = EXCLUDED.username,
+                    first_name = EXCLUDED.first_name,
+                    last_name = EXCLUDED.last_name,
+                    updated_at = NOW(),
+                    last_activity = NOW()
+            """, user_id, username, first_name, last_name)
+            logger.info(f"💾 TG пользователь {user_id} сохранён в fredi_db")
+        finally:
+            await conn.close()
+    except Exception as e:
+        logger.warning(f"⚠️ Не удалось сохранить TG пользователя {user_id}: {e}")
+
 # Настройка логирования
 logging.basicConfig(
     level=logging.INFO,
@@ -1981,6 +2011,14 @@ async def cmd_start(message: Message, state: FSMContext):
     user_name = message.from_user.first_name or "Пользователь"
     
     user_names[user_id] = user_name
+    
+    # Сохраняем пользователя в единую БД Фреди
+    asyncio.create_task(_save_tg_user(
+        user_id=user_id,
+        username=message.from_user.username,
+        first_name=message.from_user.first_name,
+        last_name=message.from_user.last_name,
+    ))
     
     await state.clear()
     
