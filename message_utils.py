@@ -40,13 +40,13 @@ async def send_with_status_cleanup(message: Message, text: str, status_msg: Mess
     if status_msg:
         try:
             await status_msg.delete()
-        except:
+        except Exception:
             pass
-    
+
     # Удаляем предыдущее сообщение бота
     try:
         await message.delete()
-    except:
+    except Exception:
         pass
     
     # Отправляем новое сообщение

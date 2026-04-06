@@ -449,15 +449,15 @@ async def send_with_status_cleanup(message: Message, text: str, status_msg: Mess
     if status_msg:
         try:
             await status_msg.delete()
-        except:
+        except Exception:
             pass
-    
+
     # Удаляем предыдущее сообщение бота
     try:
         await message.delete()
-    except:
+    except Exception:
         pass
-    
+
     # Отправляем новое сообщение
     try:
         return await message.answer(text, reply_markup=reply_markup, parse_mode=parse_mode)
@@ -2145,8 +2145,9 @@ async def show_destinations(callback: CallbackQuery, state: FSMContext):
     # Получаем рекомендации
     recommended = destination_manager.recommend_by_profile(profile_code, mode)
     
+    mc_name = mode_config['name']
     text = f"""
-{mode_config['emoji']} {bold(f'РЕЖИМ {mode_config["name"]} АКТИВИРОВАН')}
+{mode_config['emoji']} {bold(f'РЕЖИМ {mc_name} АКТИВИРОВАН')}
 
 🎯 {bold('ВЫБЕРИТЕ ТОЧКУ НАЗНАЧЕНИЯ')}
 
@@ -2481,9 +2482,9 @@ async def show_ai_generated_profile(callback: CallbackQuery, state: FSMContext, 
     if status_msg:
         try:
             await status_msg.delete()
-        except:
+        except Exception:
             pass
-    
+
     # Отправляем сообщение
     await safe_send_message(
         callback.message,
@@ -2530,9 +2531,9 @@ async def show_old_final_profile(callback: CallbackQuery, state: FSMContext, sta
     if status_msg:
         try:
             await status_msg.delete()
-        except:
+        except Exception:
             pass
-    
+
     # 🔥 ИСПРАВЛЕНО: используем safe_send_message
     await safe_send_message(
         callback.message,
@@ -4320,7 +4321,8 @@ async def show_main_menu_after_mode(message: Message, context: UserContext):
     await context.update_weather()
     day_context = context.get_day_context()
     
-    text = f"{mode_config['emoji']} {bold(f'РЕЖИМ {mode_config["display_name"]}')}\n\n"
+    display_name = mode_config['display_name']
+    text = f"{mode_config['emoji']} {bold(f'РЕЖИМ {display_name}')}\n\n"
     text += context.get_greeting(context.name) + "\n"
     text += f"📅 Сегодня {day_context['weekday']}, {day_context['day']} {day_context['month']}, {day_context['time_str']}\n"
     
@@ -4434,9 +4436,10 @@ async def choose_mode(callback: CallbackQuery, state: FSMContext, mode: str):
     user_contexts[user_id].communication_mode = new_mode
     mode_info = COMMUNICATION_MODES[new_mode]
     
+    mi_display_name = mode_info['display_name']
     await safe_send_message(
         callback.message,
-        f"{mode_info['emoji']} {bold(f'Режим выбран: {mode_info["display_name"]}')}\n\n"
+        f"{mode_info['emoji']} {bold(f'Режим выбран: {mi_display_name}')}\n\n"
         f"{mode_info['responsibility']}\n\n"
         f"Теперь давайте познакомимся поближе.",
         delete_previous=True
@@ -4724,7 +4727,7 @@ async def handle_voice_message(message: Message, state: FSMContext):
         
         try:
             os.unlink(temp_file)
-        except:
+        except Exception:
             pass
         
         if not recognized_text:
@@ -5067,13 +5070,13 @@ async def callback_handler(callback: CallbackQuery, state: FSMContext):
             logger.error(f"TelegramBadRequest in callback_handler: {e}")
             try:
                 await callback.message.answer("❌ Произошла ошибка при обработке запроса")
-            except:
+            except Exception:
                 pass
     except Exception as e:
         logger.error(f"Unexpected error in callback_handler: {e}")
         try:
             await callback.message.answer("❌ Произошла внутренняя ошибка")
-        except:
+        except Exception:
             pass
 
 
