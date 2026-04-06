@@ -19,10 +19,9 @@ logger = logging.getLogger(__name__)
 # ПОДКЛЮЧЕНИЕ
 # ============================================
 
-_DB_URL = os.environ.get(
-    "DATABASE_URL",
-    "postgresql://fredi_db_flz2_user:PP1FP91G1P6mn1uS8iBLGlk38bKqzkGy@dpg-d739b31r0fns739a7oj0-a.oregon-postgres.render.com/fredi_db_flz2"
-).replace("?sslmode=require", "").replace("?ssl=true", "").strip()
+_DB_URL = os.environ.get("DATABASE_URL", "").replace("?sslmode=require", "").replace("?ssl=true", "").strip()
+if not _DB_URL:
+    raise RuntimeError("DATABASE_URL environment variable is not set")
 
 
 async def _get_conn() -> asyncpg.Connection:
@@ -42,9 +41,9 @@ async def save_user(user_id: int, username: str = None,
         try:
             await conn.execute("""
                 INSERT INTO fredi_users (
-                    user_id, username, first_name, last_name,
+                    user_id, username, first_name, last_name, platform,
                     created_at, updated_at, last_activity
-                ) VALUES ($1, $2, $3, $4, NOW(), NOW(), NOW())
+                ) VALUES ($1, $2, $3, $4, 'telegram', NOW(), NOW(), NOW())
                 ON CONFLICT (user_id) DO UPDATE SET
                     username = EXCLUDED.username,
                     first_name = EXCLUDED.first_name,

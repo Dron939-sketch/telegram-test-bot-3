@@ -6,4 +6,4 @@ services:
     startCommand: python bot3.py
     envVars:
       - key: DATABASE_URL
-        value: postgresql://fredi_db_flz2_user:PP1FP91G1P6mn1uS8iBLGlk38bKqzkGy@dpg-d739b31r0fns739a7oj0-a.oregon-postgres.render.com/fredi_db_flz2
+        sync: false
