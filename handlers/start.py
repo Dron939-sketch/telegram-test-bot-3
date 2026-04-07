@@ -2,6 +2,11 @@
 Обработчики команды /start и начальных экранов
 """
 import asyncio
+import logging
+import os
+import re
+
+import httpx
 from aiogram.types import Message, CallbackQuery
 from aiogram.fsm.context import FSMContext
 
@@ -17,14 +22,63 @@ from bot_instance import (
 )
 from states import TestStates
 
+logger = logging.getLogger(__name__)
+
+FREDI_API_BASE = os.environ.get("FREDI_API_BASE", "https://fredi-backend-flz2.onrender.com")
+
+
+async def _link_web_user(web_user_id: int, chat_id: int, username: str | None) -> bool:
+    """Связывает web_user_id с Telegram chat_id через бэкенд Фреди."""
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            r = await client.post(
+                f"{FREDI_API_BASE}/api/messenger/link",
+                json={
+                    "user_id": int(web_user_id),
+                    "platform": "telegram",
+                    "chat_id": str(chat_id),
+                    "username": username,
+                },
+            )
+            data = r.json() if r.status_code == 200 else {}
+            return bool(data.get("success"))
+    except Exception as e:
+        logger.error(f"link_web_user error: {e}")
+        return False
+
 
 async def cmd_start(message: Message, state: FSMContext):
     """Обновленный обработчик команды /start"""
     user_id = message.from_user.id
     user_name = message.from_user.first_name or "Пользователь"
-    
+
+    # Deep-link payload: /start web_<id> — связываем web-пользователя с этим чатом
+    text = message.text or ""
+    m = re.match(r"^/start(?:@\w+)?\s+web_(\d+)\s*$", text)
+    if m:
+        web_user_id = int(m.group(1))
+        ok = await _link_web_user(
+            web_user_id=web_user_id,
+            chat_id=message.chat.id,
+            username=message.from_user.username,
+        )
+        if ok:
+            await safe_send_message(
+                message,
+                f"✅ {bold('Аккаунт связан!')}\n\n"
+                f"Теперь утренние сообщения от Фреди в 9:00 будут приходить сюда. "
+                f"Хорошего дня, {user_name}!"
+            )
+            return
+        else:
+            await safe_send_message(
+                message,
+                "⚠️ Не удалось связать аккаунт. Попробуйте ещё раз позже или напишите в поддержку."
+            )
+            return
+
     user_names[user_id] = user_name
-    
+
     await state.clear()
     
     if user_id not in user_contexts:
