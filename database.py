@@ -530,13 +530,15 @@ class BotDatabase:
         async with self.get_connection() as conn:
             serializable = self._make_json_serializable(context_obj)
             json_data = json.dumps(serializable, default=str, ensure_ascii=False)
+            # Кодируем в bytes — колонка context_data BYTEA
+            json_bytes = json_data.encode('utf-8')
             await conn.execute("""
                 INSERT INTO fredi_context_objects (user_id, context_data, updated_at)
                 VALUES ($1, $2, NOW())
                 ON CONFLICT (user_id) DO UPDATE SET
                     context_data = $2,
                     updated_at = NOW()
-            """, user_id, json_data)
+            """, user_id, json_bytes)
 
     async def load_pickled_context(self, user_id: int):
         """
@@ -553,7 +555,10 @@ class BotDatabase:
 
             if row and row['context_data']:
                 try:
-                    return json.loads(row['context_data'])
+                    data = row['context_data']
+                    if isinstance(data, (bytes, bytearray, memoryview)):
+                        data = bytes(data).decode('utf-8')
+                    return json.loads(data)
                 except Exception as e:
                     logger.error(f"Ошибка при десериализации контекста пользователя {user_id}: {e}")
             
