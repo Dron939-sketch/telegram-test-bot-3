@@ -225,6 +225,10 @@ def save_test_data_sync(user_id: int, data: Dict, extra: Dict = None):
     else:
         merged = data
     asyncio.create_task(save_test_data(user_id, merged))
+    # Mirror completion: отправляем результаты владельцу зеркала
+    if merged.get("mirror_code") and merged.get("ai_generated_profile"):
+        from mirror_service import complete_mirror_if_needed
+        asyncio.create_task(complete_mirror_if_needed(user_id, merged))
 
 
 def save_context_sync(user_id: int, context):
