@@ -77,9 +77,17 @@ async def cmd_start(message: Message, state: FSMContext):
             )
             return
 
+    # Извлекаем mirror_code до очистки state
+    _m_mirror = re.match(r"^/start(?:@\w+)?\s+(mirror_\w+)\s*$", text)
+    _mirror_code = _m_mirror.group(1) if _m_mirror else None
     user_names[user_id] = user_name
 
     await state.clear()
+    
+    # Восстанавливаем mirror_code после очистки state
+    if _mirror_code:
+        await state.update_data(mirror_code=_mirror_code)
+        logger.info(f"🪞 Mirror code saved: user={user_id}, code={_mirror_code}")
     
     if user_id not in user_contexts:
         user_contexts[user_id] = UserContext(user_id)
