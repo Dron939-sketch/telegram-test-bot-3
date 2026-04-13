@@ -1983,6 +1983,22 @@ async def back_to_mode_selected(callback: CallbackQuery, state: FSMContext):
 # НОВЫЕ ЭКРАНЫ ПРИВЕТСТВИЯ
 # ============================================
 
+async def _save_mirror_friend_to_db(user_id: int, user_name: str, mirror_code: str):
+    """Сразу сохраняем friend_user_id в fredi_mirrors через API бэкенда."""
+    try:
+        import httpx
+        api = os.environ.get("FREDI_API_BASE", "https://fredi-backend-flz2.onrender.com")
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.post(f"{api}/api/mirrors/register-friend", json={
+                "mirror_code": mirror_code,
+                "friend_user_id": user_id,
+                "friend_name": user_name
+            })
+            logger.info(f"🪞 [MIRROR] Registered friend in DB: {mirror_code} -> user={user_id}, status={resp.status_code}")
+    except Exception as e:
+        logger.error(f"🪞 [MIRROR] Failed to register friend in DB: {e}")
+
+
 async def cmd_start(message: Message, state: FSMContext):
     """Обновленный обработчик команды /start"""
     user_id = message.from_user.id
@@ -1995,12 +2011,14 @@ async def cmd_start(message: Message, state: FSMContext):
     if _m:
         _mirror_code = _m.group(1)
         logger.info(f"🪞 [MIRROR] Detected mirror_code in /start: user={user_id}, code={_mirror_code}")
+        # Сразу сохраняем friend_user_id в БД — не зависим от FSM state
+        asyncio.create_task(_save_mirror_friend_to_db(user_id, user_name, _mirror_code))
 
     user_names[user_id] = user_name
 
     await state.clear()
 
-    # Восстанавливаем mirror_code после очистки state
+    # Восстанавливаем mirror_code после очистки state (на случай если DB fallback не нужен)
     if _mirror_code:
         await state.update_data(mirror_code=_mirror_code)
         logger.info(f"🪞 [MIRROR] Saved mirror_code to state: user={user_id}, code={_mirror_code}")

@@ -1,6 +1,9 @@
 """
 mirror_service.py — Завершает зеркальный тест когда друг проходит тест в боте.
 Вызывает POST /api/mirrors/complete на бэкенде Фреди.
+
+Логика: НЕ зависим от FSM state. Берём mirror_code из БД через
+GET /api/mirrors/pending/{friend_user_id}. Одна БД для всех платформ.
 """
 import os
 import logging
@@ -12,10 +15,17 @@ FREDI_API_BASE = os.environ.get("FREDI_API_BASE", "https://fredi-backend-flz2.on
 
 
 async def complete_mirror_if_needed(user_id: int, state_data: dict):
-    """Если пользователь пришёл по mirror-ссылке, отправляем результаты владельцу зеркала."""
+    """Проверяет БД на pending зеркало и завершает его."""
+
+    # 1. Сначала пробуем из state (если повезло и не потерялось)
     mirror_code = state_data.get("mirror_code")
+
+    # 2. Если в state нет — спрашиваем БД напрямую
     if not mirror_code:
-        logger.info(f"🪞 [MIRROR] complete_mirror_if_needed: no mirror_code for user={user_id}")
+        mirror_code = await _check_db_for_mirror(user_id)
+
+    if not mirror_code:
+        logger.info(f"🪞 [MIRROR] No mirror for user={user_id} (checked state + DB)")
         return
 
     try:
@@ -37,7 +47,7 @@ async def complete_mirror_if_needed(user_id: int, state_data: dict):
             "friend_thinking_level": state_data.get("thinking_level"),
         }
 
-        logger.info(f"🪞 [MIRROR] Sending to {FREDI_API_BASE}/api/mirrors/complete: code={mirror_code}, user={user_id}, vectors={vectors}")
+        logger.info(f"🪞 [MIRROR] Sending complete: code={mirror_code}, user={user_id}, vectors={vectors}")
 
         async with httpx.AsyncClient(timeout=15) as client:
             resp = await client.post(f"{FREDI_API_BASE}/api/mirrors/complete", json=payload)
@@ -45,3 +55,19 @@ async def complete_mirror_if_needed(user_id: int, state_data: dict):
             logger.info(f"🪞 [MIRROR] Response: {mirror_code} -> HTTP {resp.status_code}, body={body}")
     except Exception as e:
         logger.error(f"🪞 [MIRROR] Error completing mirror {mirror_code}: {e}", exc_info=True)
+
+
+async def _check_db_for_mirror(user_id: int):
+    """Проверяет БД: есть ли активное зеркало где friend_user_id = этот пользователь."""
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.get(f"{FREDI_API_BASE}/api/mirrors/pending/{user_id}")
+            if resp.status_code == 200:
+                data = resp.json()
+                code = data.get("mirror_code")
+                if code:
+                    logger.info(f"🪞 [MIRROR] Found pending mirror in DB: user={user_id}, code={code}")
+                    return code
+    except Exception as e:
+        logger.error(f"🪞 [MIRROR] DB check error: {e}")
+    return None
