@@ -2058,8 +2058,24 @@ async def cmd_start(message: Message, state: FSMContext):
     # Проверяем, есть ли уже профиль
     data = await state.get_data()
     if is_test_completed(data):
+        # Если пришёл по зеркалу — предлагаем пересдать для друга
+        if _mirror_code:
+            logger.info(f"🪞 [MIRROR] User {user_id} already tested, but came via mirror — offering retest")
+            text = (
+                f"🪞 {user_name}, тебя пригласили!\n\n"
+                f"У тебя уже есть профиль. Чтобы твой друг увидел сравнение, "
+                f"нужно пройти тест заново.\n\n"
+                f"⏱ {bold('15 минут')} — и результат обновится."
+            )
+            keyboard = InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="🔄 ПРОЙТИ ТЕСТ ДЛЯ ЗЕРКАЛА", callback_data="restart_test")],
+                [InlineKeyboardButton(text="🧠 К ПОРТРЕТУ", callback_data="show_results")]
+            ])
+            await safe_send_message(message, text, reply_markup=keyboard)
+            return
+
         profile_code = data.get("profile_data", {}).get('display_name', 'СБ-4_ТФ-4_УБ-4_ЧВ-4')
-        
+
         text = f"""
 🧠 {bold('ФРЕДИ: ВИРТУАЛЬНЫЙ ПСИХОЛОГ')}
 
@@ -2113,6 +2129,26 @@ async def cmd_start(message: Message, state: FSMContext):
         await safe_send_message(message, welcome_text, reply_markup=keyboard)
         return
     
+    # Если пришёл по зеркальной ссылке и контекст уже есть — сразу тест
+    data = await state.get_data()
+    if data.get("mirror_code") or _mirror_code:
+        logger.info(f"🪞 [MIRROR] User {user_id} has context + mirror_code, auto-starting test")
+        await state.set_state(TestStates.stage_1)
+        mirror_intro = (
+            f"🪞 {user_name}, тебя пригласили пройти психологический тест!\n\n"
+            f"⏱ {bold('15 минут')} — и твой друг увидит ваше сравнение.\n\n"
+            f"🧠 {bold('ЭТАП 1: КОНФИГУРАЦИЯ ВОСПРИЯТИЯ')}\n\n"
+            f"🔍 {bold('Что мы исследуем:')}\n"
+            f"• Куда направлено ваше внимание — вовне или внутрь\n"
+            f"• Какая тревога доминирует\n\n"
+            f"📊 {bold('Вопросов:')} 8  ⏱ {bold('Время:')} ~3 минуты"
+        )
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="▶️ Начать", callback_data="start_stage_1")]
+        ])
+        await safe_send_message(message, mirror_intro, reply_markup=keyboard)
+        return
+
     # Если контекст уже заполнен, показываем меню
     await show_main_menu(message, context)
 
