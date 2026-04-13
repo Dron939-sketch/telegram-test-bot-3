@@ -15,6 +15,7 @@ async def complete_mirror_if_needed(user_id: int, state_data: dict):
     """Если пользователь пришёл по mirror-ссылке, отправляем результаты владельцу зеркала."""
     mirror_code = state_data.get("mirror_code")
     if not mirror_code:
+        logger.info(f"🪞 [MIRROR] complete_mirror_if_needed: no mirror_code for user={user_id}")
         return
 
     try:
@@ -36,8 +37,11 @@ async def complete_mirror_if_needed(user_id: int, state_data: dict):
             "friend_thinking_level": state_data.get("thinking_level"),
         }
 
+        logger.info(f"🪞 [MIRROR] Sending to {FREDI_API_BASE}/api/mirrors/complete: code={mirror_code}, user={user_id}, vectors={vectors}")
+
         async with httpx.AsyncClient(timeout=15) as client:
             resp = await client.post(f"{FREDI_API_BASE}/api/mirrors/complete", json=payload)
-            logger.info(f"🪞 Mirror complete: {mirror_code} -> {resp.status_code}")
+            body = resp.text[:200]
+            logger.info(f"🪞 [MIRROR] Response: {mirror_code} -> HTTP {resp.status_code}, body={body}")
     except Exception as e:
-        logger.error(f"🪞 Mirror complete error: {e}")
+        logger.error(f"🪞 [MIRROR] Error completing mirror {mirror_code}: {e}", exc_info=True)

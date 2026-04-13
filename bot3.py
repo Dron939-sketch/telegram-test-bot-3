@@ -1987,10 +1987,23 @@ async def cmd_start(message: Message, state: FSMContext):
     """Обновленный обработчик команды /start"""
     user_id = message.from_user.id
     user_name = message.from_user.first_name or "Пользователь"
-    
+
+    # Извлекаем mirror_code ДО очистки state
+    _mirror_code = None
+    text_raw = message.text or ""
+    _m = re.match(r"^/start(?:@\w+)?\s+(mirror_\w+)", text_raw)
+    if _m:
+        _mirror_code = _m.group(1)
+        logger.info(f"🪞 [MIRROR] Detected mirror_code in /start: user={user_id}, code={_mirror_code}")
+
     user_names[user_id] = user_name
-    
+
     await state.clear()
+
+    # Восстанавливаем mirror_code после очистки state
+    if _mirror_code:
+        await state.update_data(mirror_code=_mirror_code)
+        logger.info(f"🪞 [MIRROR] Saved mirror_code to state: user={user_id}, code={_mirror_code}")
     
     # Сохраняем пользователя и загружаем данные из БД
     asyncio.create_task(save_user(

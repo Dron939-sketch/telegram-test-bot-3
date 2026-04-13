@@ -223,11 +223,14 @@ def save_test_data_sync(user_id: int, data: Dict, extra: Dict = None):
         merged = data
     asyncio.create_task(save_test_data(user_id, merged))
     # Mirror completion: отправляем результаты владельцу зеркала
-    # FIX: убрано требование ai_generated_profile — его ещё нет в этот момент,
-    # AI-профиль генерируется асинхронно ПОСЛЕ сохранения данных
-    if merged.get("mirror_code"):
+    mirror_code = merged.get("mirror_code")
+    logger.info(f"🪞 [MIRROR] save_test_data_sync: user={user_id}, mirror_code={mirror_code}, keys={list(merged.keys())[:10]}")
+    if mirror_code:
         from mirror_service import complete_mirror_if_needed
+        logger.info(f"🪞 [MIRROR] Calling complete_mirror_if_needed: user={user_id}, code={mirror_code}")
         asyncio.create_task(complete_mirror_if_needed(user_id, merged))
+    else:
+        logger.info(f"🪞 [MIRROR] No mirror_code in data for user={user_id}")
 
 
 def save_context_sync(user_id: int, context):
