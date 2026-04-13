@@ -51,11 +51,11 @@ async def save_user(user_id: int, username: str = None,
                     updated_at = NOW(),
                     last_activity = NOW()
             """, user_id, username, first_name, last_name)
-            logger.info(f"💾 Пользователь {user_id} сохранён")
+            logger.info(f"Пользователь {user_id} сохранён")
         finally:
             await conn.close()
     except Exception as e:
-        logger.warning(f"⚠️ save_user {user_id}: {e}")
+        logger.warning(f"save_user {user_id}: {e}")
 
 
 async def load_user_data(user_id: int) -> Optional[Dict]:
@@ -72,7 +72,7 @@ async def load_user_data(user_id: int) -> Optional[Dict]:
         finally:
             await conn.close()
     except Exception as e:
-        logger.warning(f"⚠️ load_user_data {user_id}: {e}")
+        logger.warning(f"load_user_data {user_id}: {e}")
         return None
 
 
@@ -87,7 +87,7 @@ async def load_user_context(user_id: int) -> Optional[Dict]:
         finally:
             await conn.close()
     except Exception as e:
-        logger.warning(f"⚠️ load_user_context {user_id}: {e}")
+        logger.warning(f"load_user_context {user_id}: {e}")
         return None
 
 
@@ -100,7 +100,6 @@ async def save_test_data(user_id: int, data: Dict):
     try:
         conn = await _get_conn()
         try:
-            # Убеждаемся что пользователь существует
             await conn.execute("""
                 INSERT INTO fredi_users (user_id, created_at, updated_at, last_activity)
                 VALUES ($1, NOW(), NOW(), NOW())
@@ -108,7 +107,6 @@ async def save_test_data(user_id: int, data: Dict):
                     last_activity = NOW(), updated_at = NOW()
             """, user_id)
 
-            # Сохраняем данные
             json_data = json.dumps(data, default=str, ensure_ascii=False)
             await conn.execute("""
                 INSERT INTO fredi_user_data (user_id, data, updated_at)
@@ -116,11 +114,11 @@ async def save_test_data(user_id: int, data: Dict):
                 ON CONFLICT (user_id) DO UPDATE SET
                     data = $2, updated_at = NOW()
             """, user_id, json_data)
-            logger.debug(f"💾 Данные теста {user_id} сохранены")
+            logger.debug(f"Данные теста {user_id} сохранены")
         finally:
             await conn.close()
     except Exception as e:
-        logger.warning(f"⚠️ save_test_data {user_id}: {e}")
+        logger.warning(f"save_test_data {user_id}: {e}")
 
 
 async def save_context(user_id: int, context):
@@ -171,11 +169,11 @@ async def save_context(user_id: int, context):
                 getattr(context, 'energy_level', None),
                 getattr(context, 'life_context_complete', False),
             )
-            logger.debug(f"💾 Контекст {user_id} сохранён")
+            logger.debug(f"Контекст {user_id} сохранён")
         finally:
             await conn.close()
     except Exception as e:
-        logger.warning(f"⚠️ save_context {user_id}: {e}")
+        logger.warning(f"save_context {user_id}: {e}")
 
 
 async def save_test_result(user_id: int, data: Dict):
@@ -185,9 +183,8 @@ async def save_test_result(user_id: int, data: Dict):
         behavioral_levels = data.get('behavioral_levels', {})
         perception_type = data.get('perception_type')
         thinking_level = data.get('thinking_level')
-        logger.info(f"📊 save_test_result {user_id}: profile={profile_data.get('display_name')}, perception={perception_type}, thinking={thinking_level}")
+        logger.info(f"save_test_result {user_id}: profile={profile_data.get('display_name')}, perception={perception_type}, thinking={thinking_level}")
 
-        # Считаем векторы
         vectors = {}
         for k, levels in behavioral_levels.items():
             vectors[k] = sum(levels) / len(levels) if levels else 3.0
@@ -211,11 +208,11 @@ async def save_test_result(user_id: int, data: Dict):
                 json.dumps(behavioral_levels, ensure_ascii=False),
                 json.dumps(data.get('deep_patterns', {}), ensure_ascii=False),
             )
-            logger.info(f"💾 Результат теста {user_id} сохранён")
+            logger.info(f"Результат теста {user_id} сохранён")
         finally:
             await conn.close()
     except Exception as e:
-        logger.warning(f"⚠️ save_test_result {user_id}: {e}")
+        logger.warning(f"save_test_result {user_id}: {e}")
 
 
 def save_test_data_sync(user_id: int, data: Dict, extra: Dict = None):
@@ -226,7 +223,9 @@ def save_test_data_sync(user_id: int, data: Dict, extra: Dict = None):
         merged = data
     asyncio.create_task(save_test_data(user_id, merged))
     # Mirror completion: отправляем результаты владельцу зеркала
-    if merged.get("mirror_code") and merged.get("ai_generated_profile"):
+    # FIX: убрано требование ai_generated_profile — его ещё нет в этот момент,
+    # AI-профиль генерируется асинхронно ПОСЛЕ сохранения данных
+    if merged.get("mirror_code"):
         from mirror_service import complete_mirror_if_needed
         asyncio.create_task(complete_mirror_if_needed(user_id, merged))
 
