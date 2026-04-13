@@ -4285,8 +4285,14 @@ async def show_context_complete(message_or_callback, state: FSMContext, context:
         await safe_send_message(message_or_callback, summary, reply_markup=keyboard)
     else:
         await safe_send_message(message_or_callback.message, summary, reply_markup=keyboard, delete_previous=True)
-    
+
+    # Сохраняем mirror_code перед очисткой state
+    _pre_clear = await state.get_data()
+    _mc = _pre_clear.get("mirror_code")
     await state.clear()
+    if _mc:
+        await state.update_data(mirror_code=_mc)
+        logger.info(f"🪞 [MIRROR] Preserved mirror_code across context_complete clear: {_mc}")
 
 # ============================================
 # СТАРТ И НАВИГАЦИЯ
